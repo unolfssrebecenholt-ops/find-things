@@ -1,0 +1,28 @@
+<view class="editor">
+  <view class="editor-title">确认物品清单</view>
+  <view wx:for="{{items}}" wx:key="tempId" class="item">
+    <view class="item-head">
+      <button
+        class="check {{item.confirmed ? 'checked' : ''}}"
+        data-index="{{index}}"
+        bindtap="toggleConfirmed"
+      >{{item.confirmed ? '✓' : ''}}</button>
+      <text class="number">{{item.displayIndex}}</text>
+      <input
+        class="name-input"
+        value="{{item.displayName}}"
+        data-index="{{index}}"
+        bindinput="rename"
+      />
+      <button class="delete" data-index="{{index}}" bindtap="removeItem">删除</button>
+    </view>
+    <view class="meta">{{item.category}} · 置信度 {{item.confidence}}</view>
+    <textarea
+      class="note"
+      placeholder="补充备注，例如品牌、尺寸、用途"
+      value="{{item.note}}"
+      data-index="{{index}}"
+      bindinput="editNote"
+    ></textarea>
+  </view>
+</view>

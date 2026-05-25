@@ -1,0 +1,94 @@
+.capture-page {
+  display: flex;
+  flex-direction: column;
+  gap: 22rpx;
+  padding-bottom: 48rpx;
+}
+
+.intro {
+  padding-top: 12rpx;
+}
+
+.intro .subtle {
+  display: block;
+  margin-top: 14rpx;
+}
+
+.capture-card {
+  overflow: hidden;
+  background: #ffffff;
+  border: 1rpx solid #e4ded1;
+  border-radius: 8rpx;
+  box-shadow: 0 16rpx 44rpx rgba(84, 74, 55, 0.1);
+}
+
+.capture-illustration {
+  position: relative;
+  height: 300rpx;
+  background:
+    linear-gradient(135deg, rgba(255, 253, 248, 0.5), rgba(229, 240, 231, 0.45)),
+    #e8e0d4;
+}
+
+.layer {
+  position: absolute;
+  border-radius: 8rpx;
+}
+
+.shelf {
+  right: 34rpx;
+  bottom: 72rpx;
+  left: 34rpx;
+  height: 3rpx;
+  background: rgba(118, 104, 83, 0.2);
+}
+
+.book {
+  top: 64rpx;
+  left: 74rpx;
+  width: 170rpx;
+  height: 88rpx;
+  background: #7aa0bd;
+  transform: rotate(-5deg);
+}
+
+.pen {
+  top: 168rpx;
+  right: 88rpx;
+  width: 190rpx;
+  height: 20rpx;
+  background: #2c322d;
+  border-radius: 999rpx;
+  transform: rotate(4deg);
+}
+
+.clip {
+  right: 90rpx;
+  bottom: 74rpx;
+  width: 70rpx;
+  height: 48rpx;
+  border: 8rpx solid #4f8f67;
+  background: transparent;
+  border-radius: 999rpx;
+}
+
+.capture-copy {
+  display: grid;
+  gap: 8rpx;
+  padding: 24rpx;
+}
+
+.capture-title {
+  color: #253027;
+  font-size: 31rpx;
+  font-weight: 800;
+}
+
+.actions {
+  display: grid;
+  gap: 16rpx;
+}
+
+.action {
+  width: 100%;
+}

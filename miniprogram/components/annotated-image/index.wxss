@@ -1,0 +1,150 @@
+.annotated-image {
+  position: relative;
+  width: 100%;
+  height: 540rpx;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(255, 253, 248, 0.32), rgba(255, 253, 248, 0)),
+    #dce7df;
+  border: 1rpx solid #e4ded1;
+  border-radius: 8rpx;
+}
+
+.annotated-image.compact {
+  height: 328rpx;
+}
+
+.photo {
+  width: 100%;
+  height: 100%;
+}
+
+.placeholder-photo {
+  position: relative;
+  background:
+    linear-gradient(90deg, transparent 49%, rgba(125, 105, 68, 0.1) 50%, transparent 51%),
+    linear-gradient(0deg, transparent 49%, rgba(125, 105, 68, 0.1) 50%, transparent 51%),
+    linear-gradient(135deg, rgba(255, 253, 248, 0.36), rgba(255, 253, 248, 0)),
+    #dce7df;
+}
+
+.drawer-line {
+  position: absolute;
+  right: 32rpx;
+  left: 32rpx;
+  height: 3rpx;
+  background: rgba(118, 104, 83, 0.18);
+}
+
+.line-a {
+  top: 156rpx;
+}
+
+.line-b {
+  top: 336rpx;
+}
+
+.compact .line-a {
+  top: 98rpx;
+}
+
+.compact .line-b {
+  top: 204rpx;
+}
+
+.mock-item {
+  position: absolute;
+  border-radius: 10rpx;
+  box-shadow: inset 0 0 0 1rpx rgba(84, 68, 40, 0.1);
+}
+
+.book-a {
+  top: 84rpx;
+  left: 70rpx;
+  width: 170rpx;
+  height: 126rpx;
+  background: #8db3b0;
+  transform: rotate(-4deg);
+}
+
+.pen {
+  top: 300rpx;
+  left: 222rpx;
+  width: 220rpx;
+  height: 26rpx;
+  background: #3c443b;
+  border-radius: 999rpx;
+  transform: rotate(-2deg);
+}
+
+.book-b {
+  top: 108rpx;
+  right: 70rpx;
+  width: 176rpx;
+  height: 118rpx;
+  background: #c9d7e6;
+  transform: rotate(3deg);
+}
+
+.clip {
+  right: 96rpx;
+  bottom: 78rpx;
+  width: 100rpx;
+  height: 78rpx;
+  border: 0;
+  background: #79a7c7;
+  border-radius: 38rpx;
+  transform: rotate(10deg);
+}
+
+.compact .book-a {
+  top: 48rpx;
+  left: 52rpx;
+  width: 132rpx;
+  height: 88rpx;
+}
+
+.compact .pen {
+  top: 180rpx;
+  left: 180rpx;
+  width: 176rpx;
+  height: 20rpx;
+}
+
+.compact .book-b {
+  top: 62rpx;
+  right: 54rpx;
+  width: 140rpx;
+  height: 92rpx;
+}
+
+.compact .clip {
+  right: 72rpx;
+  bottom: 44rpx;
+  width: 78rpx;
+  height: 58rpx;
+}
+
+.box {
+  position: absolute;
+  min-width: 28rpx;
+  min-height: 28rpx;
+  border: 4rpx dashed #2f6f4b;
+  border-radius: 8rpx;
+}
+
+.badge {
+  position: absolute;
+  top: -24rpx;
+  left: -10rpx;
+  min-width: 38rpx;
+  height: 38rpx;
+  color: #ffffff;
+  font-size: 23rpx;
+  font-weight: 800;
+  line-height: 38rpx;
+  text-align: center;
+  background: #2f6f4b;
+  box-shadow: 0 6rpx 14rpx rgba(47, 111, 75, 0.22);
+  border-radius: 50%;
+}

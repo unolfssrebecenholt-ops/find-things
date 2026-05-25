@@ -1,0 +1,27 @@
+<view class="page capture-page">
+  <view class="intro">
+    <text class="eyebrow">第一步</text>
+    <text class="page-title">拍下箱内物品</text>
+    <text class="subtle">先拍箱内或抽屉内的照片，默认可保存 2 张；多角度会让搜索更准。</text>
+  </view>
+
+  <view class="capture-card">
+    <view class="capture-illustration">
+      <view class="layer shelf"></view>
+      <view class="layer book"></view>
+      <view class="layer pen"></view>
+      <view class="layer clip"></view>
+    </view>
+    <view class="capture-copy">
+      <text class="capture-title">建议从正上方拍</text>
+      <text class="subtle">物品重叠较多时，拍完第一张后可以继续“拍下一张”。</text>
+    </view>
+  </view>
+
+  <view class="actions">
+    <button class="primary-button action" loading="{{choosing}}" bindtap="chooseImage">拍照或选图</button>
+    <button class="soft-button action" bindtap="useDemo">使用示例数据</button>
+  </view>
+
+  <view class="note-card">当前不会调用真实 AI 服务，也不会写入任何密钥。识别结果只用于本地演示。</view>
+</view>

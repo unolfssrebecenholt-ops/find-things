@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "找东西",
+  "usingComponents": {
+    "search-result-card": "/components/search-result-card/index"
+  }
+}

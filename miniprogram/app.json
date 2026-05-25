@@ -1,0 +1,20 @@
+{
+  "pages": [
+    "pages/home/index",
+    "pages/capture/index",
+    "pages/capture/review",
+    "pages/container/edit",
+    "pages/container/detail",
+    "pages/search/index",
+    "pages/settings/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "拍箱找物",
+    "navigationBarBackgroundColor": "#f7f3ea",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f7f3ea",
+    "backgroundTextStyle": "dark"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

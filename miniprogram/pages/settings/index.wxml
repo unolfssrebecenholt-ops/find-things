@@ -1,0 +1,4 @@
+<view class="page settings-page">
+  <view class="section-title">设置</view>
+  <view class="empty-state">当前阶段使用本地 mock 数据，不连接真实 AI、支付或云开发。</view>
+</view>

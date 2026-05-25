@@ -1,0 +1,66 @@
+<view class="page home-page">
+  <view class="page-top">
+    <view class="hello">
+      <text class="eyebrow">今天整理一点点</text>
+      <text class="page-title">东西在哪，一搜就知道</text>
+    </view>
+    <button class="round-action" bindtap="goCapture">+</button>
+  </view>
+
+  <view class="hero-card">
+    <view class="hero-copy">
+      <text class="hero-title">拍下箱内物品</text>
+      <text class="subtle">确认清单后保存，下次不用翻箱倒柜。</text>
+    </view>
+    <view class="hero-actions">
+      <button class="primary-button" bindtap="goCapture">拍一箱</button>
+      <button class="soft-button" bindtap="goSearch">找东西</button>
+    </view>
+  </view>
+
+  <view class="section-row">
+    <text class="section-heading">最近整理</text>
+    <text class="text-link" bindtap="showContainers">全部容器</text>
+  </view>
+
+  <view wx:if="{{hasRecentContainers}}" class="album-grid">
+    <view
+      wx:for="{{recentContainers}}"
+      wx:key="_id"
+      class="album-card"
+      bindtap="openContainer"
+      data-id="{{item._id}}"
+    >
+      <view class="album-photo tone-{{index}}">
+        <image wx:if="{{item.coverPhoto}}" mode="aspectFill" src="{{item.coverPhoto}}"></image>
+        <text class="album-count">{{item.itemCount}} 件</text>
+        <view wx:if="{{item.showPlaceholder}}" class="photo-illustration">
+          <view class="illu-line wide"></view>
+          <view class="illu-line"></view>
+          <view class="illu-dot"></view>
+        </view>
+      </view>
+      <view class="album-meta">
+        <text class="album-name">{{item.name}}</text>
+        <text class="subtle">{{item.itemCount}} 件物品</text>
+        <text class="pill">{{item.displayStatus}}</text>
+      </view>
+    </view>
+  </view>
+  <view wx:if="{{showEmptyRecentContainers}}" class="empty-state">还没有保存的容器。先拍一箱，保存后这里会像相册一样展示。</view>
+
+  <view class="bottom-nav">
+    <view class="nav-item active">
+      <view class="nav-icon"></view>
+      <text>首页</text>
+    </view>
+    <view class="nav-item" bindtap="goSearch">
+      <view class="nav-icon search"></view>
+      <text>找东西</text>
+    </view>
+    <view class="nav-item" bindtap="showContainers">
+      <view class="nav-icon box"></view>
+      <text>容器</text>
+    </view>
+  </view>
+</view>

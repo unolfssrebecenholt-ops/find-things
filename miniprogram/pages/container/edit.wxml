@@ -1,0 +1,30 @@
+<view class="page edit-page">
+  <view class="section-title">容器信息</view>
+  <view class="form">
+    <input class="field" placeholder="容器名称，例如书桌左侧抽屉" value="{{name}}" bindinput="inputName" />
+    <input class="field" placeholder="位置，例如卧室 / 书桌" value="{{locationPath}}" bindinput="inputLocation" />
+  </view>
+
+  <view class="section-title">容器外观照片</view>
+  <image wx:if="{{coverImageFileId}}" class="cover" mode="aspectFill" src="{{coverImageFileId}}"></image>
+  <view wx:if="{{showCoverPlaceholder}}" class="empty-state">还没有容器外观照片。</view>
+  <button class="ghost-button action" bindtap="chooseCover">拍照或选容器照片</button>
+  <button wx:if="{{contentImageFileId}}" class="ghost-button action" bindtap="useContentAsCover">暂用第一张箱内照片</button>
+
+  <view class="section-title">箱内照片</view>
+  <view class="photo-summary">
+    <view
+      wx:for="{{contentImages}}"
+      wx:key="imageId"
+      class="photo-summary-item"
+    >
+      <text class="photo-summary-name">照片 {{index + 1}}</text>
+      <text class="photo-summary-meta">{{item.itemCount}} 件物品</text>
+    </view>
+  </view>
+
+  <view class="section-title">将保存 {{items.length}} 件物品</view>
+  <view wx:for="{{items}}" wx:key="tempId" class="item-row">{{index + 1}}. {{item.displayName}}</view>
+
+  <button class="primary-button save" bindtap="save">保存容器</button>
+</view>

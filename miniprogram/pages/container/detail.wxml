@@ -1,0 +1,105 @@
+<view class="page detail-page" wx:if="{{hasContainer}}">
+  <view class="detail-head">
+    <view>
+      <text class="eyebrow">{{container.displayLocation}}</text>
+      <text class="page-title">{{container.name}}</text>
+    </view>
+    <button class="round-more" bindtap="deleteContainer">⋯</button>
+  </view>
+
+  <view class="detail-hero">
+    <view class="cover-photo">
+      <image wx:if="{{hasCoverImage}}" mode="aspectFill" src="{{container.coverImageFileId}}"></image>
+      <view wx:if="{{hasCoverImage}}" class="cover-label">
+        <text>外观照片</text>
+      </view>
+      <view wx:if="{{showCoverPlaceholder}}" class="cover-placeholder">
+        <view class="cover-box-line"></view>
+        <view class="cover-box-shape"></view>
+        <view class="cover-box-shadow"></view>
+      </view>
+    </view>
+    <view class="stats-row">
+      <view class="stat">
+        <text class="stat-value">{{container.itemCount}}</text>
+        <text class="subtle">件物品</text>
+      </view>
+      <view class="stat">
+        <text class="stat-value">{{contentImages.length}}/{{freeLimit}}</text>
+        <text class="subtle">免费照片</text>
+      </view>
+      <view class="stat">
+        <text class="stat-value">今天</text>
+        <text class="subtle">更新</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="section-row">
+    <text class="section-heading">箱内照片</text>
+    <text class="text-link" bindtap="addContentPhoto">添加照片</text>
+  </view>
+
+  <view wx:if="{{hasContentImages}}" class="photo-carousel">
+    <view class="carousel-head">
+      <text class="carousel-title">当前箱内照片 <text class="pill">{{currentImageIndex + 1}}/{{contentImages.length}}</text></text>
+      <text class="pill">多拍更好找</text>
+    </view>
+
+    <swiper
+      class="photo-swiper"
+      current="{{currentImageIndex}}"
+      duration="220"
+      bindchange="onSwiperChange"
+    >
+      <swiper-item wx:for="{{contentImages}}" wx:key="imageId">
+        <annotated-image image-src="{{item.fileId}}" items="{{item.items}}" compact="{{true}}"></annotated-image>
+      </swiper-item>
+    </swiper>
+
+    <view class="carousel-indicator">
+      <view
+        wx:for="{{contentImages}}"
+        wx:key="imageId"
+        class="carousel-dot {{index == currentImageIndex ? 'active' : ''}}"
+      ></view>
+      <text class="carousel-count">{{currentImageIndex + 1}} / {{contentImages.length}}</text>
+    </view>
+
+    <view class="carousel-actions">
+      <button class="mini-button" bindtap="reRecognizeCurrent">重新识别这张</button>
+      <button class="mini-button secondary" bindtap="addContentPhoto">{{addPhotoLabel}}</button>
+    </view>
+  </view>
+  <view wx:if="{{showContentEmpty}}" class="empty-state">还没有箱内照片。添加照片后，可以在这里左右滑动查看。</view>
+
+  <view class="section-row">
+    <text class="section-heading">物品</text>
+    <text class="text-link">添加</text>
+  </view>
+  <view class="item-tags">
+    <view wx:for="{{items}}" wx:key="_id" class="tag">
+      <text>{{item.displayName}}</text>
+    </view>
+  </view>
+
+  <view class="note-card">默认可保存 {{freeLimit}} 张箱内照片；更多照片可升级。搜索会同时看名称、可见文字和关键特征。</view>
+
+  <view class="bottom-nav">
+    <view class="nav-item" bindtap="goHome">
+      <view class="nav-icon"></view>
+      <text>首页</text>
+    </view>
+    <view class="nav-item" bindtap="goSearch">
+      <view class="nav-icon search"></view>
+      <text>找东西</text>
+    </view>
+    <view class="nav-item active">
+      <view class="nav-icon box"></view>
+      <text>容器</text>
+    </view>
+  </view>
+</view>
+<view class="page" wx:if="{{showMissingContainer}}">
+  <view class="empty-state">没有找到这个容器。</view>
+</view>

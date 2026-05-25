@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "容器详情",
+  "usingComponents": {
+    "annotated-image": "/components/annotated-image/index"
+  }
+}

@@ -1,0 +1,88 @@
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.editor-title {
+  color: #253027;
+  font-size: 31rpx;
+  font-weight: 800;
+}
+
+.item {
+  padding: 18rpx;
+  background: #ffffff;
+  border: 1rpx solid #e4ded1;
+  border-radius: 8rpx;
+}
+
+.item-head {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.check {
+  width: 48rpx;
+  height: 48rpx;
+  padding: 0;
+  color: #ffffff;
+  font-size: 24rpx;
+  line-height: 48rpx;
+  background: #ffffff;
+  border: 2rpx solid #b8b0a3;
+  border-radius: 8rpx;
+}
+
+.checked {
+  background: #176b5b;
+  border-color: #176b5b;
+}
+
+.number {
+  width: 36rpx;
+  color: #176b5b;
+  font-weight: 800;
+  text-align: center;
+}
+
+.name-input {
+  min-width: 0;
+  height: 60rpx;
+  flex: 1;
+  padding: 0 12rpx;
+  color: #253027;
+  font-size: 29rpx;
+  font-weight: 750;
+  background: #f9f7f2;
+  border-radius: 8rpx;
+}
+
+.delete {
+  width: 88rpx;
+  height: 56rpx;
+  padding: 0;
+  color: #a33b2f;
+  font-size: 24rpx;
+  line-height: 56rpx;
+  background: #fff4f1;
+  border-radius: 8rpx;
+}
+
+.meta {
+  margin: 12rpx 0;
+  color: #697366;
+  font-size: 23rpx;
+}
+
+.note {
+  width: 100%;
+  min-height: 86rpx;
+  padding: 14rpx;
+  color: #253027;
+  font-size: 25rpx;
+  line-height: 1.4;
+  background: #f9f7f2;
+  border-radius: 8rpx;
+}

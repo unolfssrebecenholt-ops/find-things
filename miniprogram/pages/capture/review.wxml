@@ -1,0 +1,61 @@
+<view class="page review-page">
+  <view class="review-head">
+    <view>
+      <text class="eyebrow">书桌左侧抽屉</text>
+      <text class="page-title">确认识别结果</text>
+    </view>
+    <text class="pill">{{currentLabel}} · {{items.length}} 件</text>
+  </view>
+
+  <view class="segmented">
+    <button
+      class="segment {{viewMode == 'mark' ? 'active' : ''}}"
+      data-mode="mark"
+      bindtap="switchViewMode"
+    >标注</button>
+    <button
+      class="segment {{viewMode == 'list' ? 'active' : ''}}"
+      data-mode="list"
+      bindtap="switchViewMode"
+    >清单</button>
+  </view>
+
+  <view wx:if="{{isMarkMode}}" class="mark-panel">
+    <view class="photo-stage">
+      <annotated-image image-src="{{imagePath}}" items="{{items}}"></annotated-image>
+    </view>
+    <view class="list-expanded">
+      <view wx:for="{{editPreviewItems}}" wx:key="tempId" class="edit-line">
+        <text class="subtle">{{item.displayIndex}} 物品名称</text>
+        <view class="fake-input">{{item.displayName}}</view>
+      </view>
+      <view class="edit-line">
+        <text class="subtle">备注</text>
+        <view class="fake-input">{{previewNote}}</view>
+      </view>
+    </view>
+    <view class="quick-list">
+      <view wx:for="{{items}}" wx:key="tempId" class="quick-item">
+        <text class="quick-index">{{item.displayIndex}}</text>
+        <view class="quick-copy">
+          <text class="quick-name">{{item.displayName}}</text>
+          <text class="subtle">{{item.displayDescription}}</text>
+        </view>
+        <text class="pill">{{item.confidenceLabel}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{isListMode}}" class="list-panel">
+    <view class="editor-card">
+      <item-editor items="{{items}}" bind:change="handleItemsChange"></item-editor>
+    </view>
+  </view>
+
+  <view wx:if="{{warnings.length}}" class="note-card">{{warnings[0]}}</view>
+
+  <view class="review-actions">
+    <button class="soft-button" bindtap="addNextPhoto">拍下一张</button>
+    <button class="primary-button" bindtap="goNext">下一步：拍容器</button>
+  </view>
+</view>

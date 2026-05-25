@@ -1,0 +1,161 @@
+.review-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+  min-height: 100vh;
+  padding-bottom: 148rpx;
+  background:
+    radial-gradient(circle at 0 0, rgba(232, 185, 93, 0.12), transparent 34%),
+    #fffdf8;
+}
+
+.review-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18rpx;
+  padding-top: 12rpx;
+}
+
+.review-head .pill {
+  flex: none;
+  margin-top: 6rpx;
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8rpx;
+  padding: 8rpx;
+  border: 1rpx solid #e4ded1;
+  background: #f1eee4;
+  border-radius: 8rpx;
+}
+
+.segment {
+  height: 68rpx;
+  color: #697366;
+  font-size: 26rpx;
+  font-weight: 800;
+  line-height: 68rpx;
+  background: transparent;
+  border-radius: 6rpx;
+}
+
+.segment.active {
+  color: #2f6f4b;
+  background: #ffffff;
+  box-shadow: 0 8rpx 20rpx rgba(82, 72, 51, 0.1);
+}
+
+.mark-panel,
+.list-panel {
+  display: grid;
+  gap: 16rpx;
+}
+
+.photo-stage {
+  display: block;
+}
+
+.quick-list {
+  display: grid;
+  gap: 8rpx;
+}
+
+.list-expanded {
+  display: grid;
+  gap: 10rpx;
+}
+
+.edit-line {
+  display: grid;
+  grid-template-columns: 160rpx minmax(0, 1fr);
+  gap: 12rpx;
+  align-items: center;
+  min-height: 72rpx;
+  padding: 10rpx 14rpx;
+  background: #ffffff;
+  border: 1rpx solid #e4ded1;
+  border-radius: 8rpx;
+  box-shadow: 0 8rpx 18rpx rgba(89, 79, 55, 0.05);
+}
+
+.fake-input {
+  min-width: 0;
+  min-height: 50rpx;
+  padding: 10rpx 14rpx;
+  overflow: hidden;
+  color: #253027;
+  font-size: 25rpx;
+  font-weight: 760;
+  line-height: 30rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: #f7f3ea;
+  border-radius: 8rpx;
+}
+
+.editor-card {
+  padding: 18rpx;
+  background: #ffffff;
+  border: 1rpx solid #e4ded1;
+  border-radius: 8rpx;
+  box-shadow: 0 12rpx 30rpx rgba(89, 79, 55, 0.08);
+}
+
+.quick-item {
+  display: grid;
+  grid-template-columns: 44rpx 1fr auto;
+  gap: 12rpx;
+  align-items: center;
+  min-height: 92rpx;
+  padding: 14rpx;
+  background: #ffffff;
+  border: 1rpx solid #e4ded1;
+  border-radius: 8rpx;
+  box-shadow: 0 8rpx 18rpx rgba(89, 79, 55, 0.05);
+}
+
+.quick-index {
+  width: 42rpx;
+  height: 42rpx;
+  color: #ffffff;
+  font-size: 23rpx;
+  font-weight: 800;
+  line-height: 42rpx;
+  text-align: center;
+  background: #2f6f4b;
+  border-radius: 50%;
+}
+
+.quick-copy {
+  min-width: 0;
+}
+
+.quick-name {
+  display: block;
+  overflow: hidden;
+  color: #253027;
+  font-size: 27rpx;
+  font-weight: 800;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-actions {
+  position: fixed;
+  right: 36rpx;
+  bottom: 24rpx;
+  left: 36rpx;
+  z-index: 35;
+  display: grid;
+  grid-template-columns: 0.95fr 1.25fr;
+  gap: 14rpx;
+  padding: 0;
+}
+
+.review-actions .primary-button {
+  box-shadow: 0 14rpx 30rpx rgba(79, 143, 103, 0.22);
+}

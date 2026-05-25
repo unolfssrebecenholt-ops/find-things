@@ -1,0 +1,61 @@
+<view class="page search-page">
+  <view class="search-head">
+    <view class="search-kicker">
+      <text class="eyebrow">找东西</text>
+    </view>
+    <text class="page-title search-title">想找什么？</text>
+  </view>
+
+  <view class="search-box">
+    <view class="search-mark"></view>
+    <input
+      class="search-input"
+      placeholder="输入书、黑色笔、蓝色发卡"
+      value="{{query}}"
+      confirm-type="search"
+      bindinput="inputQuery"
+      bindconfirm="submitSearch"
+    />
+  </view>
+
+  <view class="chips">
+    <view
+      wx:for="{{examples}}"
+      wx:key="*this"
+      class="chip"
+      data-query="{{item}}"
+      bindtap="useExample"
+    >{{item}}</view>
+  </view>
+
+  <view class="section-row">
+    <text class="section-heading">{{resultHeading}}</text>
+    <text class="text-link">按相关度</text>
+  </view>
+
+  <view wx:if="{{hasResults}}" class="result-stack">
+    <search-result-card
+      wx:for="{{results}}"
+      wx:key="resultId"
+      result="{{item}}"
+      bind:open="openResult"
+    ></search-result-card>
+  </view>
+  <view wx:if="{{showEmptyResults}}" class="empty-state">没有找到匹配物品。可以换一个更宽泛的词试试，比如“书”或“蓝色”。</view>
+  <view wx:if="{{showSearchHint}}" class="empty-state">可以直接试试“书”“黑色笔”“蓝色发卡”。搜索会同时看名称、可见文字和关键特征。</view>
+
+  <view class="bottom-nav">
+    <view class="nav-item" bindtap="goHome">
+      <view class="nav-icon"></view>
+      <text>首页</text>
+    </view>
+    <view class="nav-item active">
+      <view class="nav-icon search"></view>
+      <text>找东西</text>
+    </view>
+    <view class="nav-item" bindtap="showContainers">
+      <view class="nav-icon box"></view>
+      <text>容器</text>
+    </view>
+  </view>
+</view>

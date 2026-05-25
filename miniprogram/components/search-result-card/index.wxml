@@ -1,0 +1,17 @@
+<view class="result-card" bindtap="open">
+  <view class="photo-wrap">
+    <image wx:if="{{viewModel.hasPhoto}}" class="photo" mode="aspectFill" src="{{viewModel.photo}}"></image>
+    <view wx:if="{{viewModel.showPlaceholder}}" class="photo placeholder-photo">
+      <view class="placeholder-line wide"></view>
+      <view class="placeholder-line"></view>
+      <view class="placeholder-dot"></view>
+    </view>
+    <text wx:if="{{viewModel.photoLabel}}" class="photo-badge">{{viewModel.photoLabel}}</text>
+  </view>
+  <view class="result-copy">
+    <text class="match-summary">{{viewModel.matchSummary}}</text>
+    <text class="result-name">{{result.item.displayName}}</text>
+    <text class="result-location">{{result.containerName}} · 点击查看所在容器</text>
+    <text class="result-cta">查看容器</text>
+  </view>
+</view>

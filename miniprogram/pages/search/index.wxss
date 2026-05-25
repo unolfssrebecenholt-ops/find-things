@@ -1,0 +1,98 @@
+.search-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+  padding-top: 42rpx;
+}
+
+.search-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  padding: 6rpx 4rpx 2rpx;
+}
+
+.search-kicker {
+  display: flex;
+  align-items: center;
+  min-height: 34rpx;
+}
+
+.search-title {
+  margin-top: 0;
+  font-size: 50rpx;
+  line-height: 1.14;
+}
+
+.search-box {
+  display: grid;
+  grid-template-columns: 38rpx minmax(0, 1fr);
+  gap: 14rpx;
+  align-items: center;
+  min-height: 96rpx;
+  padding: 10rpx 10rpx 10rpx 22rpx;
+  background: #ffffff;
+  border: 1rpx solid #e4ded1;
+  border-radius: 8rpx;
+  box-shadow: 0 14rpx 34rpx rgba(89, 79, 55, 0.1);
+}
+
+.search-mark {
+  position: relative;
+  width: 28rpx;
+  height: 28rpx;
+  border: 4rpx solid #4f8f67;
+  border-radius: 50%;
+}
+
+.search-mark::after {
+  position: absolute;
+  right: -10rpx;
+  bottom: -8rpx;
+  width: 15rpx;
+  height: 5rpx;
+  content: "";
+  background: #4f8f67;
+  border-radius: 999rpx;
+  transform: rotate(45deg);
+}
+
+.search-input {
+  min-width: 0;
+  height: 76rpx;
+  color: #253027;
+  font-size: 30rpx;
+  font-weight: 650;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin: 2rpx 0 4rpx;
+}
+
+.chip {
+  min-height: 58rpx;
+  padding: 12rpx 20rpx;
+  color: #626b5d;
+  font-size: 24rpx;
+  font-weight: 750;
+  line-height: 32rpx;
+  background: #ffffff;
+  border: 1rpx solid #e4ded1;
+  border-radius: 999rpx;
+}
+
+.result-stack {
+  display: grid;
+  gap: 18rpx;
+}
+
+.search-page .section-row {
+  margin-top: 18rpx;
+}
+
+.search-page .empty-state {
+  margin-top: 4rpx;
+}
