@@ -1,0 +1,1356 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>拍箱找物 UI Prototype</title>
+  <style>
+    :root {
+      --page: #f7f3ea;
+      --phone: #fffdf8;
+      --surface: #ffffff;
+      --surface-soft: #f1eee4;
+      --ink: #2d332e;
+      --muted: #788074;
+      --line: #e4ded1;
+      --green: #4f8f67;
+      --green-dark: #2f6f4b;
+      --green-soft: #e5f0e7;
+      --yellow: #e8b95d;
+      --yellow-soft: #fff1cf;
+      --red-soft: #f9e6dc;
+      --shadow: 0 24px 70px rgba(84, 74, 55, 0.18);
+      --radius: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-width: 1740px;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        linear-gradient(120deg, rgba(255, 253, 248, 0.88), rgba(237, 242, 229, 0.86)),
+        var(--page);
+    }
+
+    .board {
+      width: min(1780px, 100%);
+      margin: 0 auto;
+      padding: 32px;
+    }
+
+    .board-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .board-title {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.2;
+      font-weight: 750;
+      letter-spacing: 0;
+    }
+
+    .board-note {
+      max-width: 560px;
+      margin: 8px 0 0;
+      color: #67715f;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .palette {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .swatch {
+      width: 24px;
+      height: 24px;
+      border: 1px solid rgba(80, 70, 48, 0.12);
+      border-radius: 50%;
+    }
+
+    .phones {
+      display: grid;
+      grid-template-columns: repeat(4, 390px);
+      gap: 26px;
+      align-items: start;
+    }
+
+    .phone-wrap {
+      display: grid;
+      gap: 12px;
+    }
+
+    .screen-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 22px;
+      color: #586052;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .phone {
+      width: 390px;
+      height: 844px;
+      position: relative;
+      overflow: hidden;
+      border: 10px solid #242822;
+      border-radius: 42px;
+      background: var(--phone);
+      box-shadow: var(--shadow);
+    }
+
+    .island {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      z-index: 20;
+      width: 124px;
+      height: 36px;
+      transform: translateX(-50%);
+      border-radius: 24px;
+      background: #11140f;
+    }
+
+    .status {
+      position: absolute;
+      z-index: 15;
+      top: 18px;
+      left: 22px;
+      right: 22px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .status-right {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+
+    .battery {
+      width: 22px;
+      height: 11px;
+      padding: 2px;
+      border: 1.5px solid var(--ink);
+      border-radius: 3px;
+      position: relative;
+    }
+
+    .battery::before {
+      content: "";
+      display: block;
+      width: 12px;
+      height: 5px;
+      background: var(--ink);
+      border-radius: 1px;
+    }
+
+    .battery::after {
+      content: "";
+      position: absolute;
+      right: -4px;
+      top: 3px;
+      width: 2px;
+      height: 5px;
+      border-radius: 0 2px 2px 0;
+      background: var(--ink);
+    }
+
+    .phone-content {
+      height: 100%;
+      padding: 64px 18px 92px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 0 0, rgba(232, 185, 93, 0.12), transparent 29%),
+        var(--phone);
+    }
+
+    .page-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .hello {
+      display: grid;
+      gap: 4px;
+    }
+
+    .eyebrow {
+      color: var(--green-dark);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h2 {
+      font-size: 25px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      font-size: 16px;
+      line-height: 1.3;
+      letter-spacing: 0;
+    }
+
+    .subtle {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .icon-button {
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      color: var(--green-dark);
+      background: var(--surface);
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .hero-card {
+      display: grid;
+      gap: 16px;
+      padding: 18px;
+      border: 1px solid rgba(79, 143, 103, 0.16);
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, #edf5ec, #fffdf6 78%);
+      box-shadow: 0 12px 28px rgba(70, 86, 59, 0.1);
+    }
+
+    .hero-actions {
+      display: grid;
+      grid-template-columns: 1.35fr 1fr;
+      gap: 10px;
+    }
+
+    .button {
+      height: 48px;
+      border: 0;
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .button-primary {
+      color: #fff;
+      background: var(--green);
+      box-shadow: 0 10px 20px rgba(79, 143, 103, 0.22);
+    }
+
+    .button-soft {
+      color: var(--green-dark);
+      background: var(--green-soft);
+    }
+
+    .section-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 22px 0 12px;
+    }
+
+    .section-row h3 {
+      font-size: 15px;
+    }
+
+    .text-link {
+      color: var(--green-dark);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .album-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .album-card {
+      min-height: 152px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .photo {
+      position: relative;
+      min-height: 96px;
+      overflow: hidden;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0)),
+        #d9e5d6;
+    }
+
+    .photo.shelf {
+      background:
+        linear-gradient(135deg, rgba(255, 253, 248, 0.58), rgba(255, 253, 248, 0)),
+        #d9ddc5;
+    }
+
+    .photo.drawer {
+      background:
+        linear-gradient(135deg, rgba(255, 253, 248, 0.48), rgba(255, 253, 248, 0)),
+        #d8e6e0;
+    }
+
+    .photo.box {
+      background:
+        linear-gradient(135deg, rgba(255, 253, 248, 0.54), rgba(255, 253, 248, 0)),
+        #e8dcc3;
+    }
+
+    .photo::before,
+    .photo::after {
+      content: "";
+      position: absolute;
+      border-radius: 6px;
+      background: rgba(255, 253, 248, 0.58);
+      box-shadow: inset 0 0 0 1px rgba(117, 100, 68, 0.08);
+    }
+
+    .photo::before {
+      left: 18px;
+      top: 18px;
+      width: 62px;
+      height: 44px;
+    }
+
+    .photo::after {
+      right: 16px;
+      bottom: 14px;
+      width: 46px;
+      height: 56px;
+    }
+
+    .album-meta {
+      display: grid;
+      gap: 4px;
+      padding: 10px;
+    }
+
+    .album-meta strong {
+      font-size: 13px;
+      line-height: 1.25;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      min-height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      color: var(--green-dark);
+      background: var(--green-soft);
+      font-size: 11px;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+
+    .bottom-nav {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      height: 76px;
+      padding: 8px 14px 16px;
+      border-top: 1px solid rgba(219, 212, 197, 0.78);
+      background: rgba(255, 253, 248, 0.94);
+      backdrop-filter: blur(14px);
+    }
+
+    .nav-item {
+      display: grid;
+      place-items: center;
+      align-content: center;
+      gap: 3px;
+      color: #87907f;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .nav-item.active {
+      color: var(--green-dark);
+    }
+
+    .nav-icon {
+      width: 22px;
+      height: 22px;
+      position: relative;
+      border: 2px solid currentColor;
+      border-radius: 7px;
+    }
+
+    .nav-icon.search {
+      border-radius: 50%;
+    }
+
+    .nav-icon.search::after {
+      content: "";
+      position: absolute;
+      right: -6px;
+      bottom: -4px;
+      width: 9px;
+      height: 2px;
+      border-radius: 2px;
+      background: currentColor;
+      transform: rotate(45deg);
+    }
+
+    .nav-icon.box::before {
+      content: "";
+      position: absolute;
+      left: 4px;
+      right: 4px;
+      top: 8px;
+      border-top: 2px solid currentColor;
+    }
+
+    .review-shell {
+      display: grid;
+      gap: 12px;
+    }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-soft);
+    }
+
+    .segment {
+      height: 34px;
+      border: 0;
+      border-radius: 6px;
+      color: var(--muted);
+      background: transparent;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .segment.active {
+      color: var(--green-dark);
+      background: var(--surface);
+      box-shadow: 0 4px 12px rgba(82, 72, 51, 0.1);
+    }
+
+    .annotated-photo {
+      position: relative;
+      height: 286px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(135deg, rgba(255, 253, 248, 0.3), rgba(255, 253, 248, 0)),
+        #dce7df;
+    }
+
+    .drawer-lines {
+      position: absolute;
+      inset: 16px;
+      border: 2px solid rgba(125, 105, 68, 0.18);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(90deg, transparent 49%, rgba(125, 105, 68, 0.1) 50%, transparent 51%),
+        linear-gradient(0deg, transparent 49%, rgba(125, 105, 68, 0.1) 50%, transparent 51%);
+    }
+
+    .item-shape {
+      position: absolute;
+      border-radius: 7px;
+      background: rgba(255, 253, 248, 0.72);
+      box-shadow: inset 0 0 0 1px rgba(84, 68, 40, 0.1);
+    }
+
+    .item-shape.book-a {
+      left: 38px;
+      top: 54px;
+      width: 92px;
+      height: 84px;
+      background: #8db3b0;
+    }
+
+    .item-shape.pen {
+      left: 126px;
+      top: 160px;
+      width: 116px;
+      height: 18px;
+      background: #3c443b;
+    }
+
+    .item-shape.book-b {
+      right: 42px;
+      top: 70px;
+      width: 100px;
+      height: 70px;
+      background: #c9d7e6;
+    }
+
+    .item-shape.clip {
+      right: 54px;
+      bottom: 44px;
+      width: 62px;
+      height: 48px;
+      border-radius: 24px;
+      background: #79a7c7;
+    }
+
+    .bbox {
+      position: absolute;
+      border: 2px dashed var(--green-dark);
+      border-radius: 6px;
+    }
+
+    .bbox .num {
+      position: absolute;
+      left: -8px;
+      top: -11px;
+      display: grid;
+      place-items: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      color: #fff;
+      background: var(--green-dark);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .bbox.one {
+      left: 32px;
+      top: 46px;
+      width: 108px;
+      height: 100px;
+    }
+
+    .bbox.two {
+      left: 116px;
+      top: 148px;
+      width: 138px;
+      height: 44px;
+    }
+
+    .bbox.three {
+      right: 34px;
+      top: 58px;
+      width: 116px;
+      height: 94px;
+    }
+
+    .bbox.four {
+      right: 44px;
+      bottom: 35px;
+      width: 78px;
+      height: 66px;
+    }
+
+    .review-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .review-item {
+      display: grid;
+      grid-template-columns: 28px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .check {
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      color: #fff;
+      background: var(--green);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .confidence {
+      color: var(--green-dark);
+      background: var(--green-soft);
+    }
+
+    .low {
+      color: #815c1a;
+      background: var(--yellow-soft);
+    }
+
+    .fixed-bottom {
+      position: absolute;
+      left: 18px;
+      right: 18px;
+      bottom: 88px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .review-phone .fixed-bottom {
+      bottom: 24px;
+    }
+
+    .review-actions {
+      grid-template-columns: 1fr 1.35fr;
+    }
+
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 48px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 0 8px 18px rgba(89, 79, 55, 0.08);
+    }
+
+    .search-mark {
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--green-dark);
+      border-radius: 50%;
+      position: relative;
+      flex: none;
+    }
+
+    .search-mark::after {
+      content: "";
+      position: absolute;
+      right: -7px;
+      bottom: -4px;
+      width: 9px;
+      height: 2px;
+      border-radius: 2px;
+      background: var(--green-dark);
+      transform: rotate(45deg);
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 12px 0 16px;
+    }
+
+    .chip {
+      height: 30px;
+      padding: 0 11px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: #626b5d;
+      background: var(--surface);
+      font-size: 12px;
+      font-weight: 750;
+      line-height: 28px;
+    }
+
+    .result-stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .result-card {
+      display: grid;
+      grid-template-columns: 114px 1fr;
+      gap: 12px;
+      min-height: 124px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: 0 8px 18px rgba(89, 79, 55, 0.07);
+    }
+
+    .result-card .photo {
+      min-height: 104px;
+      border-radius: 7px;
+    }
+
+    .result-copy {
+      display: grid;
+      align-content: start;
+      gap: 8px;
+      padding-top: 2px;
+    }
+
+    .reason {
+      color: #6a5431;
+      background: var(--yellow-soft);
+    }
+
+    .photo-badge {
+      position: absolute;
+      left: 8px;
+      bottom: 8px;
+      z-index: 2;
+      padding: 4px 7px;
+      border-radius: 999px;
+      color: var(--green-dark);
+      background: rgba(255, 253, 248, 0.86);
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .detail-hero {
+      display: grid;
+      gap: 10px;
+    }
+
+    .cover-photo {
+      height: 180px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(135deg, rgba(255, 253, 248, 0.45), rgba(255, 253, 248, 0)),
+        #e0d4bc;
+      position: relative;
+    }
+
+    .cover-photo::before {
+      content: "";
+      position: absolute;
+      left: 34px;
+      right: 34px;
+      bottom: 32px;
+      height: 86px;
+      border: 2px solid rgba(118, 96, 61, 0.2);
+      border-radius: var(--radius);
+      background: rgba(255, 253, 248, 0.42);
+    }
+
+    .cover-photo::after {
+      content: "";
+      position: absolute;
+      left: 72px;
+      right: 72px;
+      bottom: 72px;
+      border-top: 2px solid rgba(118, 96, 61, 0.2);
+    }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      display: grid;
+      gap: 3px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .stat strong {
+      font-size: 16px;
+    }
+
+    .item-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .photo-carousel {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .carousel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .carousel-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #647061;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .carousel-indicator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      min-height: 22px;
+      margin-top: -2px;
+    }
+
+    .carousel-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: #d9d2c4;
+      transition: width 0.2s ease, background 0.2s ease;
+    }
+
+    .carousel-dot.active {
+      width: 22px;
+      background: var(--green);
+    }
+
+    .carousel-count {
+      color: #758070;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .carousel-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .mini-button {
+      height: 34px;
+      border: 1px solid rgba(79, 143, 103, 0.24);
+      border-radius: 7px;
+      color: var(--green-dark);
+      background: #f4faf4;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .mini-button.secondary {
+      color: #6b5b38;
+      border-color: rgba(232, 185, 93, 0.34);
+      background: var(--yellow-soft);
+    }
+
+    .tag {
+      padding: 8px 10px;
+      border-radius: 999px;
+      color: var(--ink);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .mini-map {
+      height: 164px;
+      margin-top: 10px;
+    }
+
+    .mini-map .drawer-lines {
+      inset: 12px;
+    }
+
+    .mini-map .item-shape.book-a {
+      left: 36px;
+      top: 40px;
+      width: 92px;
+      height: 76px;
+    }
+
+    .mini-map .item-shape.pen {
+      left: 122px;
+      top: 110px;
+      width: 112px;
+      height: 16px;
+    }
+
+    .mini-map .item-shape.book-b {
+      right: 40px;
+      top: 42px;
+      width: 96px;
+      height: 70px;
+    }
+
+    .mini-map .item-shape.clip {
+      right: 52px;
+      bottom: 30px;
+      width: 58px;
+      height: 42px;
+    }
+
+    .mini-map .bbox.one {
+      left: 30px;
+      top: 32px;
+      width: 108px;
+      height: 90px;
+    }
+
+    .mini-map .bbox.two {
+      left: 112px;
+      top: 98px;
+      width: 134px;
+      height: 38px;
+    }
+
+    .mini-map .bbox.three {
+      right: 32px;
+      top: 34px;
+      width: 112px;
+      height: 86px;
+    }
+
+    .mini-map .bbox.four {
+      right: 42px;
+      bottom: 22px;
+      width: 74px;
+      height: 58px;
+    }
+
+    .note-card {
+      padding: 12px;
+      border: 1px solid rgba(232, 185, 93, 0.3);
+      border-radius: var(--radius);
+      background: var(--yellow-soft);
+      color: #6f5627;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .view-panel[data-active="list"] .annotated-photo {
+      display: none;
+    }
+
+    .view-panel[data-active="mark"] .list-expanded {
+      display: none;
+    }
+
+    .list-expanded {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .edit-line {
+      display: grid;
+      gap: 6px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .edit-line:last-child {
+      padding-bottom: 0;
+      border-bottom: 0;
+    }
+
+    .fake-input {
+      height: 34px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fffefa;
+      color: var(--ink);
+      font-size: 13px;
+      line-height: 32px;
+    }
+
+    @media (max-width: 1740px) {
+      .board {
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="board">
+    <header class="board-head">
+      <div>
+        <h1 class="board-title">拍箱找物 UI 原型</h1>
+        <p class="board-note">暖白底色、柔和绿色主操作、相册式容器浏览。四屏用于对齐小程序第一版的信息层级和视觉气质。</p>
+      </div>
+      <div class="palette" aria-label="色板">
+        <span>暖白 + 绿 + 暖黄</span>
+        <span class="swatch" style="background:#fffdf8"></span>
+        <span class="swatch" style="background:#4f8f67"></span>
+        <span class="swatch" style="background:#e8b95d"></span>
+      </div>
+    </header>
+
+    <section class="phones" aria-label="四屏总览">
+      <article class="phone-wrap">
+        <div class="screen-label"><span>01 首页</span><span>Home</span></div>
+        <div class="phone">
+          <div class="status"><span>9:41</span><span class="status-right">5G <span class="battery"></span></span></div>
+          <div class="island"></div>
+          <div class="phone-content">
+            <div class="page-top">
+              <div class="hello">
+                <span class="eyebrow">今天整理一点点</span>
+                <h2>东西在哪，一搜就知道</h2>
+              </div>
+              <div class="icon-button" aria-hidden="true">+</div>
+            </div>
+
+            <section class="hero-card">
+              <div>
+                <h3>拍下箱内物品</h3>
+                <p class="subtle">确认清单后保存，下次不用翻箱倒柜。</p>
+              </div>
+              <div class="hero-actions">
+                <button class="button button-primary">拍一箱</button>
+                <button class="button button-soft">找东西</button>
+              </div>
+            </section>
+
+            <div class="section-row">
+              <h3>最近整理</h3>
+              <span class="text-link">全部容器</span>
+            </div>
+            <div class="album-grid">
+              <div class="album-card">
+                <div class="photo drawer"></div>
+                <div class="album-meta">
+                  <strong>书桌左侧抽屉</strong>
+                  <span class="subtle">8 件物品</span>
+                  <span class="pill">刚刚更新</span>
+                </div>
+              </div>
+              <div class="album-card">
+                <div class="photo box"></div>
+                <div class="album-meta">
+                  <strong>卧室 3 号箱</strong>
+                  <span class="subtle">12 件物品</span>
+                  <span class="pill">换季衣物</span>
+                </div>
+              </div>
+              <div class="album-card">
+                <div class="photo shelf"></div>
+                <div class="album-meta">
+                  <strong>客厅工具盒</strong>
+                  <span class="subtle">6 件物品</span>
+                  <span class="pill">常用</span>
+                </div>
+              </div>
+              <div class="album-card">
+                <div class="photo"></div>
+                <div class="album-meta">
+                  <strong>露营装备袋</strong>
+                  <span class="subtle">9 件物品</span>
+                  <span class="pill">待复核</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <nav class="bottom-nav">
+            <div class="nav-item active"><span class="nav-icon"></span><span>首页</span></div>
+            <div class="nav-item"><span class="nav-icon search"></span><span>找东西</span></div>
+            <div class="nav-item"><span class="nav-icon box"></span><span>容器</span></div>
+          </nav>
+        </div>
+      </article>
+
+      <article class="phone-wrap">
+        <div class="screen-label"><span>02 识别确认</span><span>Review</span></div>
+        <div class="phone review-phone">
+          <div class="status"><span>9:41</span><span class="status-right">5G <span class="battery"></span></span></div>
+          <div class="island"></div>
+          <div class="phone-content review-shell">
+            <div class="page-top">
+              <div class="hello">
+                <span class="eyebrow">书桌左侧抽屉</span>
+                <h2>确认识别结果</h2>
+              </div>
+              <div class="pill">照片 1/2 · 4 件</div>
+            </div>
+
+            <div class="segmented" role="tablist" aria-label="确认视图">
+              <button class="segment active" data-mode="mark" type="button">标注</button>
+              <button class="segment" data-mode="list" type="button">清单</button>
+            </div>
+
+            <div class="view-panel" data-active="mark">
+              <div class="annotated-photo">
+                <div class="drawer-lines"></div>
+                <div class="item-shape book-a"></div>
+                <div class="item-shape pen"></div>
+                <div class="item-shape book-b"></div>
+                <div class="item-shape clip"></div>
+                <div class="bbox one"><span class="num">1</span></div>
+                <div class="bbox two"><span class="num">2</span></div>
+                <div class="bbox three"><span class="num">3</span></div>
+                <div class="bbox four"><span class="num">4</span></div>
+              </div>
+
+              <div class="list-expanded">
+                <div class="edit-line">
+                  <span class="subtle">1 物品名称</span>
+                  <div class="fake-input">蓝色绘画本</div>
+                </div>
+                <div class="edit-line">
+                  <span class="subtle">2 物品名称</span>
+                  <div class="fake-input">黑色笔</div>
+                </div>
+                <div class="edit-line">
+                  <span class="subtle">备注</span>
+                  <div class="fake-input">放在靠左一侧，常用</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="review-list">
+              <div class="review-item">
+                <span class="check">1</span>
+                <div>
+                  <h3>蓝色绘画本</h3>
+                  <p class="subtle">左侧，封面偏蓝</p>
+                </div>
+                <span class="pill confidence">86%</span>
+              </div>
+              <div class="review-item">
+                <span class="check">2</span>
+                <div>
+                  <h3>黑色笔</h3>
+                  <p class="subtle">中部偏左</p>
+                </div>
+                <span class="pill confidence">80%</span>
+              </div>
+              <div class="review-item">
+                <span class="check">3</span>
+                <div>
+                  <h3>《三体》</h3>
+                  <p class="subtle">可见三体字样</p>
+                </div>
+                <span class="pill confidence">90%</span>
+              </div>
+              <div class="review-item">
+                <span class="check">4</span>
+                <div>
+                  <h3>蓝色发卡</h3>
+                  <p class="subtle">右下角</p>
+                </div>
+                <span class="pill low">待确认</span>
+              </div>
+            </div>
+          </div>
+          <div class="fixed-bottom review-actions">
+            <button class="button button-soft">拍下一张</button>
+            <button class="button button-primary">下一步：拍容器</button>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone-wrap">
+        <div class="screen-label"><span>03 找东西</span><span>Search</span></div>
+        <div class="phone">
+          <div class="status"><span>9:41</span><span class="status-right">5G <span class="battery"></span></span></div>
+          <div class="island"></div>
+          <div class="phone-content">
+            <div class="page-top">
+              <div class="hello">
+                <span class="eyebrow">找东西</span>
+                <h2>想找什么？</h2>
+              </div>
+            </div>
+
+            <div class="search-box">
+              <span class="search-mark"></span>
+              <strong>蓝色封面的书</strong>
+            </div>
+            <div class="chips">
+              <span class="chip">书</span>
+              <span class="chip">黑色笔</span>
+              <span class="chip">蓝色发卡</span>
+            </div>
+
+            <div class="section-row">
+              <h3>找到 3 个可能结果</h3>
+              <span class="text-link">按相关度</span>
+            </div>
+            <div class="result-stack">
+              <div class="result-card">
+                <div class="photo drawer"><span class="photo-badge">照片 2/2</span></div>
+                <div class="result-copy">
+                  <span class="pill reason">语义 92%：蓝色封面 + 书</span>
+                  <h3>蓝色封面的书</h3>
+                  <p class="subtle">书桌左侧抽屉，照片 2 靠右上</p>
+                  <span class="pill">查看容器</span>
+                </div>
+              </div>
+              <div class="result-card">
+                <div class="photo drawer"><span class="photo-badge">照片 1/2</span></div>
+                <div class="result-copy">
+                  <span class="pill reason">名称 90%：可见文字</span>
+                  <h3>《三体》</h3>
+                  <p class="subtle">书桌左侧抽屉，照片 1 上方</p>
+                  <span class="pill">查看容器</span>
+                </div>
+              </div>
+              <div class="result-card">
+                <div class="photo box"><span class="photo-badge">照片 1/1</span></div>
+                <div class="result-copy">
+                  <span class="pill reason">特征 76%：类别 书</span>
+                  <h3>旅行手册</h3>
+                  <p class="subtle">卧室 3 号箱，收纳袋旁</p>
+                  <span class="pill">查看容器</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <nav class="bottom-nav">
+            <div class="nav-item"><span class="nav-icon"></span><span>首页</span></div>
+            <div class="nav-item active"><span class="nav-icon search"></span><span>找东西</span></div>
+            <div class="nav-item"><span class="nav-icon box"></span><span>容器</span></div>
+          </nav>
+        </div>
+      </article>
+
+      <article class="phone-wrap">
+        <div class="screen-label"><span>04 容器详情</span><span>Container</span></div>
+        <div class="phone">
+          <div class="status"><span>9:41</span><span class="status-right">5G <span class="battery"></span></span></div>
+          <div class="island"></div>
+          <div class="phone-content">
+            <div class="page-top">
+              <div class="hello">
+                <span class="eyebrow">卧室 / 书桌</span>
+                <h2>书桌左侧抽屉</h2>
+              </div>
+              <div class="icon-button" aria-hidden="true">⋯</div>
+            </div>
+
+            <section class="detail-hero">
+              <div class="cover-photo"></div>
+              <div class="stats-row">
+                <div class="stat">
+                  <strong>8</strong>
+                  <span class="subtle">件物品</span>
+                </div>
+                <div class="stat">
+                  <strong>2/2</strong>
+                  <span class="subtle">免费照片</span>
+                </div>
+                <div class="stat">
+                  <strong>今天</strong>
+                  <span class="subtle">更新</span>
+                </div>
+              </div>
+            </section>
+
+            <div class="section-row">
+              <h3>箱内照片</h3>
+              <span class="text-link">添加照片</span>
+            </div>
+            <div class="photo-carousel">
+              <div class="carousel-head">
+                <div class="carousel-title">当前箱内照片 <span class="pill">1/2</span></div>
+                <span class="pill">多拍更好找</span>
+              </div>
+              <div class="annotated-photo mini-map">
+                <div class="drawer-lines"></div>
+                <div class="item-shape book-a"></div>
+                <div class="item-shape pen"></div>
+                <div class="item-shape book-b"></div>
+                <div class="item-shape clip"></div>
+                <div class="bbox one"><span class="num">1</span></div>
+                <div class="bbox two"><span class="num">2</span></div>
+                <div class="bbox three"><span class="num">3</span></div>
+                <div class="bbox four"><span class="num">4</span></div>
+              </div>
+              <div class="carousel-indicator" aria-label="照片轮播进度">
+                <span class="carousel-dot active"></span>
+                <span class="carousel-dot"></span>
+                <span class="carousel-count">1 / 2</span>
+              </div>
+              <div class="carousel-actions">
+                <button class="mini-button" type="button">重新识别这张</button>
+                <button class="mini-button secondary" type="button">加第 3 张</button>
+              </div>
+            </div>
+
+            <div class="section-row">
+              <h3>物品</h3>
+              <span class="text-link">添加</span>
+            </div>
+            <div class="item-tags">
+              <span class="tag">蓝色绘画本</span>
+              <span class="tag">黑色笔</span>
+              <span class="tag">《三体》</span>
+              <span class="tag">蓝色发卡</span>
+              <span class="tag">便签纸</span>
+              <span class="tag">数据线</span>
+            </div>
+            <div style="height: 12px"></div>
+            <div class="note-card">默认可保存 2 张箱内照片；更多照片可升级。搜索会同时看名称、可见文字和关键特征。</div>
+          </div>
+          <nav class="bottom-nav">
+            <div class="nav-item"><span class="nav-icon"></span><span>首页</span></div>
+            <div class="nav-item"><span class="nav-icon search"></span><span>找东西</span></div>
+            <div class="nav-item active"><span class="nav-icon box"></span><span>容器</span></div>
+          </nav>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    document.querySelectorAll(".segment").forEach((button) => {
+      button.addEventListener("click", () => {
+        const group = button.closest(".segmented");
+        const panel = group.nextElementSibling;
+        group.querySelectorAll(".segment").forEach((item) => item.classList.remove("active"));
+        button.classList.add("active");
+        panel.dataset.active = button.dataset.mode;
+      });
+    });
+  </script>
+</body>
+</html>
