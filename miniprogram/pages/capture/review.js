@@ -23,11 +23,6 @@ function createDraftId() {
   return `review_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function hasDrawableBbox(item) {
-  const bbox = item && item.bbox;
-  return !!bbox && Number(bbox.width) > 0 && Number(bbox.height) > 0;
-}
-
 function unique(values) {
   return values.filter((value, index) => value && values.indexOf(value) === index);
 }
@@ -38,7 +33,6 @@ function createItemViewModel(item) {
   const fullTagList = unique((item.colors || []).concat(item.features || [], item.aliases || []));
   const tagList = fullTagList.slice(0, 6);
   return Object.assign({}, item, {
-    hasBbox: hasDrawableBbox(item),
     hasTags: tagList.length > 0,
     tagList,
     tagText: fullTagList.join(' '),
@@ -55,14 +49,13 @@ Page({
     warnings: [],
     imageDrafts: [],
     currentIndex: 0,
-    viewMode: 'mark',
-    isMarkMode: true,
-    isListMode: false,
+    viewMode: 'summary',
+    isSummaryMode: true,
+    isEditMode: false,
     showAddPhotoHint: true,
     currentLabel: '照片 1/1',
     showAiWarning: false,
     aiStatusText: '',
-    markedCount: 0,
     freeLimit: FREE_CONTENT_IMAGE_LIMIT
   },
 
@@ -111,7 +104,6 @@ Page({
       currentLabel: `照片 ${safeIndex + 1}/${Math.max(imageDrafts.length, 1)}`,
       imagePath: draft.imagePath || draft.fileId || '',
       items,
-      markedCount: items.filter((item) => item.hasBbox).length,
       showAiWarning: !!draft.usedMock,
       aiStatusText: draft.usedMock
         ? `AI 未生效：${draft.aiErrorMessage || '已回退到 mock 数据'}`
@@ -125,11 +117,11 @@ Page({
   },
 
   switchViewMode(event) {
-    const viewMode = event.currentTarget.dataset.mode || 'mark';
+    const viewMode = event.currentTarget.dataset.mode || 'summary';
     this.setData({
       viewMode,
-      isMarkMode: viewMode === 'mark',
-      isListMode: viewMode !== 'mark'
+      isSummaryMode: viewMode === 'summary',
+      isEditMode: viewMode === 'edit'
     });
   },
 
@@ -169,13 +161,16 @@ Page({
       const imagePath = getChosenPath(result);
       if (!imagePath) return;
       wx.showLoading({ title: 'AI 识别中' });
-      ai.analyzeImage({ imagePath, allowMockFallback: false })
-        .then((analyzed) => {
-          return imageStore.persistImage(analyzed.imagePath || imagePath, 'find-things/content')
-            .then((storedPath) => Object.assign({}, analyzed, {
-              imagePath: storedPath,
-              fileId: storedPath
-            }));
+      const persistOriginal = imageStore.persistImage(imagePath, 'find-things/content');
+      const analyzePrepared = imageStore.prepareImageForAnalyze(imagePath)
+        .then((analyzePath) => ai.analyzeImage({ imagePath: analyzePath, allowMockFallback: false }));
+
+      Promise.all([persistOriginal, analyzePrepared])
+        .then(([storedPath, analyzed]) => {
+          return Object.assign({}, analyzed, {
+            imagePath: storedPath,
+            fileId: storedPath
+          });
         })
         .then((analyzed) => {
           const nextDraft = this.createImageDraft(analyzed, this.data.imageDrafts.length);

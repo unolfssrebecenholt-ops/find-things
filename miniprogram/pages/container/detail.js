@@ -1,4 +1,5 @@
 const ai = require('../../services/ai');
+const imageStore = require('../../services/image-store');
 const storage = require('../../services/storage');
 const { withDisplayIndexes } = require('../../utils/geometry');
 
@@ -218,9 +219,13 @@ Page({
         itemCount: 0
       };
       wx.showLoading({ title: 'AI 识别中' });
-      ai.analyzeImage({ imagePath: fileId, allowMockFallback: false })
-        .then((analyzed) => {
-          imageInput.fileId = analyzed.imagePath || fileId;
+      const persistOriginal = imageStore.persistImage(fileId, 'find-things/content');
+      const analyzePrepared = imageStore.prepareImageForAnalyze(fileId)
+        .then((analyzePath) => ai.analyzeImage({ imagePath: analyzePath, allowMockFallback: false }));
+
+      Promise.all([persistOriginal, analyzePrepared])
+        .then(([storedPath, analyzed]) => {
+          imageInput.fileId = storedPath;
           if (typeof storage.addContentImage === 'function') {
             const savedImage = storage.addContentImage(this.data.container._id, imageInput);
             const image = pickAddedContentImage(savedImage, imageInput, index);

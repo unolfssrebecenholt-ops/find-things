@@ -49,17 +49,21 @@ test('home page matches the warm four-screen prototype structure', () => {
   assert.match(wxml, /最近整理/);
 });
 
-test('review page exposes mark-list switching and a next photo entry', () => {
+test('review page presents a plain photo and inventory list before editing', () => {
   const wxml = readMiniProgramFile('pages', 'capture', 'review.wxml');
   const wxss = readMiniProgramFile('pages', 'capture', 'review.wxss');
 
   assert.match(wxml, /segmented/);
-  assert.match(wxml, />标注</);
   assert.match(wxml, />清单</);
+  assert.match(wxml, />编辑</);
   assert.match(wxml, /拍下一张/);
   assert.match(wxml, /下一步：拍容器/);
-  assert.match(wxml, /mark-summary/);
+  assert.match(wxml, /summary-panel/);
+  assert.match(wxml, /plain-photo/);
   assert.match(wxml, /quick-list/);
+  assert.doesNotMatch(wxml, /annotated-image/);
+  assert.doesNotMatch(wxml, />标注</);
+  assert.doesNotMatch(wxml, /标框/);
   assert.doesNotMatch(wxml, /list-expanded/);
   assert.doesNotMatch(wxml, /fake-input/);
   assert.doesNotMatch(wxml, /photo-strip/);
@@ -81,6 +85,18 @@ test('runtime pages do not inject demo data into home or search', () => {
   assert.doesNotMatch(captureWxml, /使用示例数据/);
   assert.match(appJs, /mockMode: false/);
   assert.match(aiConfigJs, /fallbackToMock: false/);
+});
+
+test('capture flows compress analysis images while preserving stored content photos', () => {
+  const captureJs = readMiniProgramFile('pages', 'capture', 'index.js');
+  const reviewJs = readMiniProgramFile('pages', 'capture', 'review.js');
+  const detailJs = readMiniProgramFile('pages', 'container', 'detail.js');
+
+  for (const js of [captureJs, reviewJs, detailJs]) {
+    assert.match(js, /prepareImageForAnalyze/);
+    assert.match(js, /persistImage/);
+    assert.match(js, /Promise\.all/);
+  }
 });
 
 test('container edit keeps a draft and returns home after saving', () => {

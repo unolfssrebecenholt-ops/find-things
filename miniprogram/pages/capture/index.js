@@ -46,16 +46,19 @@ Page({
   analyze(imagePath, options) {
     if (!imagePath) return;
     wx.showLoading({ title: 'AI 识别中' });
-    ai.analyzeImage(Object.assign({
-      imagePath,
-      allowMockFallback: false
-    }, options || {}))
-      .then((result) => {
-        return imageStore.persistImage(result.imagePath || imagePath, 'find-things/content')
-          .then((storedPath) => Object.assign({}, result, {
-            imagePath: storedPath,
-            fileId: storedPath
-          }));
+    const persistOriginal = imageStore.persistImage(imagePath, 'find-things/content');
+    const analyzePrepared = imageStore.prepareImageForAnalyze(imagePath)
+      .then((analyzePath) => ai.analyzeImage(Object.assign({
+        imagePath: analyzePath,
+        allowMockFallback: false
+      }, options || {})));
+
+    Promise.all([persistOriginal, analyzePrepared])
+      .then(([storedPath, result]) => {
+        return Object.assign({}, result, {
+          imagePath: storedPath,
+          fileId: storedPath
+        });
       })
       .then((result) => {
         wx.removeStorageSync('reviewDraft');

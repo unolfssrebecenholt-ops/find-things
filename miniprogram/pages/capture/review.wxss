@@ -48,17 +48,29 @@
   box-shadow: 0 8rpx 20rpx rgba(82, 72, 51, 0.1);
 }
 
-.mark-panel,
-.list-panel {
+.summary-panel,
+.edit-panel {
   display: grid;
   gap: 16rpx;
 }
 
 .photo-stage {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 480rpx;
+  overflow: hidden;
+  background: linear-gradient(135deg, #edf6ee, #f7efe0);
+  border: 1rpx solid #dfe5d9;
+  border-radius: 8rpx;
 }
 
-.mark-summary {
+.plain-photo {
+  width: 100%;
+  height: 520rpx;
+}
+
+.summary-card {
   display: flex;
   align-items: center;
   justify-content: space-between;

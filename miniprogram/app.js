@@ -1,5 +1,5 @@
 const cloudConfig = require('./config/cloud');
-const aiConfig = require('./config/ai');
+const ai = require('./services/ai');
 
 App({
   globalData: {
@@ -13,7 +13,7 @@ App({
     const launchedAt = Date.now();
     this.globalData.launchedAt = launchedAt;
 
-    const needsCloud = aiConfig.transport === 'cloud';
+    const needsCloud = ai.getRuntimeConfig().transport === 'cloud';
     if (needsCloud && typeof wx !== 'undefined' && wx.cloud) {
       try {
         wx.cloud.init({

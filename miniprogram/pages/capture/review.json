@@ -1,7 +1,6 @@
 {
   "navigationBarTitleText": "确认识别",
   "usingComponents": {
-    "annotated-image": "/components/annotated-image/index",
     "item-editor": "/components/item-editor/index"
   }
 }

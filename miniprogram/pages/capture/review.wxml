@@ -9,33 +9,33 @@
 
   <view class="segmented">
     <button
-      class="segment {{viewMode == 'mark' ? 'active' : ''}}"
-      data-mode="mark"
-      bindtap="switchViewMode"
-    >标注</button>
-    <button
-      class="segment {{viewMode == 'list' ? 'active' : ''}}"
-      data-mode="list"
+      class="segment {{viewMode == 'summary' ? 'active' : ''}}"
+      data-mode="summary"
       bindtap="switchViewMode"
     >清单</button>
+    <button
+      class="segment {{viewMode == 'edit' ? 'active' : ''}}"
+      data-mode="edit"
+      bindtap="switchViewMode"
+    >编辑</button>
   </view>
 
   <view wx:if="{{showAiWarning}}" class="warning-card">{{aiStatusText}}</view>
 
-  <view wx:if="{{isMarkMode}}" class="mark-panel">
+  <view wx:if="{{isSummaryMode}}" class="summary-panel">
     <view class="photo-stage">
-      <annotated-image image-src="{{imagePath}}" items="{{items}}"></annotated-image>
+      <image class="plain-photo" mode="aspectFit" src="{{imagePath}}"></image>
     </view>
-    <view class="mark-summary">
+    <view class="summary-card">
       <view>
         <text class="summary-title">已识别 {{items.length}} 件</text>
-        <text class="subtle">图片上只显示编号，名称在下方核对，避免遮挡物品。</text>
+        <text class="subtle">不在图片上画框，按清单核对名称和方位，避免误导。</text>
       </view>
-      <text class="pill">{{markedCount}} 个标框</text>
+      <text class="pill">清单</text>
     </view>
     <view class="quick-list">
       <view wx:for="{{items}}" wx:key="tempId" class="quick-item">
-        <text class="quick-index {{item.hasBbox ? '' : 'muted'}}">{{item.displayIndex}}</text>
+        <text class="quick-index">{{item.displayIndex}}</text>
         <view class="quick-copy">
           <text class="quick-name">{{item.displayName}}</text>
           <text class="subtle">{{item.displayDescription}}</text>
@@ -48,7 +48,7 @@
     </view>
   </view>
 
-  <view wx:if="{{isListMode}}" class="list-panel">
+  <view wx:if="{{isEditMode}}" class="edit-panel">
     <view class="editor-card">
       <item-editor items="{{items}}" bind:change="handleItemsChange"></item-editor>
     </view>

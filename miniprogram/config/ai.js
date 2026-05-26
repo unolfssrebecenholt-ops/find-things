@@ -1,6 +1,6 @@
 const defaults = {
   mode: 'real',
-  transport: 'direct',
+  transport: 'cloud',
   cloudFunctionName: 'ftAnalyzeImage',
   baseUrl: 'https://aipaiai.cn',
   endpoint: '/v1/chat/completions',
@@ -11,7 +11,7 @@ const defaults = {
   modelStorageKey: 'findThings.aiModel',
   transportStorageKey: 'findThings.aiTransport',
   timeout: 60000,
-  maxItems: 16,
+  maxItems: 12,
   fallbackToMock: false
 };
 

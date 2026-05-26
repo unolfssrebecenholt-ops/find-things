@@ -6,6 +6,11 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const DEFAULT_ENDPOINT = '/v1/chat/completions';
 const localConfig = loadLocalConfig();
 const MAX_REMOTE_IMAGE_BYTES = 8 * 1024 * 1024;
+const DEFAULT_MAX_ITEMS = 12;
+const MAX_ITEMS_LIMIT = 16;
+const DEFAULT_FUNCTION_TIMEOUT_MS = 120000;
+const FUNCTION_TIMEOUT_HEADROOM_MS = 15000;
+const MIN_AI_REQUEST_TIMEOUT_MS = 5000;
 
 function nowMs() {
   return Date.now();
@@ -50,6 +55,34 @@ function env(name, fallback, localKey) {
   return process.env[name] || localConfig[localKey || name] || fallback || '';
 }
 
+function boundedInteger(value, fallback, minimum, maximum) {
+  const number = Math.floor(Number(value));
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(minimum, Math.min(number, maximum));
+}
+
+function normalizeMaxItems(value) {
+  const number = Math.floor(Number(value));
+  if (!Number.isFinite(number) || number < 1) return DEFAULT_MAX_ITEMS;
+  return Math.min(number, MAX_ITEMS_LIMIT);
+}
+
+function aiRequestTimeoutMs() {
+  const functionTimeoutMs = boundedInteger(
+    env('FUNCTION_TIMEOUT_MS', DEFAULT_FUNCTION_TIMEOUT_MS, 'functionTimeoutMs'),
+    DEFAULT_FUNCTION_TIMEOUT_MS,
+    FUNCTION_TIMEOUT_HEADROOM_MS + MIN_AI_REQUEST_TIMEOUT_MS,
+    300000
+  );
+  const defaultTimeoutMs = Math.max(MIN_AI_REQUEST_TIMEOUT_MS, functionTimeoutMs - FUNCTION_TIMEOUT_HEADROOM_MS);
+  return boundedInteger(
+    env('OPENAI_COMPAT_TIMEOUT_MS', defaultTimeoutMs, 'timeoutMs'),
+    defaultTimeoutMs,
+    MIN_AI_REQUEST_TIMEOUT_MS,
+    defaultTimeoutMs
+  );
+}
+
 function endpointUrl() {
   const baseUrl = env('OPENAI_COMPAT_BASE_URL', 'https://aipaiai.cn', 'baseUrl').replace(/\/+$/, '');
   const endpoint = env('OPENAI_COMPAT_ENDPOINT', DEFAULT_ENDPOINT, 'endpoint');
@@ -58,12 +91,17 @@ function endpointUrl() {
 
 function buildPrompt(maxItems) {
   return [
-    '你是一个储物照片识别助手。请识别照片里对“之后找东西”有价值的具体物品。',
+    '你是一个储物照片识别助手。目标是尽量完整盘点主收纳容器内部的可搜索物品，容器可能是抽屉、箱子、收纳袋、柜格或其他储物空间。',
     '返回严格 JSON，不要 Markdown，不要解释。',
-    '字段结构：{"items":[{"displayName":"物品名称","category":"类别","features":["关键特征"],"colors":["颜色"],"visibleText":"可见文字","description":"一句自然语言描述，包含位置、外观、用途线索","aliases":["可搜索别名"],"bbox":{"x":0,"y":0,"width":0,"height":0},"confidence":0.8}]}',
-    'bbox 必须是相对整张图片的归一化坐标，x/y/width/height 都在 0 到 1 之间，并尽量紧贴物品可见区域。',
-    `最多返回 ${maxItems || 16} 个物品。可以合并重复小件，例如多包同类纸巾或多枚钥匙，但要保留明显不同的物品。`,
-    '不要把抽屉、墙面、桌面、阴影当作物品。'
+    '字段结构：{"items":[{"displayName":"标题，优先品牌/文字 + 物品类型；无法判断具体名称时用特征描述","brandName":"可见品牌或Logo，没有则空字符串","category":"类别","features":["关键特征"],"colors":["颜色"],"visibleText":"所有可读文字/型号/Logo文字","description":"一句自然语言描述，必须包含大致方位、外观、用途线索","aliases":["可搜索别名"],"inContainer":true,"confidence":0.8}]}',
+    '只识别容器内部：先判断主收纳容器的内侧边界；边界外的任何物品、家具、桌面、地面、墙面、人体或背景元素必须设为 inContainer:false 或直接不返回。',
+    '请按区域从左上到右下扫描，不要只返回最显眼、最大或最容易识别的物品。',
+    '不要把多个物品合成一个条目；每个条目只描述一个独立物品，不要返回一堆杂物、容器边缘、把手或容器本身。',
+    '凡是之后可能被用户搜索、取用或盘点的独立实物都算可搜索物品；容器结构、装饰、反光、阴影和背景元素不算。',
+    '如果看到品牌、Logo、型号或包装文字，要尽量 OCR：brandName 填可见品牌/Logo，visibleText 填可读文字，displayName 优先使用“品牌/文字 + 物品类型”；识别不到具体名称时，用主要颜色/材质/形状/用途组成特征描述。',
+    '遮挡或只露出一部分但仍可辨认的物品也要返回；名称不确定时使用“疑似…”或外观描述，并降低 confidence。',
+    `最多返回 ${maxItems || 16} 个物品。可以合并高度相似、紧邻且用途相同的重复小件，但要保留明显不同的物品。`,
+    '不要把容器、容器边缘、把手、墙面、桌面、地面、阴影当作物品；完全无法辨认的杂乱区域不要返回。'
   ].join('\n');
 }
 
@@ -174,22 +212,46 @@ async function callAi(imageDataUrl, maxItems) {
       }
     ]
   };
-  const response = await timed('ai_request', () => postJson(url, payload, apiKey), {
+  const timeoutMs = aiRequestTimeoutMs();
+  const response = await timed('ai_request', () => postJson(url, payload, apiKey, timeoutMs), {
     host: new URL(url).host,
     model,
     requestBytes: Buffer.byteLength(JSON.stringify(payload)),
     imageBytes: dataUrlBytes(imageDataUrl),
-    maxItems
+    maxItems,
+    timeoutMs
   });
 
   return parseJsonPayload(extractMessageContent(response));
 }
 
-function postJson(url, payload, apiKey) {
+function postJson(url, payload, apiKey, timeoutMs) {
   const body = JSON.stringify(payload);
   const target = new URL(url);
+  const effectiveTimeoutMs = timeoutMs || aiRequestTimeoutMs();
   return new Promise((resolve, reject) => {
-    const request = https.request({
+    let settled = false;
+    let request;
+    const finish = (callback) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadlineTimer);
+      callback();
+    };
+    const createTimeoutError = () => {
+      const error = new Error('AI request timeout');
+      error.code = 'AI_REQUEST_TIMEOUT';
+      return error;
+    };
+    const deadlineTimer = setTimeout(() => {
+      const error = createTimeoutError();
+      if (request) {
+        request.destroy(error);
+      }
+      finish(() => reject(error));
+    }, effectiveTimeoutMs);
+
+    request = https.request({
       method: 'POST',
       hostname: target.hostname,
       path: `${target.pathname}${target.search}`,
@@ -207,19 +269,19 @@ function postJson(url, payload, apiKey) {
         if (response.statusCode < 200 || response.statusCode >= 300) {
           const error = new Error(`AI request failed with ${response.statusCode}: ${sanitizeErrorBody(responseText)}`);
           error.code = 'AI_REQUEST_FAILED';
-          reject(error);
+          finish(() => reject(error));
           return;
         }
         try {
-          resolve(JSON.parse(responseText));
+          finish(() => resolve(JSON.parse(responseText)));
         } catch (error) {
-          reject(new Error('AI response is not JSON'));
+          finish(() => reject(new Error('AI response is not JSON')));
         }
       });
     });
-    request.on('error', reject);
-    request.setTimeout(60000, () => {
-      request.destroy(new Error('AI request timeout'));
+    request.on('error', (error) => finish(() => reject(error)));
+    request.setTimeout(effectiveTimeoutMs, () => {
+      request.destroy(createTimeoutError());
     });
     request.write(body);
     request.end();
@@ -232,24 +294,58 @@ function sanitizeErrorBody(text) {
     .slice(0, 600);
 }
 
+function publicError(error) {
+  const message = error && error.message ? error.message : String(error || '');
+  const code = (error && error.code)
+    || (/timeout/i.test(message) ? 'AI_REQUEST_TIMEOUT' : 'AI_ANALYZE_FAILED');
+  const friendlyMessages = {
+    AI_KEY_MISSING: '云函数未配置 AI API Key，请检查环境变量 OPENAI_COMPAT_API_KEY。',
+    AI_REQUEST_TIMEOUT: 'AI 识别超时，请换一张更清晰或更小的照片后重试。',
+    AI_REQUEST_FAILED: 'AI 服务请求失败，请稍后重试。',
+    AI_ANALYZE_FAILED: 'AI 识别失败，请重试或手动添加物品。'
+  };
+  const errorMessage = friendlyMessages[code] || friendlyMessages.AI_ANALYZE_FAILED;
+  return {
+    items: [],
+    warnings: [errorMessage],
+    errorCode: code,
+    errorMessage
+  };
+}
+
 exports.main = async (event) => {
   const startedAt = nowMs();
-  const maxItems = event && event.maxItems ? Number(event.maxItems) : 16;
+  const maxItems = normalizeMaxItems(event && event.maxItems);
   const source = event && event.imageDataUrl
     ? 'imageDataUrl'
     : (event && event.imageFileId ? 'imageFileId' : (event && event.imageUrl ? 'imageUrl' : 'empty'));
   console.log('[ftAnalyzeImage:timing]', { stage: 'start', source, maxItems });
 
-  const imageDataUrl = event.imageDataUrl
-    || (event.imageFileId ? await timed('load_image', () => imageFileIdToDataUrl(event.imageFileId), { source }) : '')
-    || (event.imageUrl ? await timed('load_image', () => remoteImageToDataUrl(event.imageUrl), { source }) : '');
-  if (!imageDataUrl) {
-    return { items: [], warnings: ['没有收到可识别图片。'] };
+  try {
+    const imageDataUrl = event.imageDataUrl
+      || (event.imageFileId ? await timed('load_image', () => imageFileIdToDataUrl(event.imageFileId), { source }) : '')
+      || (event.imageUrl ? await timed('load_image', () => remoteImageToDataUrl(event.imageUrl), { source }) : '');
+    if (!imageDataUrl) {
+      return { items: [], warnings: ['没有收到可识别图片。'] };
+    }
+    const result = await callAi(imageDataUrl, maxItems);
+    logTiming('total', startedAt, {
+      source,
+      itemCount: result && Array.isArray(result.items) ? result.items.length : 0
+    });
+    return result;
+  } catch (error) {
+    console.error('[ftAnalyzeImage:error]', {
+      code: error && error.code,
+      message: error && error.message ? error.message : String(error)
+    });
+    return publicError(error);
   }
-  const result = await callAi(imageDataUrl, maxItems);
-  logTiming('total', startedAt, {
-    source,
-    itemCount: result && Array.isArray(result.items) ? result.items.length : 0
-  });
-  return result;
+};
+
+exports._test = {
+  aiRequestTimeoutMs,
+  normalizeMaxItems,
+  buildPrompt,
+  publicError
 };

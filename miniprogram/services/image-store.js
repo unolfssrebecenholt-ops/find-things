@@ -51,6 +51,23 @@ function saveLocalFile(filePath) {
   });
 }
 
+function prepareImageForAnalyze(filePath, options) {
+  if (!filePath || isPersistentPath(filePath) || !hasWx() || !wx.compressImage) {
+    return Promise.resolve(filePath || '');
+  }
+  const quality = Number.isFinite(options && Number(options.quality))
+    ? Math.max(20, Math.min(90, Number(options.quality)))
+    : 72;
+  return new Promise((resolve) => {
+    wx.compressImage({
+      src: filePath,
+      quality,
+      success: (result) => resolve(result.tempFilePath || filePath),
+      fail: () => resolve(filePath)
+    });
+  });
+}
+
 function persistImage(filePath, folder) {
   if (!filePath || isPersistentPath(filePath)) {
     return Promise.resolve(filePath || '');
@@ -63,5 +80,6 @@ function persistImage(filePath, folder) {
 
 module.exports = {
   persistImage,
+  prepareImageForAnalyze,
   isPersistentPath
 };

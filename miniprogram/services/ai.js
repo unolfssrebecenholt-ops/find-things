@@ -16,13 +16,22 @@ function getStorageValue(key, fallback) {
   return value === undefined || value === null || value === '' ? fallback : value;
 }
 
+function resolveTransport(config, apiKey, transport) {
+  if (transport === 'direct' && !apiKey && config.cloudFunctionName) {
+    return 'cloud';
+  }
+  return transport;
+}
+
 function getRuntimeConfig() {
   const config = mergeConfig();
+  const apiKey = getStorageValue(config.apiKeyStorageKey, config.apiKey);
+  const transport = config.lockTransport ? config.transport : getStorageValue(config.transportStorageKey, config.transport);
   return mergeConfig({
-    apiKey: getStorageValue(config.apiKeyStorageKey, config.apiKey),
+    apiKey,
     baseUrl: getStorageValue(config.baseUrlStorageKey, config.baseUrl),
     model: getStorageValue(config.modelStorageKey, config.model),
-    transport: config.lockTransport ? config.transport : getStorageValue(config.transportStorageKey, config.transport)
+    transport: resolveTransport(config, apiKey, transport)
   });
 }
 
@@ -150,12 +159,17 @@ function uploadImageForCloudAnalyze(filePath) {
 
 function buildVisionPrompt(maxItems) {
   return [
-    '你是一个储物照片识别助手。请识别照片里对“之后找东西”有价值的具体物品。',
+    '你是一个储物照片识别助手。目标是尽量完整盘点主收纳容器内部的可搜索物品，容器可能是抽屉、箱子、收纳袋、柜格或其他储物空间。',
     '返回严格 JSON，不要 Markdown，不要解释。',
-    '字段结构：{"items":[{"displayName":"物品名称","category":"类别","features":["关键特征"],"colors":["颜色"],"visibleText":"可见文字","description":"一句自然语言描述，包含位置、外观、用途线索","aliases":["可搜索别名"],"bbox":{"x":0,"y":0,"width":0,"height":0},"confidence":0.8}]}',
-    'bbox 必须是相对整张图片的归一化坐标，x/y/width/height 都在 0 到 1 之间，并尽量紧贴物品可见区域。',
-    `最多返回 ${maxItems || 16} 个物品。可以合并重复小件，例如多包同类纸巾或多枚钥匙，但要保留明显不同的物品。`,
-    '不要把抽屉、墙面、桌面、阴影当作物品。遮挡严重但可辨认的物品可以返回，置信度降低。'
+    '字段结构：{"items":[{"displayName":"标题，优先品牌/文字 + 物品类型；无法判断具体名称时用特征描述","brandName":"可见品牌或Logo，没有则空字符串","category":"类别","features":["关键特征"],"colors":["颜色"],"visibleText":"所有可读文字/型号/Logo文字","description":"一句自然语言描述，必须包含大致方位、外观、用途线索","aliases":["可搜索别名"],"inContainer":true,"confidence":0.8}]}',
+    '只识别容器内部：先判断主收纳容器的内侧边界；边界外的任何物品、家具、桌面、地面、墙面、人体或背景元素必须设为 inContainer:false 或直接不返回。',
+    '请按区域从左上到右下扫描，不要只返回最显眼、最大或最容易识别的物品。',
+    '不要把多个物品合成一个条目；每个条目只描述一个独立物品，不要返回一堆杂物、容器边缘、把手或容器本身。',
+    '凡是之后可能被用户搜索、取用或盘点的独立实物都算可搜索物品；容器结构、装饰、反光、阴影和背景元素不算。',
+    '如果看到品牌、Logo、型号或包装文字，要尽量 OCR：brandName 填可见品牌/Logo，visibleText 填可读文字，displayName 优先使用“品牌/文字 + 物品类型”；识别不到具体名称时，用主要颜色/材质/形状/用途组成特征描述。',
+    '遮挡或只露出一部分但仍可辨认的物品也要返回；名称不确定时使用“疑似…”或外观描述，并降低 confidence。',
+    `最多返回 ${maxItems || 16} 个物品。可以合并高度相似、紧邻且用途相同的重复小件，但要保留明显不同的物品。`,
+    '不要把容器、容器边缘、把手、墙面、桌面、地面、阴影当作物品；完全无法辨认的杂乱区域不要返回。'
   ].join('\n');
 }
 
@@ -192,6 +206,56 @@ function toArray(value) {
   if (Array.isArray(value)) return value.filter(Boolean).map(String);
   if (!value) return [];
   return String(value).split(/[、,，;；\s]+/).filter(Boolean);
+}
+
+function unique(values) {
+  return values.filter((value, index, list) => value && list.indexOf(value) === index);
+}
+
+function isFalseLike(value) {
+  return value === false
+    || value === 0
+    || value === 'false'
+    || value === 'no'
+    || value === '否'
+    || value === '不在';
+}
+
+function isGenericDisplayName(value) {
+  const text = String(value || '').trim().toLowerCase();
+  if (!text) return true;
+  return /^物品\s*\d*$/.test(text)
+    || ['unknown', 'object', 'item', '不确定物品', '未知物品', '小物件'].includes(text);
+}
+
+function compactTitlePart(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+function titleHasBrand(displayName, brandName) {
+  const name = compactTitlePart(displayName).toLowerCase();
+  const brand = compactTitlePart(brandName).toLowerCase();
+  return !!brand && name.includes(brand);
+}
+
+function buildFeatureDisplayName(item, features, colors) {
+  const category = compactTitlePart(item.category || item.type || '');
+  const words = unique(colors.concat(features)).slice(0, 4);
+  if (category && words.length) return `${words.join('')}${category}`;
+  if (words.length) return words.join('');
+  return compactTitlePart(item.description || item.desc || item.visibleText || item.text || '');
+}
+
+function composeDisplayName(item, brandName, features, colors, index) {
+  const rawName = compactTitlePart(item.displayName || item.name || item.objectName || item.itemName);
+  const baseName = isGenericDisplayName(rawName)
+    ? buildFeatureDisplayName(item, features, colors)
+    : rawName;
+  const fallbackName = compactTitlePart(baseName) || `物品 ${index + 1}`;
+  if (brandName && !titleHasBrand(fallbackName, brandName)) {
+    return `${brandName} ${fallbackName}`.trim();
+  }
+  return fallbackName;
 }
 
 function normalizeReturnedBbox(rawBbox) {
@@ -237,24 +301,30 @@ function normalizeReturnedBbox(rawBbox) {
 }
 
 function normalizeAiItem(item, index) {
-  const displayName = String(item.displayName || item.name || item.objectName || `物品 ${index + 1}`).trim();
+  const brandName = String(item.brandName || item.brand || item.logo || '').trim();
   const features = toArray(item.features || item.feature || item.traits);
   const colors = toArray(item.colors || item.color);
-  const aliases = toArray(item.aliases || item.keywords || item.searchTerms);
+  const displayName = composeDisplayName(item, brandName, features, colors, index);
+  const visibleText = String(item.visibleText || item.text || '').trim();
+  const aliases = unique(toArray(item.aliases || item.keywords || item.searchTerms)
+    .concat(toArray(brandName))
+    .concat(toArray(visibleText)));
   const description = String(item.description || item.desc || features.join('，') || displayName).trim();
   return {
     tempId: item.tempId || `ai_${Date.now()}_${index + 1}`,
     displayName,
     aiName: String(item.aiName || item.name || displayName).trim(),
+    brandName,
     category: String(item.category || item.type || 'other').trim(),
     features,
     colors,
-    visibleText: String(item.visibleText || item.text || '').trim(),
+    visibleText,
     description,
     aliases,
     bbox: normalizeReturnedBbox(item.bbox || item.box || item.boundingBox),
     confidence: Math.max(0, Math.min(1, Number(item.confidence || item.score || 0.72))),
     uncertaintyReason: String(item.uncertaintyReason || item.uncertainReason || '').trim(),
+    inContainer: !isFalseLike(item.inContainer),
     confirmed: item.confirmed !== false,
     note: ''
   };
@@ -262,7 +332,7 @@ function normalizeAiItem(item, index) {
 
 function normalizeAiPayload(payload, imagePath) {
   const sourceItems = Array.isArray(payload) ? payload : (payload && payload.items) || [];
-  const items = sourceItems.map(normalizeAiItem).filter((item) => item.displayName);
+  const items = sourceItems.map(normalizeAiItem).filter((item) => item.displayName && item.inContainer !== false);
   const sourceImage = payload && payload.__sourceImage;
   const storedImagePath = sourceImage && (sourceImage.imageFileId || sourceImage.imageUrl);
   return {
@@ -329,12 +399,22 @@ function callCloudAnalyze(config, imagePath) {
       data
     }).then((result) => {
       const payload = result && result.result;
+      unwrapCloudAnalyzePayload(payload);
       if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
         return Object.assign({}, payload, { __sourceImage: imageInput });
       }
       return { items: Array.isArray(payload) ? payload : [], __sourceImage: imageInput };
     });
   });
+}
+
+function unwrapCloudAnalyzePayload(payload) {
+  if (payload && payload.errorCode) {
+    const error = new Error(payload.errorMessage || 'AI 识别失败，请重试或手动添加物品。');
+    error.code = payload.errorCode;
+    throw error;
+  }
+  return payload;
 }
 
 function fallbackAnalyze(imagePath, reason) {
@@ -374,6 +454,7 @@ module.exports = {
   getRuntimeConfig,
   saveRuntimeConfig,
   getSettingsViewModel,
+  unwrapCloudAnalyzePayload,
   normalizeAiPayload,
   normalizeAiItem,
   parseJsonPayload,
