@@ -1,0 +1,49 @@
+<view class="page container-list-page">
+  <view class="list-head">
+    <text class="eyebrow">容器</text>
+    <text class="page-title">全部容器</text>
+  </view>
+
+  <view wx:if="{{hasContainers}}" class="container-stack">
+    <view
+      wx:for="{{containers}}"
+      wx:key="_id"
+      class="container-row"
+      bindtap="openContainer"
+      data-id="{{item._id}}"
+    >
+      <view class="container-photo">
+        <image wx:if="{{item.coverPhoto}}" mode="aspectFill" src="{{item.coverPhoto}}"></image>
+        <view wx:if="{{item.showPlaceholder}}" class="photo-placeholder">
+          <view class="placeholder-line wide"></view>
+          <view class="placeholder-line"></view>
+        </view>
+      </view>
+      <view class="container-copy">
+        <text class="container-name">{{item.name}}</text>
+        <text class="subtle">{{item.displayLocation}}</text>
+        <view class="meta-row">
+          <text class="pill">{{item.itemCount}} 件物品</text>
+          <text class="pill">{{item.imageCount}} 张照片</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{showEmpty}}" class="empty-state">还没有保存的容器。先拍一箱，保存后会出现在这里。</view>
+
+  <view class="bottom-nav">
+    <view class="nav-item" bindtap="goHome">
+      <view class="nav-icon"></view>
+      <text>首页</text>
+    </view>
+    <view class="nav-item" bindtap="goSearch">
+      <view class="nav-icon search"></view>
+      <text>找东西</text>
+    </view>
+    <view class="nav-item active">
+      <view class="nav-icon box"></view>
+      <text>容器</text>
+    </view>
+  </view>
+</view>

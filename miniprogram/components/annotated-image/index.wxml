@@ -1,5 +1,5 @@
 <view class="annotated-image {{compact ? 'compact' : ''}}">
-  <image wx:if="{{hasImage}}" class="photo" mode="aspectFit" src="{{imageSrc}}"></image>
+  <image wx:if="{{hasImage}}" class="photo" mode="aspectFit" src="{{imageSrc}}" bindload="handleImageLoad"></image>
   <view wx:if="{{showPlaceholder}}" class="photo placeholder-photo">
     <view class="drawer-line line-a"></view>
     <view class="drawer-line line-b"></view>
@@ -10,10 +10,11 @@
   </view>
   <view
     wx:for="{{boxes}}"
-    wx:key="tempId"
+    wx:key="boxKey"
     class="box"
     style="{{item.boxStyle}}"
   >
+    <view class="sketch-stroke"></view>
     <text class="badge">{{item.displayIndex}}</text>
   </view>
 </view>

@@ -25,6 +25,8 @@ pnpm-debug.log*
 # WeChat DevTools and cloud artifacts
 project.private.config.json
 cloudbaserc.json
+miniprogram/config/ai.local.js
+cloudfunctions/**/local.config.js
 
 # Local worktrees
 .worktrees/

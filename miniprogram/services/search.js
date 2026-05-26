@@ -4,6 +4,7 @@ const { semanticMatch } = require('../utils/semantic');
 const storage = require('./storage');
 
 const SEMANTIC_SCORE_THRESHOLD = 35;
+const KEYWORD_SCORE_THRESHOLD = 30;
 
 function byId(values) {
   return (values || []).reduce((map, value) => {
@@ -30,7 +31,10 @@ function isValidSemanticMatch(semantic) {
   const hasMatchedTokens = semantic.matchedTokens && semantic.matchedTokens.length > 0;
   const hasRequiredNonColorMatch = !semantic.requiresNonColorMatch
     || (semantic.matchedNonColorTokens && semantic.matchedNonColorTokens.length > 0);
-  return semantic.score >= SEMANTIC_SCORE_THRESHOLD && hasMatchedTokens && hasRequiredNonColorMatch;
+  return semantic.score >= SEMANTIC_SCORE_THRESHOLD
+    && hasMatchedTokens
+    && hasRequiredNonColorMatch
+    && !semantic.colorMismatch;
 }
 
 function isColorOnlyIntentMiss(semantic) {
@@ -69,14 +73,18 @@ function searchItems(query, data) {
         semanticScore,
         matchSummary: validSemantic ? semantic.summary : (scored.reasons[0] || ''),
         score,
+        keywordScore,
         reasons: scored.reasons,
         colorOnlyIntentMiss: isColorOnlyIntentMiss(semantic)
       };
     })
-    .filter((result) => !result.colorOnlyIntentMiss && (result.reasons.length || result.matchSummary))
+    .filter((result) => !result.colorOnlyIntentMiss && (
+      result.semanticScore > 0 || result.keywordScore >= KEYWORD_SCORE_THRESHOLD
+    ))
     .map((result) => {
       const publicResult = Object.assign({}, result);
       delete publicResult.colorOnlyIntentMiss;
+      delete publicResult.keywordScore;
       return publicResult;
     })
     .sort((a, b) => {

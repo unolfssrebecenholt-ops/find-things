@@ -1,9 +1,10 @@
 const cloudConfig = require('./config/cloud');
+const aiConfig = require('./config/ai');
 
 App({
   globalData: {
     appName: '拍箱找物',
-    mockMode: true,
+    mockMode: false,
     cloudEnvId: cloudConfig.envId,
     collections: cloudConfig.collections
   },
@@ -12,7 +13,8 @@ App({
     const launchedAt = Date.now();
     this.globalData.launchedAt = launchedAt;
 
-    if (!this.globalData.mockMode && typeof wx !== 'undefined' && wx.cloud) {
+    const needsCloud = aiConfig.transport === 'cloud';
+    if (needsCloud && typeof wx !== 'undefined' && wx.cloud) {
       try {
         wx.cloud.init({
           env: cloudConfig.envId,

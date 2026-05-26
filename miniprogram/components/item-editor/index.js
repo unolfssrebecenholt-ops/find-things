@@ -1,3 +1,12 @@
+const { COLORS } = require('../../utils/normalize');
+
+function splitTerms(value) {
+  return String(value || '')
+    .split(/[、,，;；\s]+/)
+    .map((term) => term.trim())
+    .filter((term, index, terms) => term && terms.indexOf(term) === index);
+}
+
 Component({
   properties: {
     items: {
@@ -28,6 +37,29 @@ Component({
     rename(event) {
       this.patchItem(Number(event.currentTarget.dataset.index), {
         displayName: event.detail.value
+      });
+    },
+
+    editCategory(event) {
+      this.patchItem(Number(event.currentTarget.dataset.index), {
+        category: event.detail.value
+      });
+    },
+
+    editTags(event) {
+      const terms = splitTerms(event.detail.value);
+      const colors = terms.filter((term) => COLORS.includes(term));
+      const searchableTerms = terms.filter((term) => !COLORS.includes(term));
+      this.patchItem(Number(event.currentTarget.dataset.index), {
+        colors,
+        features: searchableTerms,
+        aliases: searchableTerms
+      });
+    },
+
+    editDescription(event) {
+      this.patchItem(Number(event.currentTarget.dataset.index), {
+        description: event.detail.value
       });
     },
 

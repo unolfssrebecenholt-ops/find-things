@@ -9,7 +9,7 @@
 
   <view class="detail-hero">
     <view class="cover-photo">
-      <image wx:if="{{hasCoverImage}}" mode="aspectFill" src="{{container.coverImageFileId}}"></image>
+      <image wx:if="{{hasCoverImage}}" mode="aspectFit" src="{{container.coverImageFileId}}"></image>
       <view wx:if="{{hasCoverImage}}" class="cover-label">
         <text>外观照片</text>
       </view>

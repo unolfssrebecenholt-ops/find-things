@@ -3,3 +3,66 @@
   flex-direction: column;
   gap: 24rpx;
 }
+
+.settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: 22rpx;
+  padding: 24rpx;
+  background: #fffdf8;
+  border: 1rpx solid #e4ded1;
+  border-radius: 8rpx;
+}
+
+.card-title {
+  color: #253027;
+  font-size: 32rpx;
+  font-weight: 800;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.label {
+  color: #5a5145;
+  font-size: 25rpx;
+  font-weight: 700;
+}
+
+.input {
+  height: 76rpx;
+  padding: 0 18rpx;
+  color: #253027;
+  font-size: 27rpx;
+  background: #f6f2e9;
+  border-radius: 8rpx;
+}
+
+.segmented-inline {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12rpx;
+}
+
+.segment {
+  height: 68rpx;
+  color: #5a5145;
+  font-size: 25rpx;
+  line-height: 68rpx;
+  background: #f6f2e9;
+  border-radius: 8rpx;
+}
+
+.segment.active {
+  color: #ffffff;
+  background: #4f8f67;
+}
+
+.settings-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14rpx;
+}

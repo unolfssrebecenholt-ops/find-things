@@ -4,6 +4,7 @@
     "pages/capture/index",
     "pages/capture/review",
     "pages/container/edit",
+    "pages/container/list",
     "pages/container/detail",
     "pages/search/index",
     "pages/settings/index"

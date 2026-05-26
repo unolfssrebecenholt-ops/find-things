@@ -1,4 +1,5 @@
-const mockAi = require('../../services/mock-ai');
+const ai = require('../../services/ai');
+const imageStore = require('../../services/image-store');
 const storage = require('../../services/storage');
 const { withDisplayIndexes } = require('../../utils/geometry');
 
@@ -18,10 +19,31 @@ function createImageId(index) {
   return `draft_image_${Date.now()}_${index + 1}`;
 }
 
+function createDraftId() {
+  return `review_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function hasDrawableBbox(item) {
+  const bbox = item && item.bbox;
+  return !!bbox && Number(bbox.width) > 0 && Number(bbox.height) > 0;
+}
+
+function unique(values) {
+  return values.filter((value, index) => value && values.indexOf(value) === index);
+}
+
 function createItemViewModel(item) {
   const confidence = Number(item.confidence);
+  const featureSummary = (item.features || []).slice(0, 3).join(' / ') || '描述可搜索';
+  const fullTagList = unique((item.colors || []).concat(item.features || [], item.aliases || []));
+  const tagList = fullTagList.slice(0, 6);
   return Object.assign({}, item, {
-    displayDescription: item.description || '确认后会保存进这个容器',
+    hasBbox: hasDrawableBbox(item),
+    hasTags: tagList.length > 0,
+    tagList,
+    tagText: fullTagList.join(' '),
+    featureSummary,
+    displayDescription: item.description || featureSummary || '确认后会保存进这个容器',
     confidenceLabel: confidence ? `${Math.round(confidence * 100)}%` : '待确认'
   });
 }
@@ -38,13 +60,18 @@ Page({
     isListMode: false,
     showAddPhotoHint: true,
     currentLabel: '照片 1/1',
-    editPreviewItems: [],
-    previewNote: '放在靠左一侧，常用',
+    showAiWarning: false,
+    aiStatusText: '',
+    markedCount: 0,
     freeLimit: FREE_CONTENT_IMAGE_LIMIT
   },
 
   onLoad() {
-    const draft = wx.getStorageSync('captureDraft') || mockAi.analyzeImage({});
+    const draft = wx.getStorageSync('captureDraft') || {
+      imagePath: '',
+      items: [],
+      warnings: ['请先选择一张照片进行识别。']
+    };
     const imageDrafts = draft.imageDrafts || [
       this.createImageDraft(draft, 0)
     ];
@@ -67,7 +94,9 @@ Page({
       sortOrder: index,
       itemCount: items.filter((item) => item.confirmed !== false).length,
       items,
-      warnings: draft.warnings || []
+      warnings: draft.warnings || [],
+      usedMock: !!draft.usedMock,
+      aiErrorMessage: draft.aiErrorMessage || ''
     };
   },
 
@@ -82,7 +111,11 @@ Page({
       currentLabel: `照片 ${safeIndex + 1}/${Math.max(imageDrafts.length, 1)}`,
       imagePath: draft.imagePath || draft.fileId || '',
       items,
-      editPreviewItems: items.slice(0, 2),
+      markedCount: items.filter((item) => item.hasBbox).length,
+      showAiWarning: !!draft.usedMock,
+      aiStatusText: draft.usedMock
+        ? `AI 未生效：${draft.aiErrorMessage || '已回退到 mock 数据'}`
+        : '',
       warnings: draft.warnings || []
     });
   },
@@ -135,27 +168,49 @@ Page({
     const success = (result) => {
       const imagePath = getChosenPath(result);
       if (!imagePath) return;
-      const analyzed = mockAi.analyzeImage({ imagePath });
-      const nextDraft = this.createImageDraft(analyzed, this.data.imageDrafts.length);
-      const imageDrafts = (this.data.imageDrafts || []).concat(nextDraft);
-      this.setData({
-        imageDrafts,
-        showAddPhotoHint: imageDrafts.length < FREE_CONTENT_IMAGE_LIMIT
-      });
-      wx.setStorageSync('captureDraft', { imageDrafts });
-      this.setCurrentImage(imageDrafts.length - 1);
+      wx.showLoading({ title: 'AI 识别中' });
+      ai.analyzeImage({ imagePath, allowMockFallback: false })
+        .then((analyzed) => {
+          return imageStore.persistImage(analyzed.imagePath || imagePath, 'find-things/content')
+            .then((storedPath) => Object.assign({}, analyzed, {
+              imagePath: storedPath,
+              fileId: storedPath
+            }));
+        })
+        .then((analyzed) => {
+          const nextDraft = this.createImageDraft(analyzed, this.data.imageDrafts.length);
+          const imageDrafts = (this.data.imageDrafts || []).concat(nextDraft);
+          this.setData({
+            imageDrafts,
+            showAddPhotoHint: imageDrafts.length < FREE_CONTENT_IMAGE_LIMIT
+          });
+          wx.setStorageSync('captureDraft', { imageDrafts });
+          this.setCurrentImage(imageDrafts.length - 1);
+        })
+        .catch((error) => {
+          wx.showModal({
+            title: 'AI 识别失败',
+            content: error && error.message ? error.message : '请检查接口配置、合法域名和网络后重试。',
+            showCancel: false,
+            confirmColor: '#4f8f67'
+          });
+        })
+        .finally(() => {
+          wx.hideLoading();
+        });
     };
 
     if (wx.chooseMedia) {
       wx.chooseMedia({
         count: 1,
         mediaType: ['image'],
+        sizeType: ['compressed'],
         sourceType: ['camera', 'album'],
         success
       });
       return;
     }
-    wx.chooseImage({ count: 1, sourceType: ['camera', 'album'], success });
+    wx.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['camera', 'album'], success });
   },
 
   goNext() {
@@ -181,7 +236,9 @@ Page({
       itemCount: (draft.items || []).filter((item) => item.confirmed !== false).length
     }));
 
+    const previousDraft = wx.getStorageSync('reviewDraft') || {};
     wx.setStorageSync('reviewDraft', {
+      draftId: previousDraft.draftId || createDraftId(),
       contentImages,
       contentImageFileId: contentImages[0] ? contentImages[0].fileId : '',
       items: confirmedItems

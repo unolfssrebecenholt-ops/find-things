@@ -20,26 +20,28 @@
     >清单</button>
   </view>
 
+  <view wx:if="{{showAiWarning}}" class="warning-card">{{aiStatusText}}</view>
+
   <view wx:if="{{isMarkMode}}" class="mark-panel">
     <view class="photo-stage">
       <annotated-image image-src="{{imagePath}}" items="{{items}}"></annotated-image>
     </view>
-    <view class="list-expanded">
-      <view wx:for="{{editPreviewItems}}" wx:key="tempId" class="edit-line">
-        <text class="subtle">{{item.displayIndex}} 物品名称</text>
-        <view class="fake-input">{{item.displayName}}</view>
+    <view class="mark-summary">
+      <view>
+        <text class="summary-title">已识别 {{items.length}} 件</text>
+        <text class="subtle">图片上只显示编号，名称在下方核对，避免遮挡物品。</text>
       </view>
-      <view class="edit-line">
-        <text class="subtle">备注</text>
-        <view class="fake-input">{{previewNote}}</view>
-      </view>
+      <text class="pill">{{markedCount}} 个标框</text>
     </view>
     <view class="quick-list">
       <view wx:for="{{items}}" wx:key="tempId" class="quick-item">
-        <text class="quick-index">{{item.displayIndex}}</text>
+        <text class="quick-index {{item.hasBbox ? '' : 'muted'}}">{{item.displayIndex}}</text>
         <view class="quick-copy">
           <text class="quick-name">{{item.displayName}}</text>
           <text class="subtle">{{item.displayDescription}}</text>
+          <view wx:if="{{item.hasTags}}" class="quick-tags">
+            <text wx:for="{{item.tagList}}" wx:for-item="tag" wx:key="*this" class="mini-tag">{{tag}}</text>
+          </view>
         </view>
         <text class="pill">{{item.confidenceLabel}}</text>
       </view>

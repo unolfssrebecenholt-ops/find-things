@@ -36,6 +36,10 @@ function scoreItem(tokens, item, container) {
       score += 15;
       addReason(reasons, `描述匹配“${token}”`);
     }
+    if (arrayIncludes(item.features, token)) {
+      score += 15;
+      addReason(reasons, `特征匹配“${token}”`);
+    }
     if (arrayIncludes(item.colors, token)) {
       score += 10;
       addReason(reasons, `颜色匹配“${token}”`);

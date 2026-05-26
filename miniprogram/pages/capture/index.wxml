@@ -20,8 +20,7 @@
 
   <view class="actions">
     <button class="primary-button action" loading="{{choosing}}" bindtap="chooseImage">拍照或选图</button>
-    <button class="soft-button action" bindtap="useDemo">使用示例数据</button>
   </view>
 
-  <view class="note-card">当前不会调用真实 AI 服务，也不会写入任何密钥。识别结果只用于本地演示。</view>
+  <view class="note-card">上传图片会调用 GPT-5.5 识别；如果请求失败，会直接提示错误，不会写入 mock 结果。</view>
 </view>

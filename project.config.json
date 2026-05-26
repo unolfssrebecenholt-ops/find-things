@@ -2,6 +2,7 @@
   "appid": "wxebb5b2dc618082a5",
   "compileType": "miniprogram",
   "miniprogramRoot": "miniprogram/",
+  "cloudfunctionRoot": "cloudfunctions/",
   "projectname": "find-things",
   "setting": {
     "es6": true,

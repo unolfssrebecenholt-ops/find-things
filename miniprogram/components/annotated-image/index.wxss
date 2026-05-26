@@ -129,22 +129,41 @@
   position: absolute;
   min-width: 28rpx;
   min-height: 28rpx;
-  border: 4rpx dashed #2f6f4b;
-  border-radius: 8rpx;
+  z-index: 3;
+  border: 5rpx dashed rgba(255, 255, 255, 0.96);
+  border-radius: 26rpx;
+  box-shadow:
+    0 0 0 2rpx rgba(0, 0, 0, 0.2),
+    0 6rpx 18rpx rgba(0, 0, 0, 0.22),
+    inset 0 0 0 2rpx rgba(0, 0, 0, 0.12);
+}
+
+.sketch-stroke {
+  position: absolute;
+  top: 7rpx;
+  right: 7rpx;
+  bottom: 7rpx;
+  left: 7rpx;
+  border: 3rpx solid rgba(255, 255, 255, 0.82);
+  border-radius: 22rpx;
+  transform: rotate(-1deg);
+  pointer-events: none;
 }
 
 .badge {
   position: absolute;
-  top: -24rpx;
-  left: -10rpx;
-  min-width: 38rpx;
-  height: 38rpx;
-  color: #ffffff;
+  top: -18rpx;
+  left: -18rpx;
+  min-width: 46rpx;
+  height: 46rpx;
+  z-index: 4;
+  color: #1d211d;
   font-size: 23rpx;
   font-weight: 800;
-  line-height: 38rpx;
+  line-height: 46rpx;
   text-align: center;
-  background: #2f6f4b;
-  box-shadow: 0 6rpx 14rpx rgba(47, 111, 75, 0.22);
+  background: rgba(255, 255, 255, 0.96);
+  border: 2rpx solid #ffffff;
+  box-shadow: 0 6rpx 14rpx rgba(0, 0, 0, 0.24);
   border-radius: 50%;
 }

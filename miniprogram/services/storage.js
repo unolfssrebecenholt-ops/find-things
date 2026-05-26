@@ -113,6 +113,31 @@ function refreshContentImageCounts(container, items) {
   });
 }
 
+function isMockAssetPath(filePath) {
+  return typeof filePath === 'string' && filePath.indexOf('/assets/mock-') === 0;
+}
+
+function isDemoImage(image) {
+  if (!image) return false;
+  return String(image.imageId || '').indexOf('demo_') === 0
+    || isMockAssetPath(image.fileId);
+}
+
+function isDemoContainer(container) {
+  if (!container) return false;
+  if (container.demo === true || container.source === 'demo') return true;
+  if (isMockAssetPath(container.coverImageFileId) || isMockAssetPath(container.contentImageFileId)) return true;
+  return (container.contentImages || []).some(isDemoImage);
+}
+
+function isDemoItem(item) {
+  if (!item) return false;
+  return item.demo === true
+    || item.source === 'demo'
+    || String(item.sourceImageId || '').indexOf('demo_') === 0
+    || isMockAssetPath(item.sourceImageFileId);
+}
+
 function isItemFromImage(item, image) {
   return (image.imageId && item.sourceImageId === image.imageId)
     || (image.fileId && item.sourceImageFileId === image.fileId);
@@ -136,6 +161,18 @@ function createStorageService(adapter) {
 
   function listItems() {
     return readArray(storage, ITEMS_KEY).filter((item) => !item.deletedAt);
+  }
+
+  function listUserContainers() {
+    return listContainers().filter((container) => !isDemoContainer(container));
+  }
+
+  function listUserItems() {
+    const userContainerIds = listUserContainers().reduce((ids, container) => {
+      ids[container._id] = true;
+      return ids;
+    }, {});
+    return listItems().filter((item) => userContainerIds[item.containerId] && !isDemoItem(item));
   }
 
   function getContainer(id) {
@@ -249,6 +286,24 @@ function createStorageService(adapter) {
     writeArray(storage, ITEMS_KEY, items);
   }
 
+  function removeDemoData() {
+    const demoContainerIds = listContainers().reduce((ids, container) => {
+      if (isDemoContainer(container)) {
+        ids[container._id] = true;
+      }
+      return ids;
+    }, {});
+    const containers = readArray(storage, CONTAINERS_KEY).filter((container) => (
+      !demoContainerIds[container._id] && !isDemoContainer(container)
+    ));
+    const items = readArray(storage, ITEMS_KEY).filter((item) => (
+      !demoContainerIds[item.containerId] && !isDemoItem(item)
+    ));
+    writeArray(storage, CONTAINERS_KEY, containers);
+    writeArray(storage, ITEMS_KEY, items);
+    return { containers: listContainers(), items: listItems() };
+  }
+
   function seedDemoData() {
     const existingContainers = listContainers();
     const existingItems = listItems();
@@ -260,6 +315,8 @@ function createStorageService(adapter) {
 
     const demoContainers = [
       {
+        demo: true,
+        source: 'demo',
         name: '露营装备袋',
         locationPath: '阳台 / 置物架',
         contentImages: [
@@ -267,6 +324,8 @@ function createStorageService(adapter) {
         ],
         items: [
           {
+            demo: true,
+            source: 'demo',
             displayName: '头灯',
             category: 'tool',
             colors: ['黑色'],
@@ -278,6 +337,8 @@ function createStorageService(adapter) {
             confirmed: true
           },
           {
+            demo: true,
+            source: 'demo',
             displayName: '防水袋',
             category: 'bag',
             colors: ['黄色'],
@@ -291,6 +352,8 @@ function createStorageService(adapter) {
         ]
       },
       {
+        demo: true,
+        source: 'demo',
         name: '客厅工具盒',
         locationPath: '客厅 / 电视柜',
         contentImages: [
@@ -298,6 +361,8 @@ function createStorageService(adapter) {
         ],
         items: [
           {
+            demo: true,
+            source: 'demo',
             displayName: '卷尺',
             category: 'tool',
             colors: ['黄色'],
@@ -309,6 +374,8 @@ function createStorageService(adapter) {
             confirmed: true
           },
           {
+            demo: true,
+            source: 'demo',
             displayName: '螺丝刀',
             category: 'tool',
             colors: ['红色'],
@@ -322,6 +389,8 @@ function createStorageService(adapter) {
         ]
       },
       {
+        demo: true,
+        source: 'demo',
         name: '卧室 3 号箱',
         locationPath: '卧室 / 衣柜',
         contentImages: [
@@ -329,6 +398,8 @@ function createStorageService(adapter) {
         ],
         items: [
           {
+            demo: true,
+            source: 'demo',
             displayName: '换季围巾',
             category: 'clothing',
             colors: ['米色'],
@@ -340,6 +411,8 @@ function createStorageService(adapter) {
             confirmed: true
           },
           {
+            demo: true,
+            source: 'demo',
             displayName: '旅行手册',
             category: 'book',
             colors: ['蓝色'],
@@ -353,6 +426,8 @@ function createStorageService(adapter) {
         ]
       },
       {
+        demo: true,
+        source: 'demo',
         name: '书桌左侧抽屉',
         locationPath: '卧室 / 书桌',
         contentImages: [
@@ -361,6 +436,8 @@ function createStorageService(adapter) {
         ],
         items: [
           {
+            demo: true,
+            source: 'demo',
             displayName: '蓝色发卡',
             aiName: '蓝色发卡',
             category: 'accessory',
@@ -373,6 +450,8 @@ function createStorageService(adapter) {
             confirmed: true
           },
           {
+            demo: true,
+            source: 'demo',
             displayName: '黑色笔',
             category: 'pen',
             colors: ['黑色'],
@@ -384,6 +463,8 @@ function createStorageService(adapter) {
             confirmed: true
           },
           {
+            demo: true,
+            source: 'demo',
             displayName: '《三体》',
             category: 'book',
             colors: [],
@@ -396,6 +477,8 @@ function createStorageService(adapter) {
             confirmed: true
           },
           {
+            demo: true,
+            source: 'demo',
             displayName: '蓝色封面的书',
             category: 'book',
             colors: ['蓝色'],
@@ -429,7 +512,9 @@ function createStorageService(adapter) {
 
   return {
     listContainers,
+    listUserContainers,
     listItems,
+    listUserItems,
     getContainer,
     getItemsByContainer,
     saveContainer,
@@ -437,6 +522,7 @@ function createStorageService(adapter) {
     replaceItemsForImage,
     getContentImages,
     deleteContainer,
+    removeDemoData,
     seedDemoData
   };
 }

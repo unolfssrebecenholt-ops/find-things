@@ -233,6 +233,39 @@ test('seeded demo data fills the home album grid with warm prototype containers'
   ]);
 });
 
+test('user-facing lists can exclude seeded demo data', () => {
+  const service = storage.createStorageService(createMemoryAdapter());
+  service.seedDemoData();
+
+  assert.equal(service.listContainers().length, 4);
+  assert.deepEqual(service.listUserContainers(), []);
+  assert.deepEqual(service.listUserItems(), []);
+
+  const saved = service.saveContainer({
+    name: '我的真实箱子',
+    contentImageFileId: '/tmp/real.jpg',
+    items: [{ displayName: '钥匙串', confirmed: true }]
+  });
+
+  assert.deepEqual(service.listUserContainers().map((container) => container._id), [saved.container._id]);
+  assert.deepEqual(service.listUserItems().map((item) => item.displayName), ['钥匙串']);
+});
+
+test('removeDemoData clears historical demo records but keeps real containers', () => {
+  const service = storage.createStorageService(createMemoryAdapter());
+  service.seedDemoData();
+  service.saveContainer({
+    name: '真实抽屉',
+    contentImageFileId: '/tmp/real-drawer.jpg',
+    items: [{ displayName: '纸巾', confirmed: true }]
+  });
+
+  service.removeDemoData();
+
+  assert.deepEqual(service.listContainers().map((container) => container.name), ['真实抽屉']);
+  assert.deepEqual(service.listItems().map((item) => item.displayName), ['纸巾']);
+});
+
 test('seeded demo data upgrades older one-container demo caches without touching real data', () => {
   const previousDemo = storage.createStorageService(createMemoryAdapter({
     'findThings.containers': [

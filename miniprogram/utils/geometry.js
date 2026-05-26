@@ -32,6 +32,51 @@ function normalizedBboxToStyle(bbox, imageSize) {
   };
 }
 
+function aspectFitRect(imageSize, containerSize) {
+  const imageWidth = toNumber(imageSize && imageSize.width, 0);
+  const imageHeight = toNumber(imageSize && imageSize.height, 0);
+  const containerWidth = toNumber(containerSize && containerSize.width, 0);
+  const containerHeight = toNumber(containerSize && containerSize.height, 0);
+  if (!imageWidth || !imageHeight || !containerWidth || !containerHeight) {
+    return {
+      left: 0,
+      top: 0,
+      width: containerWidth,
+      height: containerHeight
+    };
+  }
+  const scale = Math.min(containerWidth / imageWidth, containerHeight / imageHeight);
+  const width = imageWidth * scale;
+  const height = imageHeight * scale;
+  return {
+    left: (containerWidth - width) / 2,
+    top: (containerHeight - height) / 2,
+    width,
+    height
+  };
+}
+
+function bboxToAspectFitStyle(bbox, imageSize, containerSize) {
+  const safe = normalizeBbox(bbox);
+  const rect = aspectFitRect(imageSize, containerSize);
+  return {
+    left: Math.round(rect.left + safe.x * rect.width),
+    top: Math.round(rect.top + safe.y * rect.height),
+    width: Math.round(safe.width * rect.width),
+    height: Math.round(safe.height * rect.height)
+  };
+}
+
+function bboxToPixelStyle(bbox, imageSize, containerSize) {
+  const style = bboxToAspectFitStyle(bbox, imageSize, containerSize);
+  return [
+    `left:${style.left}px`,
+    `top:${style.top}px`,
+    `width:${style.width}px`,
+    `height:${style.height}px`
+  ].join(';');
+}
+
 function bboxToPercentStyle(bbox) {
   const safe = normalizeBbox(bbox);
   return [
@@ -50,6 +95,9 @@ module.exports = {
   clamp,
   normalizeBbox,
   normalizedBboxToStyle,
+  aspectFitRect,
+  bboxToAspectFitStyle,
+  bboxToPixelStyle,
   bboxToPercentStyle,
   withDisplayIndexes
 };

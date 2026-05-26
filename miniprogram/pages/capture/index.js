@@ -1,4 +1,5 @@
-const mockAi = require('../../services/mock-ai');
+const ai = require('../../services/ai');
+const imageStore = require('../../services/image-store');
 
 function getChosenPath(result) {
   if (result && result.tempFiles && result.tempFiles[0]) {
@@ -23,9 +24,10 @@ Page({
       wx.chooseMedia({
         count: 1,
         mediaType: ['image'],
+        sizeType: ['compressed'],
         sourceType: ['camera', 'album'],
         success: (result) => this.analyze(getChosenPath(result)),
-        fail: () => wx.showToast({ title: '也可以先用 mock demo', icon: 'none' }),
+        fail: () => wx.showToast({ title: '已取消选择', icon: 'none' }),
         complete
       });
       return;
@@ -33,20 +35,44 @@ Page({
 
     wx.chooseImage({
       count: 1,
+      sizeType: ['compressed'],
       sourceType: ['camera', 'album'],
       success: (result) => this.analyze(getChosenPath(result)),
-      fail: () => wx.showToast({ title: '也可以先用 mock demo', icon: 'none' }),
+      fail: () => wx.showToast({ title: '已取消选择', icon: 'none' }),
       complete
     });
   },
 
-  useDemo() {
-    this.analyze('/assets/mock-container-content.jpg');
-  },
-
-  analyze(imagePath) {
-    const result = mockAi.analyzeImage({ imagePath });
-    wx.setStorageSync('captureDraft', result);
-    wx.navigateTo({ url: '/pages/capture/review' });
+  analyze(imagePath, options) {
+    if (!imagePath) return;
+    wx.showLoading({ title: 'AI 识别中' });
+    ai.analyzeImage(Object.assign({
+      imagePath,
+      allowMockFallback: false
+    }, options || {}))
+      .then((result) => {
+        return imageStore.persistImage(result.imagePath || imagePath, 'find-things/content')
+          .then((storedPath) => Object.assign({}, result, {
+            imagePath: storedPath,
+            fileId: storedPath
+          }));
+      })
+      .then((result) => {
+        wx.removeStorageSync('reviewDraft');
+        wx.removeStorageSync('containerEditDraft');
+        wx.setStorageSync('captureDraft', result);
+        wx.navigateTo({ url: '/pages/capture/review' });
+      })
+      .catch((error) => {
+        wx.showModal({
+          title: 'AI 识别失败',
+          content: error && error.message ? error.message : '请检查接口配置、合法域名和网络后重试。',
+          showCancel: false,
+          confirmColor: '#4f8f67'
+        });
+      })
+      .finally(() => {
+        wx.hideLoading();
+      });
   }
 });

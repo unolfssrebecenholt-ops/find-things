@@ -13,14 +13,12 @@ function getStorageService() {
 }
 
 function getContainerStatus(container, index) {
-  const statusByName = {
-    '书桌左侧抽屉': '刚刚更新',
-    '卧室 3 号箱': '换季衣物',
-    '客厅工具盒': '常用',
-    '露营装备袋': '待复核'
-  };
-  const fallbackStatuses = ['刚刚更新', '换季衣物', '常用', '待复核'];
-  return statusByName[container.name] || fallbackStatuses[index % fallbackStatuses.length];
+  const updatedAt = Number(container.updatedAt) || 0;
+  if (!updatedAt) return index === 0 ? '已保存' : '已整理';
+  const delta = Date.now() - updatedAt;
+  if (delta < 60 * 60 * 1000) return '刚刚更新';
+  if (delta < 24 * 60 * 60 * 1000) return '今天更新';
+  return '已保存';
 }
 
 function createContainerViewModel(container, index) {
@@ -43,20 +41,13 @@ Page({
 
   onShow() {
     const service = getStorageService();
-    if (service && typeof service.seedDemoData === 'function') {
-      service.seedDemoData();
+    if (service && typeof service.removeDemoData === 'function') {
+      service.removeDemoData();
     }
-    const recentContainers = service
-      ? service.listContainers().slice(0, 4).map(createContainerViewModel)
-      : [
-          createContainerViewModel({
-            _id: 'demo_container',
-            name: '示例抽屉',
-            locationPath: '卧室 / 书桌',
-            itemCount: 4,
-            coverImageFileId: ''
-          })
-        ];
+    const containers = service
+      ? (typeof service.listUserContainers === 'function' ? service.listUserContainers() : service.listContainers())
+      : [];
+    const recentContainers = containers.slice(0, 4).map(createContainerViewModel);
 
     this.setData({
       recentContainers,
@@ -78,12 +69,7 @@ Page({
   },
 
   showContainers() {
-    const first = this.data.recentContainers[0];
-    if (first && first._id !== 'demo_container') {
-      wx.navigateTo({ url: `/pages/container/detail?id=${first._id}` });
-      return;
-    }
-    wx.showToast({ title: '先保存一个容器', icon: 'none' });
+    wx.navigateTo({ url: '/pages/container/list' });
   },
 
   openContainer(event) {

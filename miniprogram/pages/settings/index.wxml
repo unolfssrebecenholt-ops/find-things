@@ -1,4 +1,36 @@
 <view class="page settings-page">
   <view class="section-title">设置</view>
-  <view class="empty-state">当前阶段使用本地 mock 数据，不连接真实 AI、支付或云开发。</view>
+
+  <view class="settings-card">
+    <text class="card-title">AI 识别</text>
+    <text class="subtle">API Key 只保存在当前微信开发者工具/手机本地。正式版请改用云函数环境变量。</text>
+
+    <view class="field">
+      <text class="label">接口地址</text>
+      <input class="input" value="{{baseUrl}}" bindinput="inputBaseUrl" />
+    </view>
+
+    <view class="field">
+      <text class="label">模型</text>
+      <input class="input" value="{{model}}" bindinput="inputModel" />
+    </view>
+
+    <view class="field">
+      <text class="label">调用方式</text>
+      <view class="segmented-inline">
+        <button class="segment {{transport == 'direct' ? 'active' : ''}}" bindtap="useDirect">本地直连</button>
+        <button class="segment {{transport == 'cloud' ? 'active' : ''}}" bindtap="useCloud">云函数</button>
+      </view>
+    </view>
+
+    <view class="field">
+      <text class="label">API Key</text>
+      <input class="input" password="{{true}}" placeholder="{{hasApiKey ? maskedApiKey : '粘贴 sk-...'}}" value="{{apiKey}}" bindinput="inputApiKey" />
+    </view>
+
+    <view class="settings-actions">
+      <button class="primary-button" bindtap="saveAiSettings">保存配置</button>
+      <button class="soft-button" bindtap="clearApiKey">清除 Key</button>
+    </view>
+  </view>
 </view>

@@ -115,6 +115,98 @@ test('semantic search filters unexplained low-score noise for unrelated color-ob
   assert.deepEqual(whiteCupResults, []);
 });
 
+test('semantic search does not return context-only object mentions', () => {
+  const results = search.searchItems('小熊', {
+    containers: [{
+      _id: 'container_1',
+      name: '玄关抽屉',
+      contentImages: [{ imageId: 'image_1', fileId: '/tmp/image.jpg' }]
+    }],
+    items: [
+      {
+        _id: 'bear_charm',
+        containerId: 'container_1',
+        displayName: '黄色小熊挂件',
+        category: 'accessory',
+        features: ['小熊造型', '挂件'],
+        aliases: ['小熊', '小熊挂件'],
+        description: '一个黄色挂件，位于画面左侧。',
+        sourceImageId: 'image_1',
+        confidence: 0.9
+      },
+      {
+        _id: 'mesh_pouch',
+        containerId: 'container_1',
+        displayName: '黑色网格拉链小包',
+        category: 'bag',
+        colors: ['黑色'],
+        features: ['网格', '拉链'],
+        aliases: ['收纳包'],
+        description: '黑色网格小包，旁边有小熊挂件。',
+        sourceImageId: 'image_1',
+        confidence: 0.88
+      }
+    ]
+  });
+
+  assert.deepEqual(results.map((result) => result.item._id), ['bear_charm']);
+  assert.match(results[0].matchSummary, /小熊/);
+});
+
+test('semantic search recognizes bear charms without mixing in colored context noise', () => {
+  const data = {
+    containers: [{
+      _id: 'container_1',
+      name: '玄关抽屉',
+      contentImages: [{ imageId: 'image_1', fileId: '/tmp/image.jpg' }]
+    }],
+    items: [
+      {
+        _id: 'yellow_bear',
+        containerId: 'container_1',
+        displayName: '黄色小熊挂件',
+        category: 'accessory',
+        colors: ['黄色'],
+        features: ['小熊造型', '挂件'],
+        aliases: ['小熊', '小熊挂件'],
+        description: '一个黄色挂件，位于画面左侧。',
+        sourceImageId: 'image_1',
+        confidence: 0.9
+      },
+      {
+        _id: 'butterbear_tag',
+        containerId: 'container_1',
+        displayName: 'Butterbear小熊标签挂饰',
+        category: 'accessory',
+        colors: ['黄色'],
+        features: ['标签', '挂饰'],
+        aliases: ['Butterbear', '黄油小熊', '小熊挂饰'],
+        description: '黄色标签挂饰。',
+        sourceImageId: 'image_1',
+        confidence: 0.86
+      },
+      {
+        _id: 'black_pouch',
+        containerId: 'container_1',
+        displayName: '黑色网格拉链小包',
+        category: 'bag',
+        colors: ['黑色'],
+        features: ['网格', '拉链'],
+        aliases: ['收纳包'],
+        description: '黑色小包，旁边有小熊挂件。',
+        sourceImageId: 'image_1',
+        confidence: 0.88
+      }
+    ]
+  };
+
+  const bearResults = search.searchItems('小熊', data).map((result) => result.item._id);
+  const blackBearResults = search.searchItems('黑色小熊', data).map((result) => result.item._id);
+
+  assert.deepEqual(bearResults, ['yellow_bear', 'butterbear_tag']);
+  assert.deepEqual(blackBearResults, []);
+});
+
 test('search result includes matched source image ids and file ids', () => {
   const service = storage.createStorageService(createMemoryAdapter());
   service.seedDemoData();

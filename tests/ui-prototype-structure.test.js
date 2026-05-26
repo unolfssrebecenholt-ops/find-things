@@ -58,12 +58,60 @@ test('review page exposes mark-list switching and a next photo entry', () => {
   assert.match(wxml, />清单</);
   assert.match(wxml, /拍下一张/);
   assert.match(wxml, /下一步：拍容器/);
-  assert.match(wxml, /list-expanded/);
-  assert.match(wxml, /fake-input/);
+  assert.match(wxml, /mark-summary/);
+  assert.match(wxml, /quick-list/);
+  assert.doesNotMatch(wxml, /list-expanded/);
+  assert.doesNotMatch(wxml, /fake-input/);
   assert.doesNotMatch(wxml, /photo-strip/);
-  assert.match(wxss, /\.review-actions[\s\S]*right: 36rpx[\s\S]*bottom: 24rpx[\s\S]*left: 36rpx/);
-  assert.doesNotMatch(wxss, /\.review-actions[\s\S]*background: rgba\(255, 253, 248, 0\.96\)/);
+  assert.match(wxss, /\.review-actions[\s\S]*right: 0[\s\S]*bottom: 0[\s\S]*left: 0/);
+  assert.match(wxss, /\.review-actions[\s\S]*env\(safe-area-inset-bottom\)/);
   assert.doesNotMatch(cssBlock(wxss, '.photo-stage'), /background: #ffffff/);
+});
+
+test('runtime pages do not inject demo data into home or search', () => {
+  const homeJs = readMiniProgramFile('pages', 'home', 'index.js');
+  const searchJs = readMiniProgramFile('pages', 'search', 'index.js');
+  const captureWxml = readMiniProgramFile('pages', 'capture', 'index.wxml');
+  const appJs = readMiniProgramFile('app.js');
+  const aiConfigJs = readMiniProgramFile('config', 'ai.js');
+
+  assert.doesNotMatch(homeJs, /seedDemoData\(/);
+  assert.doesNotMatch(searchJs, /seedDemoData\(/);
+  assert.doesNotMatch(searchJs, /runSearch\('蓝色封面的书'\)/);
+  assert.doesNotMatch(captureWxml, /使用示例数据/);
+  assert.match(appJs, /mockMode: false/);
+  assert.match(aiConfigJs, /fallbackToMock: false/);
+});
+
+test('container edit keeps a draft and returns home after saving', () => {
+  const js = readMiniProgramFile('pages', 'container', 'edit.js');
+  const wxml = readMiniProgramFile('pages', 'container', 'edit.wxml');
+  const wxss = readMiniProgramFile('pages', 'container', 'edit.wxss');
+
+  assert.match(js, /containerEditDraft/);
+  assert.match(js, /persistDraft/);
+  assert.match(js, /wx\.reLaunch\(\{ url: '\/pages\/home\/index' \}\)/);
+  assert.doesNotMatch(js, /redirectTo/);
+  assert.match(wxml, /保存并回首页/);
+  assert.match(wxml, /返回修改/);
+  assert.match(wxml, /建议横拍/);
+  assert.match(wxml, /16:9/);
+  assert.match(wxss, /\.save-actions[\s\S]*position: fixed/);
+  assert.match(wxss, /\.cover[\s\S]*height: 382rpx/);
+});
+
+test('container tab opens a real container list page', () => {
+  const appJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'app.json'), 'utf8'));
+  const homeJs = readMiniProgramFile('pages', 'home', 'index.js');
+  const searchJs = readMiniProgramFile('pages', 'search', 'index.js');
+  const listWxml = readMiniProgramFile('pages', 'container', 'list.wxml');
+  const listJs = readMiniProgramFile('pages', 'container', 'list.js');
+
+  assert.ok(appJson.pages.includes('pages/container/list'));
+  assert.match(homeJs, /\/pages\/container\/list/);
+  assert.match(searchJs, /\/pages\/container\/list/);
+  assert.match(listWxml, /全部容器/);
+  assert.match(listJs, /listUserContainers/);
 });
 
 test('search page uses photo-first result cards and prototype wording', () => {
@@ -94,4 +142,49 @@ test('container detail keeps carousel indicators instead of photo switch buttons
   assert.match(wxss, /\.item-tags[\s\S]*flex-wrap: wrap/);
   assert.doesNotMatch(wxml, /照片 1<\/button>/);
   assert.doesNotMatch(wxml, /照片 2<\/button>/);
+});
+
+test('photo display modes separate thumbnails from full-photo review surfaces', () => {
+  const homeWxml = readMiniProgramFile('pages', 'home', 'index.wxml');
+  const listWxml = readMiniProgramFile('pages', 'container', 'list.wxml');
+  const resultCardWxml = readMiniProgramFile('components', 'search-result-card', 'index.wxml');
+  const editWxml = readMiniProgramFile('pages', 'container', 'edit.wxml');
+  const detailWxml = readMiniProgramFile('pages', 'container', 'detail.wxml');
+  const annotatedWxml = readMiniProgramFile('components', 'annotated-image', 'index.wxml');
+
+  assert.match(homeWxml, /mode="aspectFill"/);
+  assert.match(listWxml, /mode="aspectFill"/);
+  assert.match(resultCardWxml, /mode="aspectFill"/);
+  assert.match(editWxml, /mode="aspectFit"/);
+  assert.match(detailWxml, /mode="aspectFit"/);
+  assert.match(annotatedWxml, /mode="aspectFit"/);
+});
+
+test('container cover surfaces use landscape framing', () => {
+  const homeWxss = readMiniProgramFile('pages', 'home', 'index.wxss');
+  const listWxss = readMiniProgramFile('pages', 'container', 'list.wxss');
+  const detailWxss = readMiniProgramFile('pages', 'container', 'detail.wxss');
+
+  assert.match(homeWxss, /\.album-photo[\s\S]*height: 186rpx/);
+  assert.match(listWxss, /\.container-photo[\s\S]*height: 124rpx/);
+  assert.match(detailWxss, /\.cover-photo[\s\S]*height: 382rpx/);
+});
+
+test('item editor uses a high-fidelity card layout instead of cramped inline controls', () => {
+  const wxml = readMiniProgramFile('components', 'item-editor', 'index.wxml');
+  const wxss = readMiniProgramFile('components', 'item-editor', 'index.wxss');
+
+  assert.match(wxml, /item-toolbar/);
+  assert.match(wxml, /name-field/);
+  assert.match(wxml, /field-grid/);
+  assert.match(wxml, /description-field/);
+  assert.match(wxml, /note-field/);
+  assert.match(wxml, /bindblur="editTags"/);
+  assert.match(wxml, /bindblur="editDescription"/);
+  assert.match(wxml, /bindtap="removeItem"/);
+  assert.doesNotMatch(wxml, /class="item /);
+  assert.match(wxss, /\.item-card/);
+  assert.match(wxss, /\.delete[\s\S]*width: 96rpx/);
+  assert.match(wxss, /\.name-input[\s\S]*height: 76rpx/);
+  assert.match(wxss, /\.note[\s\S]*min-height: 128rpx/);
 });

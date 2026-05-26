@@ -1,28 +1,89 @@
 <view class="editor">
-  <view class="editor-title">确认物品清单</view>
-  <view wx:for="{{items}}" wx:key="tempId" class="item">
-    <view class="item-head">
+  <view class="editor-head">
+    <view>
+      <text class="editor-title">确认物品清单</text>
+      <text class="editor-subtitle">取消勾选或删除的物品不会保存。</text>
+    </view>
+    <text class="editor-count">{{items.length}} 件</text>
+  </view>
+  <view wx:for="{{items}}" wx:key="tempId" class="item-card {{item.confirmed ? '' : 'disabled'}}">
+    <view class="item-toolbar">
       <button
-        class="check {{item.confirmed ? 'checked' : ''}}"
+        class="keep-toggle {{item.confirmed ? 'checked' : ''}}"
         data-index="{{index}}"
         bindtap="toggleConfirmed"
-      >{{item.confirmed ? '✓' : ''}}</button>
-      <text class="number">{{item.displayIndex}}</text>
-      <input
-        class="name-input"
-        value="{{item.displayName}}"
-        data-index="{{index}}"
-        bindinput="rename"
-      />
+      >{{item.confirmed ? '保留' : '不存'}}</button>
+      <view class="item-identity">
+        <text class="number">{{item.displayIndex}}</text>
+        <view class="identity-stack">
+          <text class="identity-copy">AI 识别</text>
+          <text class="confidence">{{item.confidenceLabel}}</text>
+        </view>
+      </view>
       <button class="delete" data-index="{{index}}" bindtap="removeItem">删除</button>
     </view>
-    <view class="meta">{{item.category}} · 置信度 {{item.confidence}}</view>
-    <textarea
-      class="note"
-      placeholder="补充备注，例如品牌、尺寸、用途"
-      value="{{item.note}}"
-      data-index="{{index}}"
-      bindinput="editNote"
-    ></textarea>
+
+    <view class="name-field">
+      <text class="field-caption">物品名称</text>
+      <input
+        class="name-input"
+        placeholder="物品名称"
+        value="{{item.displayName}}"
+        data-index="{{index}}"
+        bindblur="rename"
+        bindconfirm="rename"
+      />
+    </view>
+
+    <view class="field-grid">
+      <view class="compact-field">
+        <text class="field-caption">类别</text>
+        <input
+          class="compact-input"
+          placeholder="类别"
+          value="{{item.category}}"
+          data-index="{{index}}"
+          bindblur="editCategory"
+          bindconfirm="editCategory"
+        />
+      </view>
+      <view class="compact-field">
+        <text class="field-caption">搜索标签</text>
+        <input
+          class="compact-input"
+          placeholder="颜色、特征、别名"
+          value="{{item.tagText}}"
+          data-index="{{index}}"
+          bindblur="editTags"
+          bindconfirm="editTags"
+        />
+      </view>
+    </view>
+
+    <view wx:if="{{item.hasTags}}" class="tag-row">
+      <text wx:for="{{item.tagList}}" wx:for-item="tag" wx:key="*this" class="tag">{{tag}}</text>
+    </view>
+
+    <view class="description-field">
+      <text class="field-caption">识别描述</text>
+      <textarea
+        class="description-input"
+        placeholder="位置、外观、用途"
+        value="{{item.description}}"
+        data-index="{{index}}"
+        bindblur="editDescription"
+      ></textarea>
+    </view>
+
+    <view class="note-field">
+      <text class="field-caption">备注</text>
+      <textarea
+        class="note"
+        placeholder="补充品牌、尺寸、用途"
+        value="{{item.note}}"
+        data-index="{{index}}"
+        bindblur="editNote"
+      ></textarea>
+    </view>
   </view>
 </view>

@@ -1,4 +1,4 @@
-const mockAi = require('../../services/mock-ai');
+const ai = require('../../services/ai');
 const storage = require('../../services/storage');
 const { withDisplayIndexes } = require('../../utils/geometry');
 
@@ -63,6 +63,9 @@ Page({
   },
 
   load() {
+    if (typeof storage.removeDemoData === 'function') {
+      storage.removeDemoData();
+    }
     const container = storage.getContainer(this.data.id);
     if (!container) {
       this.setData({
@@ -151,30 +154,44 @@ Page({
     const image = (this.data.contentImages || [])[this.data.currentImageIndex];
     if (!image) return;
 
-    const analyzed = mockAi.analyzeImage({ imagePath: image.fileId });
-    const items = withDisplayIndexes(analyzed.items || []).map((item) => Object.assign({}, item, {
-      sourceImageId: image.imageId,
-      sourceImageFileId: image.fileId
-    }));
+    wx.showLoading({ title: 'AI 识别中' });
+    ai.analyzeImage({ imagePath: image.fileId, allowMockFallback: false })
+      .then((analyzed) => {
+        const items = withDisplayIndexes(analyzed.items || []).map((item) => Object.assign({}, item, {
+          sourceImageId: image.imageId,
+          sourceImageFileId: image.fileId
+        }));
 
-    if (typeof storage.replaceItemsForImage === 'function') {
-      storage.replaceItemsForImage(this.data.container._id, image.imageId, items);
-      wx.showToast({ title: '已重新识别', icon: 'success' });
-      this.load();
-      return;
-    }
+        if (typeof storage.replaceItemsForImage === 'function') {
+          storage.replaceItemsForImage(this.data.container._id, image.imageId, items);
+          wx.showToast({ title: '已重新识别', icon: 'success' });
+          this.load();
+          return;
+        }
 
-    wx.showToast({ title: '数据层同步中，暂未保存', icon: 'none' });
-    const contentImages = (this.data.contentImages || []).map((contentImage, index) => {
-      if (index !== this.data.currentImageIndex) return contentImage;
-      return Object.assign({}, contentImage, { items, itemCount: items.length });
-    });
-    this.setData({
-      contentImages,
-      hasContentImages: contentImages.length > 0,
-      showContentEmpty: contentImages.length === 0
-    });
-    this.syncCurrentImage(this.data.currentImageIndex);
+        wx.showToast({ title: '数据层同步中，暂未保存', icon: 'none' });
+        const contentImages = (this.data.contentImages || []).map((contentImage, index) => {
+          if (index !== this.data.currentImageIndex) return contentImage;
+          return Object.assign({}, contentImage, { items, itemCount: items.length });
+        });
+        this.setData({
+          contentImages,
+          hasContentImages: contentImages.length > 0,
+          showContentEmpty: contentImages.length === 0
+        });
+        this.syncCurrentImage(this.data.currentImageIndex);
+      })
+      .catch((error) => {
+        wx.showModal({
+          title: 'AI 识别失败',
+          content: error && error.message ? error.message : '请检查接口配置、合法域名和网络后重试。',
+          showCancel: false,
+          confirmColor: '#4f8f67'
+        });
+      })
+      .finally(() => {
+        wx.hideLoading();
+      });
   },
 
   addContentPhoto() {
@@ -200,37 +217,52 @@ Page({
         sortOrder: index,
         itemCount: 0
       };
-      const analyzed = mockAi.analyzeImage({ imagePath: fileId });
+      wx.showLoading({ title: 'AI 识别中' });
+      ai.analyzeImage({ imagePath: fileId, allowMockFallback: false })
+        .then((analyzed) => {
+          imageInput.fileId = analyzed.imagePath || fileId;
+          if (typeof storage.addContentImage === 'function') {
+            const savedImage = storage.addContentImage(this.data.container._id, imageInput);
+            const image = pickAddedContentImage(savedImage, imageInput, index);
+            const items = withDisplayIndexes(analyzed.items || []).map((item) => Object.assign({}, item, {
+              sourceImageId: image.imageId,
+              sourceImageFileId: image.fileId
+            }));
+            if (typeof storage.replaceItemsForImage === 'function') {
+              storage.replaceItemsForImage(this.data.container._id, image.imageId, items);
+            }
+            wx.showToast({ title: '已添加照片', icon: 'success' });
+            this.load();
+            this.syncCurrentImage(index);
+            return;
+          }
 
-      if (typeof storage.addContentImage === 'function') {
-        const savedImage = storage.addContentImage(this.data.container._id, imageInput);
-        const image = pickAddedContentImage(savedImage, imageInput, index);
-        const items = withDisplayIndexes(analyzed.items || []).map((item) => Object.assign({}, item, {
-          sourceImageId: image.imageId,
-          sourceImageFileId: image.fileId
-        }));
-        if (typeof storage.replaceItemsForImage === 'function') {
-          storage.replaceItemsForImage(this.data.container._id, image.imageId, items);
-        }
-        wx.showToast({ title: '已添加照片', icon: 'success' });
-        this.load();
-        this.syncCurrentImage(index);
-        return;
-      }
-
-      wx.showToast({ title: '数据层同步中，暂未保存', icon: 'none' });
+          wx.showToast({ title: '数据层同步中，暂未保存', icon: 'none' });
+        })
+        .catch((error) => {
+          wx.showModal({
+            title: 'AI 识别失败',
+            content: error && error.message ? error.message : '请检查接口配置、合法域名和网络后重试。',
+            showCancel: false,
+            confirmColor: '#4f8f67'
+          });
+        })
+        .finally(() => {
+          wx.hideLoading();
+        });
     };
 
     if (wx.chooseMedia) {
       wx.chooseMedia({
         count: 1,
         mediaType: ['image'],
+        sizeType: ['compressed'],
         sourceType: ['camera', 'album'],
         success
       });
       return;
     }
-    wx.chooseImage({ count: 1, sourceType: ['camera', 'album'], success });
+    wx.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['camera', 'album'], success });
   },
 
   deleteContainer() {

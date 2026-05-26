@@ -38,3 +38,33 @@ test('adds display indexes without mutating recognition items', () => {
   assert.equal(indexed[0].displayIndex, 1);
   assert.equal(original[0].displayIndex, undefined);
 });
+
+test('maps portrait image bboxes into the aspectFit rendered area', () => {
+  const rect = geometry.bboxToAspectFitStyle(
+    { x: 0.1, y: 0.2, width: 0.3, height: 0.4 },
+    { width: 1000, height: 2000 },
+    { width: 300, height: 300 }
+  );
+
+  assert.deepEqual(rect, {
+    left: 90,
+    top: 60,
+    width: 45,
+    height: 120
+  });
+});
+
+test('maps wide image bboxes into the aspectFit rendered area', () => {
+  const rect = geometry.bboxToAspectFitStyle(
+    { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
+    { width: 2000, height: 1000 },
+    { width: 300, height: 300 }
+  );
+
+  assert.deepEqual(rect, {
+    left: 75,
+    top: 113,
+    width: 150,
+    height: 75
+  });
+});

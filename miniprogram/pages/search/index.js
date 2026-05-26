@@ -1,6 +1,36 @@
 const storage = require('../../services/storage');
 const search = require('../../services/search');
 
+function getUserData() {
+  if (typeof storage.removeDemoData === 'function') {
+    storage.removeDemoData();
+  }
+  return {
+    containers: typeof storage.listUserContainers === 'function' ? storage.listUserContainers() : storage.listContainers(),
+    items: typeof storage.listUserItems === 'function' ? storage.listUserItems() : storage.listItems()
+  };
+}
+
+function unique(values) {
+  return values.reduce((result, value) => {
+    const text = String(value || '').trim();
+    if (text && result.indexOf(text) < 0) result.push(text);
+    return result;
+  }, []);
+}
+
+function buildExamples(items) {
+  const fromItems = unique((items || []).reduce((values, item) => {
+    values.push(item.displayName);
+    if (Array.isArray(item.aliases)) values.push(item.aliases[0]);
+    if (Array.isArray(item.colors) && item.colors[0] && item.displayName) {
+      values.push(`${item.colors[0]}${item.displayName}`);
+    }
+    return values;
+  }, []));
+  return fromItems.length ? fromItems.slice(0, 3) : ['书', '钥匙', '纸巾'];
+}
+
 Page({
   data: {
     query: '',
@@ -10,12 +40,22 @@ Page({
     showSearchHint: true,
     searched: false,
     resultHeading: '搜索结果',
-    examples: ['书', '黑色笔', '蓝色发卡']
+    examples: ['书', '钥匙', '纸巾']
   },
 
   onLoad() {
-    storage.seedDemoData();
-    this.runSearch('蓝色封面的书');
+    this.refreshExamples();
+  },
+
+  onShow() {
+    this.refreshExamples();
+  },
+
+  refreshExamples() {
+    const data = getUserData();
+    this.setData({
+      examples: buildExamples(data.items)
+    });
   },
 
   inputQuery(event) {
@@ -33,12 +73,26 @@ Page({
   },
 
   runSearch(query) {
-    const results = search.searchItems(query, {
-      containers: storage.listContainers(),
-      items: storage.listItems()
+    const keyword = String(query || '').trim();
+    if (!keyword) {
+      this.setData({
+        query: '',
+        results: [],
+        hasResults: false,
+        showEmptyResults: false,
+        showSearchHint: true,
+        searched: false,
+        resultHeading: '搜索结果'
+      });
+      return;
+    }
+    const data = getUserData();
+    const results = search.searchItems(keyword, {
+      containers: data.containers,
+      items: data.items
     });
     this.setData({
-      query,
+      query: keyword,
       results,
       hasResults: results.length > 0,
       showEmptyResults: results.length === 0,
@@ -59,11 +113,6 @@ Page({
   },
 
   showContainers() {
-    const first = storage.listContainers()[0];
-    if (first) {
-      wx.navigateTo({ url: `/pages/container/detail?id=${first._id}` });
-      return;
-    }
-    wx.showToast({ title: '先保存一个容器', icon: 'none' });
+    wx.navigateTo({ url: '/pages/container/list' });
   }
 });
