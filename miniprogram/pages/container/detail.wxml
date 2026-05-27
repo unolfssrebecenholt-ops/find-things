@@ -4,7 +4,7 @@
       <text class="eyebrow">{{container.displayLocation}}</text>
       <text class="page-title">{{container.name}}</text>
     </view>
-    <button class="round-more" bindtap="deleteContainer">⋯</button>
+    <view class="danger-action" bindtap="deleteContainer">删除</view>
   </view>
 
   <view class="detail-hero">
@@ -71,7 +71,15 @@
       <button class="mini-button secondary" bindtap="addContentPhoto">{{addPhotoLabel}}</button>
     </view>
   </view>
-  <view wx:if="{{showContentEmpty}}" class="empty-state">还没有箱内照片。添加照片后，可以在这里左右滑动查看。</view>
+  <view wx:if="{{showContentEmpty}}" class="empty-state with-xiaolan">
+    <view class="xiaolan-row">
+      <image class="xiaolan-avatar" mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
+      <view class="xiaolan-copy">
+        <text class="xiaolan-name">小懒还没看到箱子里面</text>
+        <text>添加照片后，可以在这里左右滑动查看。</text>
+      </view>
+    </view>
+  </view>
 
   <view class="section-row">
     <text class="section-heading">物品</text>
@@ -101,5 +109,13 @@
   </view>
 </view>
 <view class="page" wx:if="{{showMissingContainer}}">
-  <view class="empty-state">没有找到这个容器。</view>
+  <view class="empty-state with-xiaolan">
+    <view class="xiaolan-row">
+      <image class="xiaolan-avatar" mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
+      <view class="xiaolan-copy">
+        <text class="xiaolan-name">小懒没找到这个容器</text>
+        <text>可能已经删除，或者链接里的容器信息不完整。</text>
+      </view>
+    </view>
+  </view>
 </view>

@@ -20,7 +20,10 @@
     >编辑</button>
   </view>
 
-  <view wx:if="{{showAiWarning}}" class="warning-card">{{aiStatusText}}</view>
+  <view wx:if="{{showAiWarning}}" class="warning-card xiaolan-row">
+    <image class="xiaolan-avatar small" mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
+    <text>{{aiStatusText}}</text>
+  </view>
 
   <view wx:if="{{isSummaryMode}}" class="summary-panel">
     <view class="photo-stage">

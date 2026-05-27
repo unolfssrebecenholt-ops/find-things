@@ -1,5 +1,6 @@
 const imageStore = require('../../services/image-store');
 const storage = require('../../services/storage');
+const { navigateHome } = require('../../utils/navigation');
 
 function getChosenPath(result) {
   if (result && result.tempFiles && result.tempFiles[0]) {
@@ -199,6 +200,6 @@ Page({
     wx.removeStorageSync('captureDraft');
     wx.removeStorageSync('containerEditDraft');
     wx.showToast({ title: '已保存', icon: 'success' });
-    wx.reLaunch({ url: '/pages/home/index' });
+    navigateHome();
   }
 });

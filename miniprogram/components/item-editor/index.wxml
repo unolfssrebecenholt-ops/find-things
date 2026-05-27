@@ -8,19 +8,21 @@
   </view>
   <view wx:for="{{items}}" wx:key="tempId" class="item-card {{item.confirmed ? '' : 'disabled'}}">
     <view class="item-toolbar">
-      <button
-        class="keep-toggle {{item.confirmed ? 'checked' : ''}}"
-        data-index="{{index}}"
-        bindtap="toggleConfirmed"
-      >{{item.confirmed ? '保留' : '不存'}}</button>
       <view class="item-identity">
         <text class="number">{{item.displayIndex}}</text>
         <view class="identity-stack">
-          <text class="identity-copy">AI 识别</text>
+          <text class="identity-copy">小懒识别</text>
           <text class="confidence">{{item.confidenceLabel}}</text>
         </view>
       </view>
-      <button class="delete" data-index="{{index}}" bindtap="removeItem">删除</button>
+      <view class="item-actions">
+        <button
+          class="action-button keep-toggle {{item.confirmed ? 'checked' : ''}}"
+          data-index="{{index}}"
+          bindtap="toggleConfirmed"
+        >{{item.confirmed ? '保留' : '不存'}}</button>
+        <button class="action-button delete" data-index="{{index}}" bindtap="removeItem">删除</button>
+      </view>
     </view>
 
     <view class="name-field">
@@ -65,7 +67,7 @@
     </view>
 
     <view class="description-field">
-      <text class="field-caption">识别描述</text>
+      <text class="field-caption">小懒描述</text>
       <textarea
         class="description-input"
         placeholder="位置、外观、用途"

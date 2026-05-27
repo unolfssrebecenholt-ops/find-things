@@ -4,20 +4,31 @@
   gap: 24rpx;
 }
 
+.settings-title {
+  margin-top: 4rpx;
+}
+
 .settings-card {
   display: flex;
   flex-direction: column;
   gap: 22rpx;
-  padding: 24rpx;
+  padding: 26rpx;
   background: #fffdf8;
-  border: 1rpx solid #e4ded1;
-  border-radius: 8rpx;
+  border: 2rpx solid #eadfc8;
+  border-radius: 34rpx;
+  box-shadow: 0 10rpx 0 #f1e4c8;
+}
+
+.settings-hero {
+  align-items: flex-start;
+  padding-bottom: 4rpx;
 }
 
 .card-title {
-  color: #253027;
+  color: #2f352c;
   font-size: 32rpx;
   font-weight: 800;
+  line-height: 1.25;
 }
 
 .field {
@@ -27,7 +38,7 @@
 }
 
 .label {
-  color: #5a5145;
+  color: #725f45;
   font-size: 25rpx;
   font-weight: 700;
 }
@@ -35,10 +46,11 @@
 .input {
   height: 76rpx;
   padding: 0 18rpx;
-  color: #253027;
+  color: #2f352c;
   font-size: 27rpx;
-  background: #f6f2e9;
-  border-radius: 8rpx;
+  background: #fff9ee;
+  border: 2rpx solid #eadfc8;
+  border-radius: 22rpx;
 }
 
 .segmented-inline {
@@ -49,16 +61,18 @@
 
 .segment {
   height: 68rpx;
-  color: #5a5145;
+  color: #725f45;
   font-size: 25rpx;
   line-height: 68rpx;
-  background: #f6f2e9;
-  border-radius: 8rpx;
+  background: #fff9ee;
+  border: 2rpx solid #eadfc8;
+  border-radius: 22rpx;
 }
 
 .segment.active {
   color: #ffffff;
-  background: #4f8f67;
+  background: #ff7a59;
+  border-color: #ff7a59;
 }
 
 .settings-actions {

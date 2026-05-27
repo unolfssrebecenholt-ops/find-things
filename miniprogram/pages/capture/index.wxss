@@ -16,18 +16,37 @@
 
 .capture-card {
   overflow: hidden;
-  background: #ffffff;
-  border: 1rpx solid #e4ded1;
-  border-radius: 8rpx;
-  box-shadow: 0 16rpx 44rpx rgba(84, 74, 55, 0.1);
+  background: #fffdf8;
+  border: 2rpx solid #eadfc8;
+  border-radius: 34rpx;
+  box-shadow: 0 12rpx 0 #f1e4c8;
 }
 
 .capture-illustration {
   position: relative;
-  height: 300rpx;
-  background:
-    linear-gradient(135deg, rgba(255, 253, 248, 0.5), rgba(229, 240, 231, 0.45)),
-    #e8e0d4;
+  height: 318rpx;
+  background: #dff3df;
+}
+
+.capture-illustration::before {
+  position: absolute;
+  top: 34rpx;
+  right: 42rpx;
+  width: 154rpx;
+  height: 26rpx;
+  content: "";
+  background: #fff0b8;
+  border-radius: 999rpx;
+  transform: rotate(-10deg);
+}
+
+.capture-mascot {
+  position: absolute;
+  top: 40rpx;
+  right: 56rpx;
+  z-index: 2;
+  width: 118rpx;
+  height: 118rpx;
 }
 
 .layer {
@@ -48,7 +67,7 @@
   left: 74rpx;
   width: 170rpx;
   height: 88rpx;
-  background: #7aa0bd;
+  background: #8ab7ee;
   transform: rotate(-5deg);
 }
 
@@ -57,7 +76,7 @@
   right: 88rpx;
   width: 190rpx;
   height: 20rpx;
-  background: #2c322d;
+  background: #4b493f;
   border-radius: 999rpx;
   transform: rotate(4deg);
 }
@@ -67,7 +86,7 @@
   bottom: 74rpx;
   width: 70rpx;
   height: 48rpx;
-  border: 8rpx solid #4f8f67;
+  border: 8rpx solid #ff7a59;
   background: transparent;
   border-radius: 999rpx;
 }
@@ -79,7 +98,7 @@
 }
 
 .capture-title {
-  color: #253027;
+  color: #2f352c;
   font-size: 31rpx;
   font-weight: 800;
 }

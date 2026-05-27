@@ -18,15 +18,17 @@
 }
 
 .container-row {
+  position: relative;
   display: grid;
   grid-template-columns: 220rpx minmax(0, 1fr);
+  align-items: center;
   gap: 18rpx;
   min-height: 152rpx;
   padding: 14rpx;
-  background: #ffffff;
-  border: 1rpx solid #e4ded1;
-  border-radius: 8rpx;
-  box-shadow: 0 10rpx 24rpx rgba(89, 79, 55, 0.06);
+  background: #fffdf8;
+  border: 2rpx solid #eadfc8;
+  border-radius: 30rpx;
+  box-shadow: 0 8rpx 0 #f1e4c8;
 }
 
 .container-photo {
@@ -34,10 +36,8 @@
   width: 100%;
   height: 124rpx;
   overflow: hidden;
-  background:
-    linear-gradient(135deg, rgba(255, 253, 248, 0.54), rgba(255, 253, 248, 0)),
-    #d8e6e0;
-  border-radius: 8rpx;
+  background: #dff3df;
+  border-radius: 22rpx;
 }
 
 .container-photo image {
@@ -57,14 +57,14 @@
   bottom: 42rpx;
   width: 78rpx;
   height: 16rpx;
-  background: rgba(47, 111, 75, 0.38);
+  background: rgba(255, 122, 89, 0.42);
   border-radius: 6rpx;
 }
 
 .placeholder-line.wide {
   bottom: 72rpx;
   width: 118rpx;
-  background: rgba(255, 253, 248, 0.62);
+  background: rgba(255, 253, 248, 0.72);
   box-shadow: inset 0 0 0 1rpx rgba(117, 100, 68, 0.08);
 }
 
@@ -73,12 +73,13 @@
   min-width: 0;
   align-content: center;
   gap: 8rpx;
+  padding-right: 58rpx;
 }
 
 .container-name {
   min-width: 0;
   overflow: hidden;
-  color: #253027;
+  color: #2f352c;
   font-size: 31rpx;
   font-weight: 850;
   line-height: 1.25;
@@ -91,4 +92,25 @@
   flex-wrap: wrap;
   gap: 8rpx;
   margin-top: 2rpx;
+}
+
+.more-action {
+  position: absolute;
+  top: 16rpx;
+  right: 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5rpx;
+  width: 48rpx;
+  height: 44rpx;
+  background: transparent;
+  border-radius: 6rpx;
+}
+
+.more-dot {
+  width: 7rpx;
+  height: 7rpx;
+  background: #b1a38d;
+  border-radius: 50%;
 }

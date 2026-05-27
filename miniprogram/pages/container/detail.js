@@ -2,6 +2,7 @@ const ai = require('../../services/ai');
 const imageStore = require('../../services/image-store');
 const storage = require('../../services/storage');
 const { withDisplayIndexes } = require('../../utils/geometry');
+const { navigateHome } = require('../../utils/navigation');
 
 const FREE_CONTENT_IMAGE_LIMIT = storage.FREE_CONTENT_IMAGE_LIMIT || 2;
 
@@ -155,7 +156,7 @@ Page({
     const image = (this.data.contentImages || [])[this.data.currentImageIndex];
     if (!image) return;
 
-    wx.showLoading({ title: 'AI 识别中' });
+    wx.showLoading({ title: '小懒正在重新看这张' });
     ai.analyzeImage({ imagePath: image.fileId, allowMockFallback: false })
       .then((analyzed) => {
         const items = withDisplayIndexes(analyzed.items || []).map((item) => Object.assign({}, item, {
@@ -184,10 +185,10 @@ Page({
       })
       .catch((error) => {
         wx.showModal({
-          title: 'AI 识别失败',
-          content: error && error.message ? error.message : '请检查接口配置、合法域名和网络后重试。',
+          title: '小懒暂时没看清',
+          content: error && error.message ? error.message : '请检查识别服务配置、合法域名和网络后重试。',
           showCancel: false,
-          confirmColor: '#4f8f67'
+          confirmColor: '#ff7a59'
         });
       })
       .finally(() => {
@@ -202,7 +203,7 @@ Page({
         content: `默认可保存 ${FREE_CONTENT_IMAGE_LIMIT} 张箱内照片，更多照片可在升级后使用。`,
         showCancel: false,
         confirmText: '知道了',
-        confirmColor: '#4f8f67'
+        confirmColor: '#ff7a59'
       });
       return;
     }
@@ -218,7 +219,7 @@ Page({
         sortOrder: index,
         itemCount: 0
       };
-      wx.showLoading({ title: 'AI 识别中' });
+      wx.showLoading({ title: '小懒正在分析中' });
       const persistOriginal = imageStore.persistImage(fileId, 'find-things/content');
       const analyzePrepared = imageStore.prepareImageForAnalyze(fileId)
         .then((analyzePath) => ai.analyzeImage({ imagePath: analyzePath, allowMockFallback: false }));
@@ -246,10 +247,10 @@ Page({
         })
         .catch((error) => {
           wx.showModal({
-            title: 'AI 识别失败',
-            content: error && error.message ? error.message : '请检查接口配置、合法域名和网络后重试。',
+            title: '小懒暂时没看清',
+            content: error && error.message ? error.message : '请检查识别服务配置、合法域名和网络后重试。',
             showCancel: false,
-            confirmColor: '#4f8f67'
+            confirmColor: '#ff7a59'
           });
         })
         .finally(() => {
@@ -271,21 +272,24 @@ Page({
   },
 
   deleteContainer() {
+    if (!this.data.container || !this.data.container._id) return;
+
     wx.showModal({
       title: '删除容器',
-      content: '删除后，本地搜索不会再显示这个容器里的物品。',
+      content: `确定删除「${this.data.container.name || '这个容器'}」吗？删除后，本地搜索不会再显示这个容器里的物品。`,
+      confirmText: '删除',
       confirmColor: '#a33b2f',
       success: (result) => {
         if (!result.confirm) return;
         storage.deleteContainer(this.data.container._id);
         wx.showToast({ title: '已删除', icon: 'success' });
-        wx.reLaunch({ url: '/pages/home/index' });
+        navigateHome();
       }
     });
   },
 
   goHome() {
-    wx.reLaunch({ url: '/pages/home/index' });
+    navigateHome();
   },
 
   goSearch() {

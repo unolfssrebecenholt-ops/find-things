@@ -27,10 +27,30 @@
           <text class="pill">{{item.imageCount}} 张照片</text>
         </view>
       </view>
+      <view
+        class="more-action"
+        catchtap="showContainerActions"
+        data-id="{{item._id}}"
+        data-name="{{item.name}}"
+        aria-label="更多操作"
+      >
+        <view class="more-dot"></view>
+        <view class="more-dot"></view>
+        <view class="more-dot"></view>
+      </view>
     </view>
   </view>
 
-  <view wx:if="{{showEmpty}}" class="empty-state">还没有保存的容器。先拍一箱，保存后会出现在这里。</view>
+  <view wx:if="{{showEmpty}}" class="empty-state with-xiaolan">
+    <view class="xiaolan-row">
+      <image class="xiaolan-avatar" mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
+      <view class="xiaolan-copy">
+        <text class="xiaolan-name">小懒还没有容器记录</text>
+        <text>先拍一箱，保存后会出现在这里。</text>
+      </view>
+    </view>
+    <button class="empty-action" bindtap="goCapture">拍照整理</button>
+  </view>
 
   <view class="bottom-nav">
     <view class="nav-item" bindtap="goHome">

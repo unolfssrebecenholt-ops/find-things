@@ -13,23 +13,23 @@
   padding: 6rpx 4rpx 2rpx;
 }
 
-.round-more {
+.danger-action {
   display: flex;
-  flex: 0 0 72rpx;
+  flex: 0 0 96rpx;
   align-items: center;
   justify-content: center;
-  width: 72rpx;
-  min-width: 72rpx;
-  max-width: 72rpx;
-  height: 72rpx;
+  width: 96rpx;
+  min-width: 96rpx;
+  max-width: 96rpx;
+  height: 64rpx;
   padding: 0;
-  color: #253027;
-  font-size: 42rpx;
+  color: #a33b2f;
+  font-size: 24rpx;
   font-weight: 800;
   line-height: 1;
-  background: #ffffff;
-  border: 1rpx solid #e4ded1;
-  border-radius: 50%;
+  background: #ffe8dc;
+  border: 1rpx solid rgba(163, 59, 47, 0.18);
+  border-radius: 18rpx;
 }
 
 .detail-hero {
@@ -43,11 +43,11 @@
   height: 382rpx;
   overflow: hidden;
   background:
-    linear-gradient(135deg, rgba(255, 253, 248, 0.45), rgba(255, 253, 248, 0)),
-    #e0d4bc;
-  border: 1rpx solid #e4ded1;
-  border-radius: 8rpx;
-  box-shadow: 0 12rpx 34rpx rgba(84, 74, 55, 0.1);
+    linear-gradient(135deg, rgba(255, 253, 248, 0.55), rgba(255, 240, 184, 0.18)),
+    #dff3df;
+  border: 2rpx solid #eadfc8;
+  border-radius: 30rpx;
+  box-shadow: 0 10rpx 0 #f1e4c8;
 }
 
 .cover-photo image {
@@ -61,7 +61,7 @@
   bottom: 18rpx;
   z-index: 2;
   padding: 8rpx 14rpx;
-  color: #2f6f4b;
+  color: #725f45;
   font-size: 22rpx;
   font-weight: 800;
   background: rgba(255, 253, 248, 0.9);
@@ -92,7 +92,7 @@
   height: 172rpx;
   background: rgba(255, 253, 248, 0.42);
   border: 4rpx solid rgba(118, 96, 61, 0.2);
-  border-radius: 8rpx;
+  border-radius: 22rpx;
 }
 
 .cover-box-shadow {
@@ -116,14 +116,13 @@
   flex-direction: column;
   gap: 4rpx;
   padding: 18rpx 16rpx;
-  background: #ffffff;
-  border: 1rpx solid #e4ded1;
-  border-radius: 8rpx;
-  box-shadow: 0 8rpx 22rpx rgba(84, 74, 55, 0.06);
+  background: #fffdf8;
+  border: 2rpx solid #eadfc8;
+  border-radius: 24rpx;
 }
 
 .stat-value {
-  color: #253027;
+  color: #2f352c;
   font-size: 30rpx;
   font-weight: 850;
 }
@@ -132,10 +131,10 @@
   display: grid;
   gap: 14rpx;
   padding: 18rpx;
-  background: #ffffff;
-  border: 1rpx solid #e4ded1;
-  border-radius: 8rpx;
-  box-shadow: 0 12rpx 34rpx rgba(84, 74, 55, 0.1);
+  background: #fffdf8;
+  border: 2rpx solid #eadfc8;
+  border-radius: 30rpx;
+  box-shadow: 0 10rpx 0 #f1e4c8;
 }
 
 .carousel-head {
@@ -158,7 +157,7 @@
 .photo-swiper {
   height: 328rpx;
   overflow: hidden;
-  border-radius: 8rpx;
+  border-radius: 24rpx;
 }
 
 .carousel-indicator {
@@ -172,18 +171,18 @@
 .carousel-dot {
   width: 14rpx;
   height: 14rpx;
-  background: #cfd8cc;
+  background: #ecd79a;
   border-radius: 999rpx;
 }
 
 .carousel-dot.active {
   width: 44rpx;
-  background: #4f8f67;
+  background: #ff7a59;
 }
 
 .carousel-count {
   margin-left: 8rpx;
-  color: #697366;
+  color: #7b7465;
   font-size: 23rpx;
   font-weight: 700;
 }
@@ -196,18 +195,19 @@
 
 .mini-button {
   height: 72rpx;
-  color: #2f6f4b;
+  color: #486f45;
   font-size: 25rpx;
   font-weight: 800;
   line-height: 72rpx;
-  background: #f4faf4;
-  border: 1rpx solid rgba(79, 143, 103, 0.24);
+  background: #e6f6d8;
+  border: 2rpx solid #c7e8b6;
+  border-radius: 22rpx;
 }
 
 .mini-button.secondary {
-  color: #6b5b38;
-  background: #fff1cf;
-  border-color: rgba(232, 185, 93, 0.34);
+  color: #7b5e1e;
+  background: #fff0b8;
+  border-color: #ecd79a;
 }
 
 .item-tags {
@@ -221,11 +221,11 @@
   max-width: 100%;
   min-height: 56rpx;
   padding: 12rpx 18rpx;
-  color: #253027;
+  color: #2f352c;
   font-size: 24rpx;
   font-weight: 750;
-  background: #ffffff;
-  border: 1rpx solid #e4ded1;
+  background: #fffdf8;
+  border: 2rpx solid #eadfc8;
   border-radius: 999rpx;
 }
 

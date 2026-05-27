@@ -7,14 +7,15 @@
 
   <view class="capture-card">
     <view class="capture-illustration">
+      <image class="capture-mascot" mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
       <view class="layer shelf"></view>
       <view class="layer book"></view>
       <view class="layer pen"></view>
       <view class="layer clip"></view>
     </view>
     <view class="capture-copy">
-      <text class="capture-title">建议从正上方拍</text>
-      <text class="subtle">物品重叠较多时，拍完第一张后可以继续“拍下一张”。</text>
+      <text class="capture-title">给小懒一张清楚的照片</text>
+      <text class="subtle">从正上方拍，物品重叠多时可以继续拍下一张。</text>
     </view>
   </view>
 
@@ -22,5 +23,4 @@
     <button class="primary-button action" loading="{{choosing}}" bindtap="chooseImage">拍照或选图</button>
   </view>
 
-  <view class="note-card">上传图片会调用 GPT-5.5 识别；如果请求失败，会直接提示错误，不会写入 mock 结果。</view>
 </view>

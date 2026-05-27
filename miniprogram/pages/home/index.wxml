@@ -8,9 +8,12 @@
   </view>
 
   <view class="hero-card">
-    <view class="hero-copy">
-      <text class="hero-title">拍下箱内物品</text>
-      <text class="subtle">确认清单后保存，下次不用翻箱倒柜。</text>
+    <view class="hero-topline">
+      <view class="hero-copy">
+        <text class="hero-title">小懒陪你整理一箱</text>
+        <text class="subtle">拍一下、确认清单，下次直接搜。</text>
+      </view>
+      <image class="hero-mascot" mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
     </view>
     <view class="hero-actions">
       <button class="primary-button" bindtap="goCapture">拍一箱</button>
@@ -47,7 +50,16 @@
       </view>
     </view>
   </view>
-  <view wx:if="{{showEmptyRecentContainers}}" class="empty-state">还没有保存的容器。先拍一箱，保存后这里会像相册一样展示。</view>
+  <view wx:if="{{showEmptyRecentContainers}}" class="empty-state with-xiaolan">
+    <view class="xiaolan-row">
+      <image class="xiaolan-avatar" mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
+      <view class="xiaolan-copy">
+        <text class="xiaolan-name">小懒还没有东西可找</text>
+        <text>先拍一箱，保存后这里会像相册一样展示。</text>
+      </view>
+    </view>
+    <button class="empty-action" bindtap="goCapture">拍照整理</button>
+  </view>
 
   <view class="bottom-nav">
     <view class="nav-item active">

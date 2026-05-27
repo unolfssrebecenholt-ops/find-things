@@ -52,7 +52,7 @@ Page({
       settings.apiKey = this.data.apiKey;
     }
     ai.saveRuntimeConfig(settings);
-    wx.showToast({ title: '已保存 AI 配置', icon: 'success' });
+    wx.showToast({ title: '已保存小懒配置', icon: 'success' });
     this.onShow();
   },
 

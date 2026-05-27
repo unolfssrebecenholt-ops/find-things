@@ -1,0 +1,1885 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>拍箱找物 高级简约 UI 原型</title>
+  <style>
+    :root {
+      --paper: #f3f2ed;
+      --surface: #fbfbf7;
+      --surface-soft: #f7f7f2;
+      --ink: #151713;
+      --muted: #6f756d;
+      --faint: #9da399;
+      --line: rgba(21, 23, 19, 0.12);
+      --line-strong: rgba(21, 23, 19, 0.2);
+      --pine: #1f6048;
+      --pine-dark: #143e31;
+      --sage: #dbe9df;
+      --sage-deep: #a9c8b5;
+      --shadow: 0 26px 70px rgba(22, 25, 18, 0.13);
+      --radius-lg: 28px;
+      --radius-md: 20px;
+      --radius-sm: 14px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-width: 2120px;
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(90deg, rgba(21, 23, 19, 0.035) 1px, transparent 1px) 0 0 / 72px 72px,
+        linear-gradient(180deg, #f7f6f1 0%, var(--paper) 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    .board {
+      width: 2100px;
+      margin: 0 auto;
+      padding: 44px 48px 56px;
+    }
+
+    .board-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 40px;
+      margin-bottom: 34px;
+    }
+
+    .board-title {
+      margin: 0;
+      font-size: 38px;
+      font-weight: 820;
+      letter-spacing: 0;
+      line-height: 1.06;
+    }
+
+    .board-note {
+      max-width: 760px;
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .palette {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .swatch {
+      display: block;
+      width: 24px;
+      height: 24px;
+      border: 1px solid rgba(21, 23, 19, 0.12);
+      border-radius: 50%;
+    }
+
+    .phones {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 24px;
+    }
+
+    .phone-wrap {
+      min-width: 0;
+    }
+
+    .screen-label {
+      display: flex;
+      justify-content: space-between;
+      margin: 0 2px 12px;
+      color: var(--pine-dark);
+      font-size: 13px;
+      font-weight: 780;
+      letter-spacing: 0;
+    }
+
+    .phone {
+      position: relative;
+      width: 374px;
+      height: 880px;
+      overflow: hidden;
+      background: var(--surface);
+      border: 10px solid #171b15;
+      border-radius: 46px;
+      box-shadow: var(--shadow);
+    }
+
+    .phone::after {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      pointer-events: none;
+      content: "";
+      border: 1px solid rgba(255, 255, 255, 0.62);
+      border-radius: 36px;
+    }
+
+    .island {
+      position: absolute;
+      top: 18px;
+      left: 50%;
+      z-index: 9;
+      width: 112px;
+      height: 34px;
+      background: #10120f;
+      border-radius: 999px;
+      transform: translateX(-50%);
+    }
+
+    .status {
+      position: absolute;
+      top: 28px;
+      right: 24px;
+      left: 24px;
+      z-index: 8;
+      display: flex;
+      justify-content: space-between;
+      color: #171b15;
+      font-size: 13px;
+      font-weight: 760;
+    }
+
+    .battery {
+      display: inline-block;
+      width: 23px;
+      height: 11px;
+      margin-left: 5px;
+      vertical-align: -1px;
+      border: 1.5px solid currentColor;
+      border-radius: 3px;
+    }
+
+    .battery::after {
+      display: block;
+      width: 13px;
+      height: 7px;
+      margin: 1px;
+      content: "";
+      background: currentColor;
+      border-radius: 2px;
+    }
+
+    .phone-content {
+      position: relative;
+      z-index: 2;
+      height: 100%;
+      padding: 72px 22px 94px;
+      overflow: hidden;
+    }
+
+    .page-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+
+    .kicker {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--pine);
+      font-size: 12px;
+      font-weight: 760;
+      letter-spacing: 0;
+    }
+
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    .page-title {
+      max-width: 260px;
+      font-size: 28px;
+      font-weight: 840;
+      line-height: 1.12;
+      letter-spacing: 0;
+    }
+
+    .sloth-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+      height: 40px;
+      padding: 5px 10px 5px 5px;
+      color: var(--pine-dark);
+      background: rgba(219, 233, 223, 0.78);
+      border: 1px solid rgba(31, 96, 72, 0.16);
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .sloth-chip img {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+    }
+
+    .sloth-chip span {
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .icon-button {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      color: var(--pine);
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+    }
+
+    .icon-button strong {
+      margin-top: -2px;
+      font-size: 25px;
+      font-weight: 420;
+      line-height: 1;
+    }
+
+    .hero-panel {
+      display: grid;
+      gap: 18px;
+      padding: 20px;
+      background: linear-gradient(180deg, #ffffff 0%, #f8f8f3 100%);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+    }
+
+    .hero-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 76px;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .hero-panel h3 {
+      font-size: 20px;
+      font-weight: 820;
+      line-height: 1.2;
+    }
+
+    .body-copy {
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .mascot-orbit {
+      position: relative;
+      display: grid;
+      width: 76px;
+      height: 76px;
+      place-items: center;
+      background: #fff2c8;
+      border: 1px solid rgba(21, 23, 19, 0.08);
+      border-radius: 24px;
+    }
+
+    .mascot-orbit img {
+      width: 58px;
+      height: 58px;
+    }
+
+    .action-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 0;
+      height: 50px;
+      padding: 0 16px;
+      border: 0;
+      border-radius: 999px;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .button-primary {
+      color: #fff;
+      background: var(--pine);
+    }
+
+    .button-soft {
+      color: var(--pine-dark);
+      background: var(--sage);
+    }
+
+    .section-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 24px 2px 12px;
+    }
+
+    .section-row h3 {
+      font-size: 17px;
+      font-weight: 820;
+    }
+
+    .text-link {
+      color: var(--pine);
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .page-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: none;
+    }
+
+    .manage-button,
+    .danger-button,
+    .row-delete,
+    .batch-delete {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      white-space: nowrap;
+    }
+
+    .manage-button {
+      height: 42px;
+      padding: 0 15px;
+      color: var(--pine);
+      background: rgba(219, 233, 223, 0.72);
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 820;
+    }
+
+    .manage-button.active {
+      color: #fff;
+      background: var(--pine);
+    }
+
+    .danger-button {
+      height: 42px;
+      padding: 0 13px;
+      color: #9f3d32;
+      background: #f7e5df;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 820;
+    }
+
+    .detail-title {
+      max-width: 190px;
+    }
+
+    .container-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .list-toolbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      margin: 4px 0 16px;
+    }
+
+    .compact-search {
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      height: 46px;
+      padding: 0 13px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.74);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .compact-search .search-mark {
+      width: 17px;
+      height: 17px;
+      border-width: 1.8px;
+    }
+
+    .compact-filter {
+      display: grid;
+      width: 46px;
+      height: 46px;
+      place-items: center;
+      color: var(--pine);
+      background: rgba(255, 255, 255, 0.74);
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      font-size: 20px;
+      font-weight: 520;
+      line-height: 1;
+    }
+
+    .library-summary {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .summary-tile {
+      min-height: 86px;
+      padding: 15px;
+      background: linear-gradient(180deg, #ffffff 0%, #f7f7f2 100%);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+    }
+
+    .summary-tile strong {
+      display: block;
+      font-size: 25px;
+      font-weight: 840;
+      line-height: 1;
+    }
+
+    .summary-tile span {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 690;
+      line-height: 1.35;
+    }
+
+    .container-row.featured {
+      grid-template-columns: 104px minmax(0, 1fr);
+      align-items: stretch;
+      min-height: 126px;
+      padding: 10px;
+    }
+
+    .container-row.featured .thumb {
+      height: 104px;
+    }
+
+    .container-row.manage-row {
+      grid-template-columns: 24px 78px minmax(0, 1fr) auto;
+      align-items: center;
+      min-height: 106px;
+    }
+
+    .container-row.manage-row .thumb {
+      height: 78px;
+      border-radius: 16px;
+    }
+
+    .select-dot {
+      position: relative;
+      display: block;
+      width: 22px;
+      height: 22px;
+      border: 1.8px solid rgba(31, 96, 72, 0.36);
+      border-radius: 50%;
+    }
+
+    .select-dot.selected {
+      background: var(--pine);
+      border-color: var(--pine);
+    }
+
+    .select-dot.selected::after {
+      position: absolute;
+      top: 5px;
+      left: 5px;
+      width: 9px;
+      height: 5px;
+      content: "";
+      border-bottom: 2px solid #fff;
+      border-left: 2px solid #fff;
+      transform: rotate(-45deg);
+    }
+
+    .container-body {
+      display: grid;
+      min-width: 0;
+      align-content: center;
+      gap: 8px;
+    }
+
+    .container-meta-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .container-progress {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      margin-top: 2px;
+    }
+
+    .progress-line {
+      height: 5px;
+      overflow: hidden;
+      background: rgba(31, 96, 72, 0.12);
+      border-radius: 999px;
+    }
+
+    .progress-line span {
+      display: block;
+      width: 72%;
+      height: 100%;
+      background: var(--pine);
+      border-radius: inherit;
+    }
+
+    .progress-copy {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 720;
+      white-space: nowrap;
+    }
+
+    .row-delete {
+      height: 32px;
+      padding: 0 10px;
+      color: #9f3d32;
+      background: #f7e5df;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 820;
+    }
+
+    .batch-bar {
+      position: absolute;
+      right: 22px;
+      bottom: 92px;
+      left: 22px;
+      z-index: 13;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 10px 10px 14px;
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      box-shadow: 0 18px 42px rgba(22, 25, 18, 0.12);
+      backdrop-filter: blur(16px);
+    }
+
+    .batch-copy {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 720;
+      line-height: 1.35;
+    }
+
+    .batch-copy strong {
+      color: var(--ink);
+      font-weight: 860;
+    }
+
+    .batch-delete {
+      height: 40px;
+      padding: 0 15px;
+      color: #fff;
+      background: #9f3d32;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 840;
+    }
+
+    .container-row {
+      display: grid;
+      grid-template-columns: 82px minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      min-height: 100px;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+    }
+
+    .thumb {
+      position: relative;
+      height: 80px;
+      overflow: hidden;
+      background: #e4ebe4;
+      border: 1px solid rgba(21, 23, 19, 0.08);
+      border-radius: 18px;
+    }
+
+    .thumb::before,
+    .thumb::after,
+    .photo-map::before,
+    .photo-map::after {
+      position: absolute;
+      content: "";
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 8px;
+    }
+
+    .thumb::before {
+      top: 19px;
+      left: 14px;
+      width: 34px;
+      height: 28px;
+    }
+
+    .thumb::after {
+      right: 13px;
+      bottom: 16px;
+      width: 26px;
+      height: 38px;
+    }
+
+    .thumb.warm {
+      background: #e8e1d2;
+    }
+
+    .thumb.cool {
+      background: #dde6eb;
+    }
+
+    .thumb.pine {
+      background: #d9e7de;
+    }
+
+    .row-title {
+      display: block;
+      overflow: hidden;
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.25;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .subtle {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .meta-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 28px;
+      padding: 0 10px;
+      color: var(--pine-dark);
+      background: var(--sage);
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .bottom-nav {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 12;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      height: 86px;
+      padding: 10px 24px 18px;
+      background: rgba(251, 251, 247, 0.92);
+      border-top: 1px solid var(--line);
+      backdrop-filter: blur(18px);
+    }
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 740;
+    }
+
+    .nav-item.active {
+      color: var(--pine);
+    }
+
+    .nav-icon {
+      position: relative;
+      width: 22px;
+      height: 22px;
+      border: 1.8px solid currentColor;
+      border-radius: 8px;
+    }
+
+    .nav-icon.search {
+      border-radius: 50%;
+    }
+
+    .nav-icon.search::after {
+      position: absolute;
+      right: -5px;
+      bottom: -3px;
+      width: 8px;
+      height: 2px;
+      content: "";
+      background: currentColor;
+      border-radius: 99px;
+      transform: rotate(45deg);
+    }
+
+    .nav-icon.box::before {
+      position: absolute;
+      top: 8px;
+      right: 4px;
+      left: 4px;
+      content: "";
+      border-top: 1.8px solid currentColor;
+    }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      padding: 4px;
+      background: var(--surface-soft);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+    }
+
+    .segment {
+      height: 38px;
+      color: var(--muted);
+      background: transparent;
+      border: 0;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 780;
+    }
+
+    .segment.active {
+      color: var(--pine-dark);
+      background: #fff;
+      box-shadow: 0 4px 18px rgba(22, 25, 18, 0.08);
+    }
+
+    .ratio-guide {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 10px;
+      padding: 8px 10px;
+      color: var(--muted);
+      background: rgba(219, 233, 223, 0.44);
+      border: 1px solid rgba(31, 96, 72, 0.12);
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 720;
+      line-height: 1;
+    }
+
+    .ratio-guide strong {
+      color: var(--pine);
+      font-size: 13px;
+      font-weight: 860;
+    }
+
+    .photo-map {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      height: auto;
+      margin-top: 12px;
+      overflow: hidden;
+      background:
+        linear-gradient(90deg, rgba(21, 23, 19, 0.055) 1px, transparent 1px) 0 0 / 86px 86px,
+        linear-gradient(0deg, rgba(21, 23, 19, 0.055) 1px, transparent 1px) 0 0 / 86px 86px,
+        #e4eee7;
+      border: 1px solid var(--line);
+      border-radius: 26px;
+    }
+
+    .photo-map.ratio-portrait {
+      width: 45%;
+      aspect-ratio: 9 / 16;
+      margin-right: auto;
+      margin-left: auto;
+    }
+
+    .photo-map::before {
+      top: 20%;
+      left: 12%;
+      width: 28%;
+      height: 30%;
+      background: #92b7b0;
+    }
+
+    .photo-map::after {
+      top: 25%;
+      right: 12%;
+      width: 25%;
+      height: 25%;
+      background: #c5d3e8;
+    }
+
+    .map-pen {
+      position: absolute;
+      left: 34%;
+      bottom: 38%;
+      z-index: 2;
+      width: 38%;
+      height: 7%;
+      background: #20261f;
+      border-radius: 99px;
+    }
+
+    .map-clip {
+      position: absolute;
+      right: 17%;
+      bottom: 22%;
+      z-index: 2;
+      width: 17%;
+      height: 22%;
+      background: #86b7c9;
+      border-radius: 22px;
+    }
+
+    .bbox {
+      position: absolute;
+      z-index: 3;
+      border: 1.4px dashed var(--pine);
+      border-radius: 12px;
+    }
+
+    .bbox.one {
+      top: 17%;
+      left: 10%;
+      width: 36%;
+      height: 42%;
+    }
+
+    .bbox.two {
+      left: 28%;
+      bottom: 34%;
+      width: 49%;
+      height: 20%;
+    }
+
+    .bbox.three {
+      top: 18%;
+      right: 9%;
+      width: 34%;
+      height: 42%;
+    }
+
+    .bbox.four {
+      right: 13%;
+      bottom: 15%;
+      width: 27%;
+      height: 31%;
+    }
+
+    .num {
+      position: absolute;
+      top: -10px;
+      left: -10px;
+      display: grid;
+      width: 24px;
+      height: 24px;
+      place-items: center;
+      color: #fff;
+      background: var(--pine);
+      border-radius: 50%;
+      font-size: 11px;
+      font-weight: 820;
+    }
+
+    .review-list {
+      display: grid;
+      gap: 9px;
+      margin-top: 12px;
+    }
+
+    .review-item {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 11px 12px;
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+    }
+
+    .check {
+      display: grid;
+      width: 28px;
+      height: 28px;
+      place-items: center;
+      color: #fff;
+      background: var(--pine);
+      border-radius: 50%;
+      font-size: 12px;
+      font-weight: 820;
+    }
+
+    .review-item h3 {
+      overflow: hidden;
+      font-size: 14px;
+      font-weight: 820;
+      line-height: 1.25;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .confidence {
+      color: var(--pine);
+      background: rgba(219, 233, 223, 0.72);
+    }
+
+    .fixed-bottom {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 12;
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 10px;
+      padding: 14px 22px 24px;
+      background: rgba(251, 251, 247, 0.95);
+      border-top: 1px solid var(--line);
+      backdrop-filter: blur(18px);
+    }
+
+    .recognizing-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 19;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      background: rgba(251, 251, 247, 0.66);
+      backdrop-filter: blur(8px);
+    }
+
+    .recognizing-card {
+      width: 100%;
+      padding: 22px;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(21, 23, 19, 0.12);
+      border-radius: 28px;
+      box-shadow: 0 24px 54px rgba(22, 25, 18, 0.14);
+    }
+
+    .recognizing-top {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .recognizing-orbit {
+      position: relative;
+      display: grid;
+      width: 64px;
+      height: 64px;
+      flex: none;
+      place-items: center;
+      background:
+        conic-gradient(from 28deg, var(--pine) 0 72%, rgba(31, 96, 72, 0.12) 72% 100%);
+      border-radius: 50%;
+    }
+
+    .recognizing-orbit::before {
+      position: absolute;
+      inset: 5px;
+      content: "";
+      background: #fff2c8;
+      border-radius: 50%;
+    }
+
+    .recognizing-orbit img {
+      position: relative;
+      z-index: 1;
+      width: 44px;
+      height: 44px;
+    }
+
+    .recognizing-title {
+      display: block;
+      font-size: 19px;
+      font-weight: 840;
+      line-height: 1.2;
+    }
+
+    .recognizing-copy {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 660;
+      line-height: 1.45;
+    }
+
+    .recognizing-steps {
+      display: grid;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .recognizing-step {
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr) auto;
+      gap: 9px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 720;
+    }
+
+    .recognizing-dot {
+      display: block;
+      width: 8px;
+      height: 8px;
+      margin: 0 auto;
+      background: rgba(31, 96, 72, 0.26);
+      border-radius: 50%;
+    }
+
+    .recognizing-step.active {
+      color: var(--ink);
+    }
+
+    .recognizing-step.active .recognizing-dot {
+      width: 10px;
+      height: 10px;
+      background: var(--pine);
+    }
+
+    .recognizing-state {
+      color: var(--pine);
+      font-size: 11px;
+      font-weight: 820;
+      white-space: nowrap;
+    }
+
+    .recognizing-hint {
+      margin-top: 17px;
+      padding: 11px 12px;
+      color: var(--pine-dark);
+      background: rgba(219, 233, 223, 0.56);
+      border: 1px solid rgba(31, 96, 72, 0.1);
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.45;
+    }
+
+    .review-phone .phone-content {
+      padding-bottom: 100px;
+    }
+
+    .search-box {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      gap: 12px;
+      align-items: center;
+      height: 58px;
+      padding: 0 16px;
+      background: #fff;
+      border: 1px solid var(--line-strong);
+      border-radius: 18px;
+    }
+
+    .search-mark {
+      position: relative;
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--pine);
+      border-radius: 50%;
+    }
+
+    .search-mark::after {
+      position: absolute;
+      right: -6px;
+      bottom: -4px;
+      width: 8px;
+      height: 2px;
+      content: "";
+      background: var(--pine);
+      border-radius: 99px;
+      transform: rotate(45deg);
+    }
+
+    .search-query {
+      overflow: hidden;
+      font-size: 16px;
+      font-weight: 790;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 12px 0 0;
+    }
+
+    .chip {
+      min-height: 30px;
+      padding: 7px 12px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 720;
+      line-height: 1;
+    }
+
+    .result-stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .result-card {
+      display: grid;
+      grid-template-columns: 96px minmax(0, 1fr);
+      gap: 12px;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+    }
+
+    .result-card .thumb {
+      height: 98px;
+      border-radius: 18px;
+    }
+
+    .result-copy {
+      min-width: 0;
+      padding: 3px 2px 2px 0;
+    }
+
+    .reason {
+      display: inline-flex;
+      max-width: 100%;
+      margin-bottom: 8px;
+      overflow: hidden;
+      color: var(--pine);
+      background: rgba(219, 233, 223, 0.72);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .result-name {
+      display: block;
+      overflow: hidden;
+      font-size: 16px;
+      font-weight: 820;
+      line-height: 1.22;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .result-location {
+      display: block;
+      overflow: hidden;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.38;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .result-cta {
+      display: inline-flex;
+      margin-top: 8px;
+      color: var(--pine-dark);
+      font-size: 12px;
+      font-weight: 780;
+    }
+
+    .detail-cover {
+      aspect-ratio: 16 / 9;
+      height: auto;
+      overflow: hidden;
+      background:
+        linear-gradient(90deg, rgba(21, 23, 19, 0.055) 1px, transparent 1px) 0 0 / 84px 84px,
+        linear-gradient(0deg, rgba(21, 23, 19, 0.055) 1px, transparent 1px) 0 0 / 84px 84px,
+        #e5e1d4;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+    }
+
+    .detail-cover-inner {
+      position: relative;
+      height: 100%;
+    }
+
+    .detail-cover-inner::before {
+      position: absolute;
+      right: 54px;
+      bottom: 66px;
+      left: 54px;
+      height: 72px;
+      content: "";
+      background: rgba(255, 255, 255, 0.58);
+      border: 1px solid rgba(21, 23, 19, 0.1);
+      border-radius: 16px;
+    }
+
+    .detail-cover-inner::after {
+      position: absolute;
+      right: 82px;
+      bottom: 112px;
+      left: 82px;
+      content: "";
+      border-top: 1px solid rgba(21, 23, 19, 0.16);
+    }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .stat {
+      padding: 12px 12px 11px;
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid var(--line);
+      border-radius: 17px;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 17px;
+      font-weight: 840;
+      line-height: 1;
+    }
+
+    .stat span {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 650;
+    }
+
+    .photo-card {
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.76);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+    }
+
+    .mini-map {
+      aspect-ratio: 16 / 9;
+      height: auto;
+      margin: 0;
+      border-radius: 18px;
+    }
+
+    .mini-map .bbox.one {
+      top: 24px;
+      left: 20px;
+      width: 86px;
+      height: 64px;
+    }
+
+    .mini-map .bbox.two {
+      left: 78px;
+      bottom: 42px;
+      width: 126px;
+      height: 40px;
+    }
+
+    .mini-map .bbox.three {
+      top: 28px;
+      right: 24px;
+      width: 80px;
+      height: 62px;
+    }
+
+    .mini-map .bbox.four {
+      right: 34px;
+      bottom: 30px;
+      width: 64px;
+      height: 48px;
+    }
+
+    .mini-map::before {
+      top: 38px;
+      left: 38px;
+      width: 62px;
+      height: 44px;
+    }
+
+    .mini-map::after {
+      top: 42px;
+      right: 48px;
+      width: 56px;
+      height: 42px;
+    }
+
+    .mini-map .map-pen {
+      left: 86px;
+      bottom: 50px;
+      width: 104px;
+      height: 12px;
+    }
+
+    .mini-map .map-clip {
+      right: 48px;
+      bottom: 38px;
+      width: 48px;
+      height: 34px;
+    }
+
+    .carousel-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .dots {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      background: rgba(31, 96, 72, 0.18);
+      border-radius: 50%;
+    }
+
+    .dot.active {
+      width: 22px;
+      background: var(--pine);
+      border-radius: 999px;
+    }
+
+    .item-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .item-tag {
+      display: inline-flex;
+      max-width: 100%;
+      min-height: 32px;
+      padding: 8px 12px;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 720;
+      line-height: 1;
+    }
+
+    .quiet-note {
+      display: grid;
+      grid-template-columns: 40px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      margin-top: 12px;
+      padding: 12px;
+      color: var(--muted);
+      background: rgba(219, 233, 223, 0.48);
+      border: 1px solid rgba(31, 96, 72, 0.12);
+      border-radius: 18px;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .quiet-note img {
+      width: 40px;
+      height: 40px;
+    }
+  </style>
+</head>
+<body>
+  <main class="board">
+    <header class="board-head">
+      <div>
+        <h1 class="board-title">拍箱找物 UI 重构原型</h1>
+        <p class="board-note">冷白基底、松针绿主操作、细线分层。保留小懒树懒形象，但从大面积卡通装饰收敛为品牌助手和空状态记忆点。五屏覆盖首页、识别确认、搜索、容器列表和容器详情。</p>
+      </div>
+      <div class="palette" aria-label="色板">
+        <span>冷白 · 松针绿 · 烟灰线</span>
+        <span class="swatch" style="background:#fbfbf7"></span>
+        <span class="swatch" style="background:#1f6048"></span>
+        <span class="swatch" style="background:#dbe9df"></span>
+      </div>
+    </header>
+
+    <section class="phones" aria-label="五屏总览">
+      <article class="phone-wrap">
+        <div class="screen-label"><span>01 首页</span><span>Home</span></div>
+        <div class="phone">
+          <div class="status"><span>9:41</span><span>5G <span class="battery"></span></span></div>
+          <div class="island"></div>
+          <div class="phone-content">
+            <div class="page-top">
+              <div>
+                <span class="kicker">今天整理一点点</span>
+                <h2 class="page-title">东西在哪，一搜就知道</h2>
+              </div>
+              <div class="icon-button" aria-hidden="true"><strong>+</strong></div>
+            </div>
+
+            <section class="hero-panel">
+              <div class="hero-row">
+                <div>
+                  <h3>物品索引已准备好</h3>
+                  <p class="body-copy">拍箱内物品时，把手机横过来，小懒会看得更清楚。存好后，下次一搜就出来。</p>
+                </div>
+                <div class="mascot-orbit">
+                  <img src="../../miniprogram/assets/xiaolan-sloth.svg" alt="小懒树懒" />
+                </div>
+              </div>
+              <div class="action-grid">
+                <button class="button button-primary">拍一箱</button>
+                <button class="button button-soft">找东西</button>
+              </div>
+            </section>
+
+            <div class="section-row">
+              <h3>最近整理</h3>
+              <span class="text-link">全部容器</span>
+            </div>
+            <div class="container-list">
+              <div class="container-row">
+                <div class="thumb pine"></div>
+                <div>
+                  <span class="row-title">书桌左侧抽屉</span>
+                  <span class="subtle">8 件物品，今天更新</span>
+                </div>
+                <span class="meta-pill">常用</span>
+              </div>
+              <div class="container-row">
+                <div class="thumb warm"></div>
+                <div>
+                  <span class="row-title">卧室 3 号箱</span>
+                  <span class="subtle">12 件物品，换季衣物</span>
+                </div>
+                <span class="meta-pill">已确认</span>
+              </div>
+              <div class="container-row">
+                <div class="thumb cool"></div>
+                <div>
+                  <span class="row-title">客厅工具盒</span>
+                  <span class="subtle">6 件物品，刚刚整理</span>
+                </div>
+                <span class="meta-pill">工具</span>
+              </div>
+            </div>
+          </div>
+          <nav class="bottom-nav" aria-label="底部导航">
+            <div class="nav-item active"><span class="nav-icon"></span><span>首页</span></div>
+            <div class="nav-item"><span class="nav-icon search"></span><span>找东西</span></div>
+            <div class="nav-item"><span class="nav-icon box"></span><span>容器</span></div>
+          </nav>
+        </div>
+      </article>
+
+      <article class="phone-wrap">
+        <div class="screen-label"><span>02 识别确认</span><span>Review</span></div>
+        <div class="phone review-phone">
+          <div class="status"><span>9:41</span><span>5G <span class="battery"></span></span></div>
+          <div class="island"></div>
+          <div class="phone-content">
+            <div class="page-top">
+              <div>
+                <span class="kicker">书桌左侧抽屉</span>
+                <h2 class="page-title">确认识别结果</h2>
+              </div>
+              <div class="sloth-chip">
+                <img src="../../miniprogram/assets/xiaolan-sloth.svg" alt="" />
+                <span>4 件</span>
+              </div>
+            </div>
+
+            <div class="segmented" role="tablist" aria-label="确认视图">
+              <button class="segment active" type="button">标注</button>
+              <button class="segment" type="button">清单</button>
+            </div>
+            <div class="ratio-guide">
+              <span>横过来拍更清楚</span>
+              <strong>小懒好找</strong>
+              <span>竖着拍也收</span>
+            </div>
+
+            <div class="photo-map ratio-landscape">
+              <div class="map-pen"></div>
+              <div class="map-clip"></div>
+              <div class="bbox one"><span class="num">1</span></div>
+              <div class="bbox two"><span class="num">2</span></div>
+              <div class="bbox three"><span class="num">3</span></div>
+              <div class="bbox four"><span class="num">4</span></div>
+            </div>
+
+            <div class="review-list">
+              <div class="review-item">
+                <span class="check">1</span>
+                <div>
+                  <h3>蓝色绘画本</h3>
+                  <span class="subtle">左侧，封面偏蓝</span>
+                </div>
+                <span class="meta-pill confidence">86%</span>
+              </div>
+              <div class="review-item">
+                <span class="check">2</span>
+                <div>
+                  <h3>黑色笔</h3>
+                  <span class="subtle">中部偏左</span>
+                </div>
+                <span class="meta-pill confidence">80%</span>
+              </div>
+              <div class="review-item">
+                <span class="check">3</span>
+                <div>
+                  <h3>《三体》</h3>
+                  <span class="subtle">可见书名文字</span>
+                </div>
+                <span class="meta-pill confidence">90%</span>
+              </div>
+            </div>
+          </div>
+          <div class="fixed-bottom">
+            <button class="button button-soft">拍下一张</button>
+            <button class="button button-primary">下一步</button>
+          </div>
+          <div class="recognizing-layer" aria-label="识别中加载框">
+            <div class="recognizing-card">
+              <div class="recognizing-top">
+                <div class="recognizing-orbit">
+                  <img src="../../miniprogram/assets/xiaolan-sloth.svg" alt="" />
+                </div>
+                <div>
+                  <span class="recognizing-title">小懒正在认真找找看</span>
+                  <span class="recognizing-copy">物品、文字和位置都在排队被看见，请稍等小懒一下。</span>
+                </div>
+              </div>
+              <div class="recognizing-steps">
+                <div class="recognizing-step active">
+                  <span class="recognizing-dot"></span>
+                  <span>先看清照片细节</span>
+                  <span class="recognizing-state">看着呢</span>
+                </div>
+                <div class="recognizing-step">
+                  <span class="recognizing-dot"></span>
+                  <span>认出物品和文字</span>
+                  <span class="recognizing-state">马上来</span>
+                </div>
+                <div class="recognizing-step">
+                  <span class="recognizing-dot"></span>
+                  <span>整理成可搜索清单</span>
+                  <span class="recognizing-state">马上来</span>
+                </div>
+              </div>
+              <div class="recognizing-hint">先别溜走，小懒快整理好了。照片越清楚，之后越好找。</div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone-wrap">
+        <div class="screen-label"><span>03 找东西</span><span>Search</span></div>
+        <div class="phone">
+          <div class="status"><span>9:41</span><span>5G <span class="battery"></span></span></div>
+          <div class="island"></div>
+          <div class="phone-content">
+            <div class="page-top">
+              <div>
+                <span class="kicker">找东西</span>
+                <h2 class="page-title">想找什么？</h2>
+              </div>
+              <div class="sloth-chip">
+                <img src="../../miniprogram/assets/xiaolan-sloth.svg" alt="" />
+                <span>小懒在找</span>
+              </div>
+            </div>
+
+            <div class="search-box">
+              <span class="search-mark"></span>
+              <span class="search-query">蓝色封面的书</span>
+            </div>
+            <div class="chips">
+              <span class="chip">书</span>
+              <span class="chip">蓝色</span>
+              <span class="chip">可见文字</span>
+            </div>
+
+            <div class="section-row">
+              <h3>找到 3 个可能结果</h3>
+              <span class="text-link">相关度</span>
+            </div>
+            <div class="result-stack">
+              <div class="result-card">
+                <div class="thumb pine"></div>
+                <div class="result-copy">
+                  <span class="meta-pill reason">语义 92%</span>
+                  <span class="result-name">蓝色封面的书</span>
+                  <span class="result-location">书桌左侧抽屉，照片 2 靠右上</span>
+                  <span class="result-cta">查看容器</span>
+                </div>
+              </div>
+              <div class="result-card">
+                <div class="thumb cool"></div>
+                <div class="result-copy">
+                  <span class="meta-pill reason">名称 90%</span>
+                  <span class="result-name">《三体》</span>
+                  <span class="result-location">书桌左侧抽屉，照片 1 上方</span>
+                  <span class="result-cta">查看容器</span>
+                </div>
+              </div>
+              <div class="result-card">
+                <div class="thumb warm"></div>
+                <div class="result-copy">
+                  <span class="meta-pill reason">特征 76%</span>
+                  <span class="result-name">旅行手册</span>
+                  <span class="result-location">卧室 3 号箱，收纳袋旁</span>
+                  <span class="result-cta">查看容器</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <nav class="bottom-nav" aria-label="底部导航">
+            <div class="nav-item"><span class="nav-icon"></span><span>首页</span></div>
+            <div class="nav-item active"><span class="nav-icon search"></span><span>找东西</span></div>
+            <div class="nav-item"><span class="nav-icon box"></span><span>容器</span></div>
+          </nav>
+        </div>
+      </article>
+
+      <article class="phone-wrap">
+        <div class="screen-label"><span>04 容器列表</span><span>Containers</span></div>
+        <div class="phone">
+          <div class="status"><span>9:41</span><span>5G <span class="battery"></span></span></div>
+          <div class="island"></div>
+          <div class="phone-content">
+            <div class="page-top">
+              <div>
+                <span class="kicker">全部容器</span>
+                <h2 class="page-title">家里的东西，都在这里</h2>
+              </div>
+              <div class="page-actions">
+                <button class="manage-button active" type="button">完成</button>
+                <div class="icon-button" aria-hidden="true"><strong>+</strong></div>
+              </div>
+            </div>
+
+            <div class="list-toolbar">
+              <div class="compact-search">
+                <span class="search-mark"></span>
+                <span>搜索容器或位置</span>
+              </div>
+              <div class="compact-filter" aria-hidden="true">⌄</div>
+            </div>
+
+            <div class="library-summary">
+              <div class="summary-tile">
+                <strong>7</strong>
+                <span>个容器已保存</span>
+              </div>
+              <div class="summary-tile">
+                <strong>48</strong>
+                <span>件物品可搜索</span>
+              </div>
+            </div>
+
+            <div class="section-row">
+              <h3>最近更新</h3>
+              <span class="text-link">按时间</span>
+            </div>
+            <div class="container-list">
+              <div class="container-row featured manage-row">
+                <span class="select-dot selected"></span>
+                <div class="thumb pine"></div>
+                <div class="container-body">
+                  <div>
+                    <span class="row-title">书桌左侧抽屉</span>
+                    <span class="subtle">卧室 / 书桌，8 件物品</span>
+                  </div>
+                  <div class="container-meta-line">
+                    <span class="meta-pill">今天更新</span>
+                    <span class="meta-pill">2 张照片</span>
+                  </div>
+                  <div class="container-progress">
+                    <div class="progress-line"><span></span></div>
+                    <span class="progress-copy">已确认</span>
+                  </div>
+                </div>
+                <button class="row-delete" type="button">删除</button>
+              </div>
+              <div class="container-row featured manage-row">
+                <span class="select-dot selected"></span>
+                <div class="thumb warm"></div>
+                <div class="container-body">
+                  <div>
+                    <span class="row-title">卧室 3 号箱</span>
+                    <span class="subtle">卧室 / 衣柜，12 件物品</span>
+                  </div>
+                  <div class="container-meta-line">
+                    <span class="meta-pill">换季衣物</span>
+                    <span class="meta-pill">1 张照片</span>
+                  </div>
+                  <div class="container-progress">
+                    <div class="progress-line"><span style="width: 54%"></span></div>
+                    <span class="progress-copy">待复核</span>
+                  </div>
+                </div>
+                <button class="row-delete" type="button">删除</button>
+              </div>
+              <div class="container-row featured manage-row">
+                <span class="select-dot"></span>
+                <div class="thumb cool"></div>
+                <div class="container-body">
+                  <div>
+                    <span class="row-title">客厅工具盒</span>
+                    <span class="subtle">客厅 / 电视柜，6 件物品</span>
+                  </div>
+                  <div class="container-meta-line">
+                    <span class="meta-pill">常用工具</span>
+                    <span class="meta-pill">2 张照片</span>
+                  </div>
+                  <div class="container-progress">
+                    <div class="progress-line"><span style="width: 86%"></span></div>
+                    <span class="progress-copy">完整</span>
+                  </div>
+                </div>
+                <button class="row-delete" type="button">删除</button>
+              </div>
+            </div>
+          </div>
+          <div class="batch-bar" aria-label="批量管理">
+            <span class="batch-copy"><strong>已选 2 个容器</strong><br />删掉后，小懒也会忘记里面的物品</span>
+            <button class="batch-delete" type="button">批量删除</button>
+          </div>
+          <nav class="bottom-nav" aria-label="底部导航">
+            <div class="nav-item"><span class="nav-icon"></span><span>首页</span></div>
+            <div class="nav-item"><span class="nav-icon search"></span><span>找东西</span></div>
+            <div class="nav-item active"><span class="nav-icon box"></span><span>容器</span></div>
+          </nav>
+        </div>
+      </article>
+
+      <article class="phone-wrap">
+        <div class="screen-label"><span>05 容器详情</span><span>Detail</span></div>
+        <div class="phone">
+          <div class="status"><span>9:41</span><span>5G <span class="battery"></span></span></div>
+          <div class="island"></div>
+          <div class="phone-content">
+            <div class="page-top">
+              <div>
+                <span class="kicker">卧室 / 书桌</span>
+                <h2 class="page-title detail-title">书桌左侧抽屉</h2>
+              </div>
+              <div class="page-actions">
+                <button class="danger-button" type="button">删除</button>
+                <div class="icon-button" aria-hidden="true"><strong>···</strong></div>
+              </div>
+            </div>
+
+            <div class="detail-cover ratio-landscape">
+              <div class="detail-cover-inner"></div>
+            </div>
+            <div class="stats-row">
+              <div class="stat"><strong>8</strong><span>件物品</span></div>
+              <div class="stat"><strong>2/2</strong><span>免费照片</span></div>
+              <div class="stat"><strong>今天</strong><span>更新</span></div>
+            </div>
+
+            <div class="section-row">
+              <h3>箱内照片</h3>
+              <span class="text-link">添加照片</span>
+            </div>
+            <div class="photo-card">
+              <div class="photo-map mini-map ratio-landscape">
+                <div class="map-pen"></div>
+                <div class="map-clip"></div>
+                <div class="bbox one"><span class="num">1</span></div>
+                <div class="bbox two"><span class="num">2</span></div>
+                <div class="bbox three"><span class="num">3</span></div>
+                <div class="bbox four"><span class="num">4</span></div>
+              </div>
+              <div class="carousel-foot">
+                <div class="dots"><span class="dot active"></span><span class="dot"></span><span class="meta-pill">横屏拍的</span></div>
+                <span class="text-link">重新识别</span>
+              </div>
+            </div>
+
+            <div class="section-row">
+              <h3>物品</h3>
+              <span class="text-link">添加</span>
+            </div>
+            <div class="item-cloud">
+              <span class="item-tag">蓝色绘画本</span>
+              <span class="item-tag">黑色笔</span>
+              <span class="item-tag">《三体》</span>
+              <span class="item-tag">蓝色发卡</span>
+              <span class="item-tag">便签纸</span>
+            </div>
+            <div class="quiet-note">
+              <img src="../../miniprogram/assets/xiaolan-sloth.svg" alt="" />
+              <span>小懒会同时看名称、可见文字和关键特征。</span>
+            </div>
+          </div>
+          <nav class="bottom-nav" aria-label="底部导航">
+            <div class="nav-item"><span class="nav-icon"></span><span>首页</span></div>
+            <div class="nav-item"><span class="nav-icon search"></span><span>找东西</span></div>
+            <div class="nav-item active"><span class="nav-icon box"></span><span>容器</span></div>
+          </nav>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

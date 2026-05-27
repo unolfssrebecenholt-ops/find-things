@@ -2,6 +2,26 @@
   display: flex;
   flex-direction: column;
   gap: 18rpx;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.editor view,
+.editor text,
+.editor button,
+.editor input,
+.editor textarea {
+  box-sizing: border-box;
+}
+
+.editor button {
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.editor button::after {
+  border: 0;
 }
 
 .editor-head {
@@ -14,7 +34,7 @@
 
 .editor-title {
   display: block;
-  color: #253027;
+  color: #2f352c;
   font-size: 31rpx;
   font-weight: 850;
   line-height: 1.25;
@@ -23,7 +43,7 @@
 .editor-subtitle {
   display: block;
   margin-top: 6rpx;
-  color: #697366;
+  color: #7b7465;
   font-size: 24rpx;
   line-height: 1.45;
 }
@@ -32,22 +52,24 @@
   flex: none;
   min-height: 44rpx;
   padding: 7rpx 14rpx;
-  color: #2f6f4b;
+  color: #7b5e1e;
   font-size: 22rpx;
   font-weight: 800;
   line-height: 30rpx;
-  background: #e5f0e7;
+  background: #fff0b8;
   border-radius: 999rpx;
 }
 
 .item-card {
   display: grid;
   gap: 14rpx;
+  min-width: 0;
+  max-width: 100%;
   padding: 18rpx;
-  background: #ffffff;
-  border: 1rpx solid #e4ded1;
-  border-radius: 8rpx;
-  box-shadow: 0 10rpx 24rpx rgba(89, 79, 55, 0.06);
+  background: #fffdf8;
+  border: 2rpx solid #eadfc8;
+  border-radius: 30rpx;
+  box-shadow: 0 8rpx 0 #f1e4c8;
 }
 
 .item-card.disabled {
@@ -56,29 +78,45 @@
 
 .item-toolbar {
   display: grid;
-  grid-template-columns: 82rpx minmax(0, 1fr) 96rpx;
-  gap: 12rpx;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14rpx;
   align-items: center;
-  min-height: 58rpx;
+  min-height: 60rpx;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.item-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 96rpx);
+  gap: 6rpx;
+  justify-self: end;
+  max-width: 100%;
+  padding: 4rpx;
+  background: #fff0b8;
+  border: 2rpx solid #ecd79a;
+  border-radius: 22rpx;
+}
+
+.action-button {
+  width: 96rpx;
+  max-width: 100%;
+  height: 48rpx;
+  padding: 0;
+  font-size: 22rpx;
+  font-weight: 850;
+  line-height: 48rpx;
+  border-radius: 18rpx;
 }
 
 .keep-toggle {
-  width: 82rpx;
-  height: 52rpx;
-  padding: 0;
-  color: #6b5b38;
-  font-size: 22rpx;
-  font-weight: 850;
-  line-height: 52rpx;
-  background: #f7f3ea;
-  border: 1rpx solid #e4ded1;
-  border-radius: 8rpx;
+  color: #725f45;
+  background: transparent;
 }
 
 .keep-toggle.checked {
   color: #ffffff;
-  background: #176b5b;
-  border-color: #176b5b;
+  background: #ff7a59;
 }
 
 .item-identity {
@@ -99,19 +137,19 @@
   flex: none;
   width: 42rpx;
   height: 42rpx;
-  color: #176b5b;
+  color: #ff7a59;
   font-size: 23rpx;
   font-weight: 850;
   line-height: 42rpx;
   text-align: center;
-  background: #e5f0e7;
+  background: #ffe8dc;
   border-radius: 50%;
 }
 
 .identity-copy {
   min-width: 0;
   overflow: hidden;
-  color: #697366;
+  color: #7b7465;
   font-size: 23rpx;
   font-weight: 750;
   text-overflow: ellipsis;
@@ -124,37 +162,31 @@
   min-height: 42rpx;
   padding: 6rpx 10rpx;
   overflow: hidden;
-  color: #2f6f4b;
+  color: #7b5e1e;
   font-size: 21rpx;
   font-weight: 800;
   line-height: 30rpx;
   text-overflow: ellipsis;
   white-space: nowrap;
-  background: #eef7ef;
-  border-radius: 6rpx;
+  background: #fff0b8;
+  border-radius: 999rpx;
 }
 
 .delete {
-  width: 96rpx;
-  height: 52rpx;
-  padding: 0;
   color: #a33b2f;
-  font-size: 22rpx;
-  font-weight: 800;
-  line-height: 52rpx;
-  background: #fff4f1;
-  border-radius: 8rpx;
+  background: #ffe8dc;
 }
 
 .name-field,
 .description-field,
 .note-field {
   display: grid;
+  min-width: 0;
   gap: 8rpx;
 }
 
 .field-caption {
-  color: #697366;
+  color: #7b7465;
   font-size: 22rpx;
   font-weight: 800;
   line-height: 1.25;
@@ -165,13 +197,13 @@
   min-width: 0;
   height: 76rpx;
   padding: 0 16rpx;
-  color: #253027;
+  color: #2f352c;
   font-size: 30rpx;
   font-weight: 800;
   line-height: 76rpx;
-  background: #f9f7f2;
-  border: 1rpx solid #eee8dc;
-  border-radius: 8rpx;
+  background: #fff9ee;
+  border: 2rpx solid #eadfc8;
+  border-radius: 22rpx;
 }
 
 .field-grid {
@@ -191,12 +223,12 @@
   min-width: 0;
   height: 64rpx;
   padding: 0 14rpx;
-  color: #253027;
+  color: #2f352c;
   font-size: 25rpx;
   line-height: 64rpx;
-  background: #f9f7f2;
-  border: 1rpx solid #eee8dc;
-  border-radius: 8rpx;
+  background: #fff9ee;
+  border: 2rpx solid #eadfc8;
+  border-radius: 20rpx;
 }
 
 .tag-row {
@@ -215,31 +247,34 @@
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
-  border-radius: 6rpx;
+  border-radius: 999rpx;
 }
 
 .tag {
-  color: #5f695b;
-  background: #f4f7f1;
-  border: 1rpx solid #e0e8dd;
+  color: #725f45;
+  background: #fff0b8;
+  border: 1rpx solid #ecd79a;
 }
 
 .description-input,
 .note {
   width: 100%;
+  min-width: 0;
+  height: 132rpx;
+  min-height: 0;
   padding: 16rpx;
-  color: #253027;
+  color: #2f352c;
   font-size: 25rpx;
   line-height: 1.45;
-  background: #f9f7f2;
-  border: 1rpx solid #eee8dc;
-  border-radius: 8rpx;
+  background: #fff9ee;
+  border: 2rpx solid #eadfc8;
+  border-radius: 22rpx;
 }
 
 .description-input {
-  min-height: 112rpx;
+  height: 132rpx;
 }
 
 .note {
-  min-height: 128rpx;
+  height: 112rpx;
 }

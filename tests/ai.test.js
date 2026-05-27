@@ -1,6 +1,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
 
+const localAiConfigPath = path.join(__dirname, '..', 'miniprogram', 'config', 'ai.local.js');
+require.cache[localAiConfigPath] = {
+  id: localAiConfigPath,
+  filename: localAiConfigPath,
+  loaded: true,
+  exports: {}
+};
 const ai = require('../miniprogram/services/ai');
 
 function withWxStorage(values, fn) {
@@ -155,6 +163,12 @@ test('vision prompt requires searchable fields without bbox positioning', () => 
   assert.match(prompt, /只识别容器内部/);
   assert.match(prompt, /Logo/);
   assert.match(prompt, /品牌\/文字 \+ 物品类型/);
+  assert.match(prompt, /物体封面上的图标、图案、文字/);
+  assert.match(prompt, /必须 OCR/);
+  assert.match(prompt, /合理拼接到 displayName/);
+  assert.doesNotMatch(prompt, /要尽量 OCR/);
+  assert.match(prompt, /展示信息不足以分析出具体物品名或物品类别/);
+  assert.match(prompt, /可见特征 \+ 简述 \+ 形状/);
   assert.match(prompt, /特征描述/);
   assert.match(prompt, /不要把多个物品合成一个条目/);
   assert.doesNotMatch(prompt, /bbox|boundingBox|归一化坐标|标框/);

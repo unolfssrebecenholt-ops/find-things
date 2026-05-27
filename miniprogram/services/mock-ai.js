@@ -84,7 +84,7 @@ function analyzeImage(options) {
   return {
     imagePath,
     items: withDisplayIndexes(MOCK_ITEMS.map(cloneItem)),
-    warnings: ['当前为本地 mock 识别结果，请确认名称和位置。']
+    warnings: ['小懒先用本地示例结果整理了一份清单，请确认名称和位置。']
   };
 }
 

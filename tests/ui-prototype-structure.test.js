@@ -39,7 +39,7 @@ test('wxml avoids brittle else chains and complex fallback expressions', () => {
   }
 });
 
-test('home page matches the warm four-screen prototype structure', () => {
+test('home page keeps the task-first structure with Xiaolan empty state', () => {
   const wxml = readMiniProgramFile('pages', 'home', 'index.wxml');
 
   assert.match(wxml, /今天整理一点点/);
@@ -47,6 +47,8 @@ test('home page matches the warm four-screen prototype structure', () => {
   assert.match(wxml, /album-grid/);
   assert.match(wxml, /bottom-nav/);
   assert.match(wxml, /最近整理/);
+  assert.match(wxml, /小懒还没有东西可找/);
+  assert.match(wxml, /xiaolan-sloth\.svg/);
 });
 
 test('review page presents a plain photo and inventory list before editing', () => {
@@ -106,7 +108,7 @@ test('container edit keeps a draft and returns home after saving', () => {
 
   assert.match(js, /containerEditDraft/);
   assert.match(js, /persistDraft/);
-  assert.match(js, /wx\.reLaunch\(\{ url: '\/pages\/home\/index' \}\)/);
+  assert.match(js, /navigateHome\(\)/);
   assert.doesNotMatch(js, /redirectTo/);
   assert.match(wxml, /保存并回首页/);
   assert.match(wxml, /返回修改/);
@@ -128,21 +130,47 @@ test('container tab opens a real container list page', () => {
   assert.match(searchJs, /\/pages\/container\/list/);
   assert.match(listWxml, /全部容器/);
   assert.match(listJs, /listUserContainers/);
+  assert.match(listWxml, /catchtap="showContainerActions"/);
+  assert.match(listJs, /showActionSheet/);
+  assert.match(listJs, /confirmDeleteContainer/);
 });
 
-test('search page uses photo-first result cards and prototype wording', () => {
+test('search page uses photo-first result cards and playful assistant wording', () => {
   const wxml = readMiniProgramFile('pages', 'search', 'index.wxml');
   const cardWxml = readMiniProgramFile('components', 'search-result-card', 'index.wxml');
   const cardWxss = readMiniProgramFile('components', 'search-result-card', 'index.wxss');
 
   assert.match(wxml, /想找什么/);
   assert.match(wxml, /result-stack/);
+  assert.match(wxml, /小懒没有找到匹配物品/);
   assert.doesNotMatch(wxml, /search-submit/);
   assert.match(cardWxml, /photo-wrap/);
   assert.match(cardWxml, /match-summary/);
   assert.match(cardWxml, /查看容器/);
   assert.match(cardWxss, /\.photo-badge[\s\S]*left:/);
-  assert.match(cardWxss, /\.match-summary[\s\S]*#fff1cf/);
+  assert.match(cardWxss, /\.match-summary[\s\S]*#fff0b8/);
+});
+
+test('user-facing recognition copy uses Xiaolan instead of raw AI labels', () => {
+  const files = [
+    ['pages', 'capture', 'index.js'],
+    ['pages', 'capture', 'review.js'],
+    ['pages', 'capture', 'review.wxml'],
+    ['pages', 'container', 'detail.js'],
+    ['pages', 'settings', 'index.js'],
+    ['pages', 'settings', 'index.wxml'],
+    ['components', 'item-editor', 'index.wxml'],
+    ['services', 'mock-ai.js']
+  ];
+  const content = files.map((segments) => readMiniProgramFile(...segments)).join('\n');
+  const assetPath = path.join(__dirname, '..', 'miniprogram', 'assets', 'xiaolan-sloth.svg');
+
+  assert.ok(fs.existsSync(assetPath));
+  assert.match(content, /小懒正在分析中/);
+  assert.match(content, /小懒暂时没看清/);
+  assert.match(content, /小懒识别服务/);
+  assert.match(content, /小懒识别/);
+  assert.doesNotMatch(content, /AI 识别中|AI 识别失败|AI 未生效|AI 识别|AI 配置|本地 mock|mock 数据/);
 });
 
 test('container detail keeps carousel indicators instead of photo switch buttons', () => {
@@ -191,6 +219,7 @@ test('item editor uses a high-fidelity card layout instead of cramped inline con
   const wxss = readMiniProgramFile('components', 'item-editor', 'index.wxss');
 
   assert.match(wxml, /item-toolbar/);
+  assert.match(wxml, /item-actions/);
   assert.match(wxml, /name-field/);
   assert.match(wxml, /field-grid/);
   assert.match(wxml, /description-field/);
@@ -200,7 +229,11 @@ test('item editor uses a high-fidelity card layout instead of cramped inline con
   assert.match(wxml, /bindtap="removeItem"/);
   assert.doesNotMatch(wxml, /class="item /);
   assert.match(wxss, /\.item-card/);
-  assert.match(wxss, /\.delete[\s\S]*width: 96rpx/);
+  assert.match(wxss, /\.editor button[\s\S]*margin: 0/);
+  assert.match(wxss, /\.item-card[\s\S]*max-width: 100%/);
+  assert.match(wxss, /\.item-actions[\s\S]*grid-template-columns: repeat\(2, 96rpx\)/);
+  assert.match(wxss, /\.action-button[\s\S]*width: 96rpx/);
   assert.match(wxss, /\.name-input[\s\S]*height: 76rpx/);
-  assert.match(wxss, /\.note[\s\S]*min-height: 128rpx/);
+  assert.match(wxss, /\.description-input[\s\S]*height: 132rpx/);
+  assert.match(wxss, /\.note[\s\S]*height: 112rpx/);
 });

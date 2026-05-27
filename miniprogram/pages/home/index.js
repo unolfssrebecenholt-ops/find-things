@@ -1,5 +1,6 @@
 let storageService = null;
 const { isMockAssetPath } = require('../../utils/mock-assets');
+const { navigateHome } = require('../../utils/navigation');
 
 function getStorageService() {
   if (!storageService) {
@@ -65,7 +66,7 @@ Page({
   },
 
   goHome() {
-    wx.reLaunch({ url: '/pages/home/index' });
+    navigateHome();
   },
 
   showContainers() {

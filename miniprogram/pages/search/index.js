@@ -1,5 +1,6 @@
 const storage = require('../../services/storage');
 const search = require('../../services/search');
+const { navigateHome } = require('../../utils/navigation');
 
 function getUserData() {
   if (typeof storage.removeDemoData === 'function') {
@@ -109,10 +110,14 @@ Page({
   },
 
   goHome() {
-    wx.reLaunch({ url: '/pages/home/index' });
+    navigateHome();
   },
 
   showContainers() {
     wx.navigateTo({ url: '/pages/container/list' });
+  },
+
+  goCapture() {
+    wx.navigateTo({ url: '/pages/capture/index' });
   }
 });

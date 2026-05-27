@@ -45,7 +45,7 @@ Page({
 
   analyze(imagePath, options) {
     if (!imagePath) return;
-    wx.showLoading({ title: 'AI 识别中' });
+    wx.showLoading({ title: '小懒正在分析中' });
     const persistOriginal = imageStore.persistImage(imagePath, 'find-things/content');
     const analyzePrepared = imageStore.prepareImageForAnalyze(imagePath)
       .then((analyzePath) => ai.analyzeImage(Object.assign({
@@ -68,10 +68,10 @@ Page({
       })
       .catch((error) => {
         wx.showModal({
-          title: 'AI 识别失败',
-          content: error && error.message ? error.message : '请检查接口配置、合法域名和网络后重试。',
+          title: '小懒暂时没看清',
+          content: error && error.message ? error.message : '请检查识别服务配置、合法域名和网络后重试。',
           showCancel: false,
-          confirmColor: '#4f8f67'
+          confirmColor: '#ff7a59'
         });
       })
       .finally(() => {

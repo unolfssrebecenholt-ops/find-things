@@ -106,7 +106,7 @@ Page({
       items,
       showAiWarning: !!draft.usedMock,
       aiStatusText: draft.usedMock
-        ? `AI 未生效：${draft.aiErrorMessage || '已回退到 mock 数据'}`
+        ? `小懒这次没能完成识别：${draft.aiErrorMessage || '已使用本地示例结果'}`
         : '',
       warnings: draft.warnings || []
     });
@@ -152,7 +152,7 @@ Page({
         content: `默认可保存 ${FREE_CONTENT_IMAGE_LIMIT} 张箱内照片，更多照片可在升级后使用。`,
         showCancel: false,
         confirmText: '知道了',
-        confirmColor: '#4f8f67'
+        confirmColor: '#ff7a59'
       });
       return;
     }
@@ -160,7 +160,7 @@ Page({
     const success = (result) => {
       const imagePath = getChosenPath(result);
       if (!imagePath) return;
-      wx.showLoading({ title: 'AI 识别中' });
+      wx.showLoading({ title: '小懒正在分析中' });
       const persistOriginal = imageStore.persistImage(imagePath, 'find-things/content');
       const analyzePrepared = imageStore.prepareImageForAnalyze(imagePath)
         .then((analyzePath) => ai.analyzeImage({ imagePath: analyzePath, allowMockFallback: false }));
@@ -184,10 +184,10 @@ Page({
         })
         .catch((error) => {
           wx.showModal({
-            title: 'AI 识别失败',
-            content: error && error.message ? error.message : '请检查接口配置、合法域名和网络后重试。',
+            title: '小懒暂时没看清',
+            content: error && error.message ? error.message : '请检查识别服务配置、合法域名和网络后重试。',
             showCancel: false,
-            confirmColor: '#4f8f67'
+            confirmColor: '#ff7a59'
           });
         })
         .finally(() => {

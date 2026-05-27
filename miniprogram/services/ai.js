@@ -166,7 +166,8 @@ function buildVisionPrompt(maxItems) {
     '请按区域从左上到右下扫描，不要只返回最显眼、最大或最容易识别的物品。',
     '不要把多个物品合成一个条目；每个条目只描述一个独立物品，不要返回一堆杂物、容器边缘、把手或容器本身。',
     '凡是之后可能被用户搜索、取用或盘点的独立实物都算可搜索物品；容器结构、装饰、反光、阴影和背景元素不算。',
-    '如果看到品牌、Logo、型号或包装文字，要尽量 OCR：brandName 填可见品牌/Logo，visibleText 填可读文字，displayName 优先使用“品牌/文字 + 物品类型”；识别不到具体名称时，用主要颜色/材质/形状/用途组成特征描述。',
+    '如果看到品牌、Logo、型号、包装文字，或物体封面上的图标、图案、文字，必须 OCR 并理解其含义：brandName 填可见品牌/Logo，visibleText 填所有可读文字/型号/Logo文字；displayName 优先使用“品牌/文字 + 物品类型”。如果文字/图标完整，尽量识别品牌、系列或商品名；如果不完整，描述可见图标/文字的内容含义，并把可靠结果合理拼接到 displayName。识别不到具体名称时，用主要颜色、材质、形状或用途组成特征描述，同时写入 features。',
+    '如果物品展示信息不足以分析出具体物品名或物品类别，不要硬猜；用可见特征 + 简述 + 形状来总结 displayName 标题，并在 description 中说明不确定点。',
     '遮挡或只露出一部分但仍可辨认的物品也要返回；名称不确定时使用“疑似…”或外观描述，并降低 confidence。',
     `最多返回 ${maxItems || 16} 个物品。可以合并高度相似、紧邻且用途相同的重复小件，但要保留明显不同的物品。`,
     '不要把容器、容器边缘、把手、墙面、桌面、地面、阴影当作物品；完全无法辨认的杂乱区域不要返回。'
@@ -347,7 +348,7 @@ function normalizeAiPayload(payload, imagePath) {
 
 function requestOpenAiCompatible(config, imageDataUrl) {
   if (!config.apiKey) {
-    return Promise.reject(new Error('未配置 AI API Key'));
+    return Promise.reject(new Error('未配置识别服务密钥'));
   }
   return new Promise((resolve, reject) => {
     wx.request({
@@ -410,7 +411,7 @@ function callCloudAnalyze(config, imagePath) {
 
 function unwrapCloudAnalyzePayload(payload) {
   if (payload && payload.errorCode) {
-    const error = new Error(payload.errorMessage || 'AI 识别失败，请重试或手动添加物品。');
+    const error = new Error(payload.errorMessage || '小懒暂时没看清，请重试或手动添加物品。');
     error.code = payload.errorCode;
     throw error;
   }
@@ -423,7 +424,7 @@ function fallbackAnalyze(imagePath, reason) {
     usedMock: true,
     aiErrorMessage: reason,
     aiProvider: 'mock',
-    warnings: [`${reason}，已使用本地 mock 识别结果。`].concat(result.warnings || [])
+    warnings: [`${reason}，已使用本地示例结果。`].concat(result.warnings || [])
   });
 }
 
@@ -431,7 +432,7 @@ function analyzeImage(options) {
   const imagePath = options && options.imagePath ? options.imagePath : '';
   const config = getRuntimeConfig();
   if ((options && options.forceMock) || config.mode === 'mock') {
-    return Promise.resolve(fallbackAnalyze(imagePath, '当前为 mock 模式'));
+    return Promise.resolve(fallbackAnalyze(imagePath, '当前为本地示例模式'));
   }
   const allowMockFallback = !(options && options.allowMockFallback === false) && config.fallbackToMock;
 
@@ -444,7 +445,7 @@ function analyzeImage(options) {
     .then((payload) => normalizeAiPayload(payload, imagePath))
     .catch((error) => {
       if (!allowMockFallback) throw error;
-      return fallbackAnalyze(imagePath, error.message || 'AI 识别不可用');
+      return fallbackAnalyze(imagePath, error.message || '识别服务暂不可用');
     });
 }
 
