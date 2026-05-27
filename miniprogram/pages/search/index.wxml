@@ -1,9 +1,13 @@
 <view class="page search-page">
-  <view class="search-head">
-    <view class="search-kicker">
+  <view class="page-top">
+    <view class="search-heading">
       <text class="eyebrow">找东西</text>
+      <text class="page-title search-title">想找什么？</text>
     </view>
-    <text class="page-title search-title">想找什么？</text>
+    <view class="sloth-chip">
+      <image class="sloth-chip-avatar" mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
+      <text>小懒在找</text>
+    </view>
   </view>
 
   <view class="search-box">

@@ -2,6 +2,7 @@ const ai = require('../../services/ai');
 const imageStore = require('../../services/image-store');
 const storage = require('../../services/storage');
 const { withDisplayIndexes } = require('../../utils/geometry');
+const { createImageMetadata } = require('../../utils/image-metadata');
 
 const FREE_CONTENT_IMAGE_LIMIT = storage.FREE_CONTENT_IMAGE_LIMIT || 2;
 
@@ -23,6 +24,14 @@ function createDraftId() {
   return `review_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function getRatioClass(draft) {
+  if (draft.orientation === 'portrait') return 'ratio-portrait';
+  if (draft.orientation === 'square') return 'ratio-square';
+  if (draft.width && draft.height && draft.width === draft.height) return 'ratio-square';
+  if (draft.width && draft.height && draft.height > draft.width) return 'ratio-portrait';
+  return 'ratio-landscape';
+}
+
 function unique(values) {
   return values.filter((value, index) => value && values.indexOf(value) === index);
 }
@@ -32,13 +41,22 @@ function createItemViewModel(item) {
   const featureSummary = (item.features || []).slice(0, 3).join(' / ') || '描述可搜索';
   const fullTagList = unique((item.colors || []).concat(item.features || [], item.aliases || []));
   const tagList = fullTagList.slice(0, 6);
+  const bbox = item.bbox || {};
+  const hasAnnotation = Number.isFinite(bbox.x)
+    && Number.isFinite(bbox.y)
+    && Number.isFinite(bbox.width)
+    && Number.isFinite(bbox.height);
   return Object.assign({}, item, {
     hasTags: tagList.length > 0,
     tagList,
     tagText: fullTagList.join(' '),
     featureSummary,
     displayDescription: item.description || featureSummary || '确认后会保存进这个容器',
-    confidenceLabel: confidence ? `${Math.round(confidence * 100)}%` : '待确认'
+    confidenceLabel: confidence ? `${Math.round(confidence * 100)}%` : '待确认',
+    hasAnnotation,
+    annotationStyle: hasAnnotation
+      ? `left:${Math.round(bbox.x * 100)}%;top:${Math.round(bbox.y * 100)}%;width:${Math.round(bbox.width * 100)}%;height:${Math.round(bbox.height * 100)}%;`
+      : ''
   });
 }
 
@@ -49,13 +67,15 @@ Page({
     warnings: [],
     imageDrafts: [],
     currentIndex: 0,
-    viewMode: 'summary',
+    viewMode: 'annotated',
+    isAnnotatedMode: true,
     isSummaryMode: true,
-    isEditMode: false,
     showAddPhotoHint: true,
     currentLabel: '照片 1/1',
     showAiWarning: false,
     aiStatusText: '',
+    ratioClass: 'ratio-landscape',
+    recognizing: false,
     freeLimit: FREE_CONTENT_IMAGE_LIMIT
   },
 
@@ -75,6 +95,7 @@ Page({
   createImageDraft(draft, index) {
     const imageId = draft.imageId || createImageId(index);
     const fileId = draft.fileId || draft.imagePath || draft.contentImageFileId || '';
+    const imageMetadata = draft.imageMetadata || {};
     const items = withDisplayIndexes(draft.items || []).map((item) => Object.assign({}, item, {
       sourceImageId: imageId,
       sourceImageFileId: fileId
@@ -86,6 +107,11 @@ Page({
       label: `照片 ${index + 1}`,
       sortOrder: index,
       itemCount: items.filter((item) => item.confirmed !== false).length,
+      orientation: imageMetadata.orientation || '',
+      width: imageMetadata.width || 0,
+      height: imageMetadata.height || 0,
+      analyzeStatus: imageMetadata.analyzeStatus || 'ready',
+      analyzedAt: imageMetadata.analyzedAt || Date.now(),
       items,
       warnings: draft.warnings || [],
       usedMock: !!draft.usedMock,
@@ -103,6 +129,7 @@ Page({
       showAddPhotoHint: imageDrafts.length < FREE_CONTENT_IMAGE_LIMIT,
       currentLabel: `照片 ${safeIndex + 1}/${Math.max(imageDrafts.length, 1)}`,
       imagePath: draft.imagePath || draft.fileId || '',
+      ratioClass: getRatioClass(draft),
       items,
       showAiWarning: !!draft.usedMock,
       aiStatusText: draft.usedMock
@@ -117,11 +144,11 @@ Page({
   },
 
   switchViewMode(event) {
-    const viewMode = event.currentTarget.dataset.mode || 'summary';
+    const viewMode = event.currentTarget.dataset.mode || 'annotated';
     this.setData({
       viewMode,
-      isSummaryMode: viewMode === 'summary',
-      isEditMode: viewMode === 'edit'
+      isAnnotatedMode: viewMode === 'annotated',
+      isSummaryMode: viewMode === 'annotated' || viewMode === 'summary'
     });
   },
 
@@ -152,7 +179,7 @@ Page({
         content: `默认可保存 ${FREE_CONTENT_IMAGE_LIMIT} 张箱内照片，更多照片可在升级后使用。`,
         showCancel: false,
         confirmText: '知道了',
-        confirmColor: '#ff7a59'
+        confirmColor: '#1f6048'
       });
       return;
     }
@@ -160,7 +187,7 @@ Page({
     const success = (result) => {
       const imagePath = getChosenPath(result);
       if (!imagePath) return;
-      wx.showLoading({ title: '小懒正在分析中' });
+      this.setData({ recognizing: true });
       const persistOriginal = imageStore.persistImage(imagePath, 'find-things/content');
       const analyzePrepared = imageStore.prepareImageForAnalyze(imagePath)
         .then((analyzePath) => ai.analyzeImage({ imagePath: analyzePath, allowMockFallback: false }));
@@ -169,7 +196,11 @@ Page({
         .then(([storedPath, analyzed]) => {
           return Object.assign({}, analyzed, {
             imagePath: storedPath,
-            fileId: storedPath
+            fileId: storedPath,
+            imageMetadata: createImageMetadata({
+              chooseResult: result,
+              imageMetadata: analyzed.imageMetadata
+            })
           });
         })
         .then((analyzed) => {
@@ -187,11 +218,11 @@ Page({
             title: '小懒暂时没看清',
             content: error && error.message ? error.message : '请检查识别服务配置、合法域名和网络后重试。',
             showCancel: false,
-            confirmColor: '#ff7a59'
+            confirmColor: '#1f6048'
           });
         })
         .finally(() => {
-          wx.hideLoading();
+          this.setData({ recognizing: false });
         });
     };
 
@@ -228,7 +259,12 @@ Page({
       fileId: draft.fileId,
       label: draft.label || `照片 ${index + 1}`,
       sortOrder: index,
-      itemCount: (draft.items || []).filter((item) => item.confirmed !== false).length
+      itemCount: (draft.items || []).filter((item) => item.confirmed !== false).length,
+      orientation: draft.orientation || '',
+      width: draft.width || 0,
+      height: draft.height || 0,
+      analyzeStatus: draft.analyzeStatus || 'ready',
+      analyzedAt: draft.analyzedAt || Date.now()
     }));
 
     const previousDraft = wx.getStorageSync('reviewDraft') || {};

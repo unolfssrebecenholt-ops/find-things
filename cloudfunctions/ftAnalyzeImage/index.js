@@ -11,6 +11,24 @@ const MAX_ITEMS_LIMIT = 16;
 const DEFAULT_FUNCTION_TIMEOUT_MS = 120000;
 const FUNCTION_TIMEOUT_HEADROOM_MS = 15000;
 const MIN_AI_REQUEST_TIMEOUT_MS = 5000;
+const TLS_CERTIFICATE_ERROR_CODES = new Set([
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  'CERT_HAS_EXPIRED',
+  'ERR_TLS_CERT_ALTNAME_INVALID'
+]);
+const NETWORK_UNREACHABLE_ERROR_CODES = new Set([
+  'ECONNREFUSED',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ECONNRESET',
+  'ENETUNREACH',
+  'EHOSTUNREACH',
+  'ECONNABORTED',
+  'EPIPE'
+]);
 
 function nowMs() {
   return Date.now();
@@ -53,6 +71,25 @@ function loadLocalConfig() {
 
 function env(name, fallback, localKey) {
   return process.env[name] || localConfig[localKey || name] || fallback || '';
+}
+
+function configValue(name, fallback, localKey) {
+  if (Object.prototype.hasOwnProperty.call(process.env, name)) {
+    return process.env[name];
+  }
+  const key = localKey || name;
+  if (Object.prototype.hasOwnProperty.call(localConfig, key)) {
+    return localConfig[key];
+  }
+  return fallback;
+}
+
+function isFalseValue(value) {
+  return /^(false|0|no)$/i.test(String(value).trim());
+}
+
+function tlsRejectUnauthorized() {
+  return !isFalseValue(configValue('OPENAI_COMPAT_TLS_REJECT_UNAUTHORIZED', 'true', 'tlsRejectUnauthorized'));
 }
 
 function boundedInteger(value, fallback, minimum, maximum) {
@@ -228,7 +265,6 @@ async function callAi(imageDataUrl, maxItems) {
 
 function postJson(url, payload, apiKey, timeoutMs) {
   const body = JSON.stringify(payload);
-  const target = new URL(url);
   const effectiveTimeoutMs = timeoutMs || aiRequestTimeoutMs();
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -252,17 +288,7 @@ function postJson(url, payload, apiKey, timeoutMs) {
       finish(() => reject(error));
     }, effectiveTimeoutMs);
 
-    request = https.request({
-      method: 'POST',
-      hostname: target.hostname,
-      path: `${target.pathname}${target.search}`,
-      port: target.port || 443,
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body)
-      }
-    }, (response) => {
+    request = https.request(createPostOptions(url, apiKey, body), (response) => {
       const chunks = [];
       response.on('data', (chunk) => chunks.push(chunk));
       response.on('end', () => {
@@ -289,6 +315,22 @@ function postJson(url, payload, apiKey, timeoutMs) {
   });
 }
 
+function createPostOptions(url, apiKey, body) {
+  const target = new URL(url);
+  return {
+    method: 'POST',
+    hostname: target.hostname,
+    path: `${target.pathname}${target.search}`,
+    port: target.port || 443,
+    rejectUnauthorized: tlsRejectUnauthorized(),
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(body)
+    }
+  };
+}
+
 function sanitizeErrorBody(text) {
   return String(text || '')
     .replace(/sk-[A-Za-z0-9]+/g, 'sk-****')
@@ -297,13 +339,18 @@ function sanitizeErrorBody(text) {
 
 function publicError(error) {
   const message = error && error.message ? error.message : String(error || '');
-  const code = (error && error.code)
+  const rawCode = error && error.code;
+  const code = TLS_CERTIFICATE_ERROR_CODES.has(rawCode)
+    ? 'AI_TLS_CERTIFICATE_INVALID'
+    : (NETWORK_UNREACHABLE_ERROR_CODES.has(rawCode) ? 'AI_SERVICE_UNREACHABLE' : rawCode)
     || (/timeout/i.test(message) ? 'AI_REQUEST_TIMEOUT' : 'AI_ANALYZE_FAILED');
   const friendlyMessages = {
-    AI_KEY_MISSING: '云函数未配置 AI API Key，请检查环境变量 OPENAI_COMPAT_API_KEY。',
-    AI_REQUEST_TIMEOUT: 'AI 识别超时，请换一张更清晰或更小的照片后重试。',
-    AI_REQUEST_FAILED: 'AI 服务请求失败，请稍后重试。',
-    AI_ANALYZE_FAILED: 'AI 识别失败，请重试或手动添加物品。'
+    AI_KEY_MISSING: '小懒还没接上识别服务，请检查云函数环境变量 OPENAI_COMPAT_API_KEY。',
+    AI_REQUEST_TIMEOUT: '小懒看得有点久，请换一张更清晰或更小的照片后重试。',
+    AI_TLS_CERTIFICATE_INVALID: '小懒没法信任识别服务的证书，请换可信服务地址或配置证书后重试。',
+    AI_SERVICE_UNREACHABLE: '小懒没连上识别服务，请稍后重试或检查服务地址。',
+    AI_REQUEST_FAILED: '小懒请求识别服务失败，请稍后重试。',
+    AI_ANALYZE_FAILED: '小懒暂时没看清，请重试或手动添加物品。'
   };
   const errorMessage = friendlyMessages[code] || friendlyMessages.AI_ANALYZE_FAILED;
   return {
@@ -348,5 +395,6 @@ exports._test = {
   aiRequestTimeoutMs,
   normalizeMaxItems,
   buildPrompt,
+  createPostOptions,
   publicError
 };

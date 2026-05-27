@@ -27,6 +27,7 @@ project.private.config.json
 cloudbaserc.json
 miniprogram/config/ai.local.js
 cloudfunctions/**/local.config.js
+output/
 
 # Local worktrees
 .worktrees/

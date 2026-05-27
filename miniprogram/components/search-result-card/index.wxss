@@ -1,21 +1,21 @@
 .result-card {
   display: grid;
-  grid-template-columns: 220rpx minmax(0, 1fr);
+  grid-template-columns: 192rpx minmax(0, 1fr);
   gap: 18rpx;
-  min-height: 224rpx;
-  padding: 18rpx;
-  background: #fffdf8;
-  border: 2rpx solid #eadfc8;
-  border-radius: 30rpx;
-  box-shadow: 0 8rpx 0 #f1e4c8;
+  min-height: 204rpx;
+  padding: 16rpx;
+  background: #fbfbf7;
+  border: 2rpx solid rgba(21, 23, 19, 0.12);
+  border-radius: 28rpx;
+  box-shadow: 0 18rpx 46rpx rgba(22, 25, 18, 0.07);
 }
 
 .photo-wrap {
   position: relative;
-  width: 220rpx;
-  height: 204rpx;
+  width: 192rpx;
+  height: 172rpx;
   overflow: hidden;
-  background: #dff3df;
+  background: #dbe9df;
   border-radius: 24rpx;
 }
 
@@ -36,14 +36,14 @@
   bottom: 48rpx;
   width: 70rpx;
   height: 14rpx;
-  background: rgba(255, 122, 89, 0.48);
+  background: rgba(31, 96, 72, 0.32);
   border-radius: 999rpx;
 }
 
 .placeholder-line.wide {
   bottom: 76rpx;
   width: 112rpx;
-  background: rgba(255, 240, 184, 0.8);
+  background: rgba(251, 251, 247, 0.78);
 }
 
 .placeholder-dot {
@@ -52,7 +52,7 @@
   bottom: 44rpx;
   width: 48rpx;
   height: 48rpx;
-  background: rgba(124, 201, 130, 0.72);
+  background: rgba(169, 200, 181, 0.72);
   border-radius: 50%;
 }
 
@@ -61,11 +61,11 @@
   left: 12rpx;
   bottom: 12rpx;
   padding: 6rpx 10rpx;
-  color: #725f45;
+  color: #143e31;
   font-size: 20rpx;
   font-weight: 800;
   line-height: 1.2;
-  background: rgba(255, 253, 248, 0.92);
+  background: rgba(251, 251, 247, 0.92);
   border-radius: 999rpx;
 }
 
@@ -77,24 +77,43 @@
   padding-top: 2rpx;
 }
 
+.match-row {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  min-width: 0;
+}
+
+.semantic-percent,
 .match-summary {
-  align-self: flex-start;
   max-width: 100%;
   padding: 6rpx 12rpx;
   overflow: hidden;
-  color: #7b5e1e;
+  color: #1f6048;
   font-size: 22rpx;
   font-weight: 750;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
-  background: #fff0b8;
+  background: #dbe9df;
+  border: 1rpx solid rgba(21, 23, 19, 0.08);
   border-radius: 999rpx;
+}
+
+.semantic-percent {
+  flex: none;
+  color: #143e31;
+  font-size: 20rpx;
+  font-weight: 820;
+}
+
+.match-summary {
+  min-width: 0;
 }
 
 .result-name {
   overflow: hidden;
-  color: #2f352c;
+  color: #151713;
   font-size: 32rpx;
   font-weight: 800;
   line-height: 1.25;
@@ -104,7 +123,7 @@
 
 .result-location {
   overflow: hidden;
-  color: #7b7465;
+  color: #6f756d;
   font-size: 24rpx;
   line-height: 1.35;
   text-overflow: ellipsis;
@@ -114,12 +133,13 @@
 .result-cta {
   align-self: flex-start;
   margin-top: auto;
-  color: #ff7a59;
+  color: #1f6048;
   min-height: 42rpx;
   padding: 7rpx 14rpx;
   font-size: 24rpx;
   font-weight: 800;
   line-height: 28rpx;
-  background: #ffe8dc;
+  background: #eef4ef;
+  border: 1rpx solid rgba(21, 23, 19, 0.08);
   border-radius: 999rpx;
 }

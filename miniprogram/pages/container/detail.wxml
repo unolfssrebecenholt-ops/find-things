@@ -8,7 +8,7 @@
   </view>
 
   <view class="detail-hero">
-    <view class="cover-photo">
+    <view class="detail-cover cover-photo">
       <image wx:if="{{hasCoverImage}}" mode="aspectFit" src="{{container.coverImageFileId}}"></image>
       <view wx:if="{{hasCoverImage}}" class="cover-label">
         <text>外观照片</text>
@@ -40,7 +40,7 @@
     <text class="text-link" bindtap="addContentPhoto">添加照片</text>
   </view>
 
-  <view wx:if="{{hasContentImages}}" class="photo-carousel">
+  <view wx:if="{{hasContentImages}}" class="photo-carousel photo-card">
     <view class="carousel-head">
       <text class="carousel-title">当前箱内照片 <text class="pill">{{currentImageIndex + 1}}/{{contentImages.length}}</text></text>
       <text class="pill">多拍更好找</text>
@@ -91,7 +91,7 @@
     </view>
   </view>
 
-  <view class="note-card">默认可保存 {{freeLimit}} 张箱内照片；更多照片可升级。搜索会同时看名称、可见文字和关键特征。</view>
+  <view class="note-card quiet-note">默认可保存 {{freeLimit}} 张箱内照片；更多照片可升级。搜索会同时看名称、可见文字和关键特征。</view>
 
   <view class="bottom-nav">
     <view class="nav-item" bindtap="goHome">

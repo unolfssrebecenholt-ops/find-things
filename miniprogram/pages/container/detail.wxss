@@ -27,7 +27,7 @@
   font-size: 24rpx;
   font-weight: 800;
   line-height: 1;
-  background: #ffe8dc;
+  background: #f4e5df;
   border: 1rpx solid rgba(163, 59, 47, 0.18);
   border-radius: 18rpx;
 }
@@ -40,14 +40,14 @@
 .cover-photo {
   position: relative;
   width: 100%;
-  height: 382rpx;
+  height: 360rpx;
   overflow: hidden;
   background:
-    linear-gradient(135deg, rgba(255, 253, 248, 0.55), rgba(255, 240, 184, 0.18)),
-    #dff3df;
-  border: 2rpx solid #eadfc8;
+    linear-gradient(135deg, rgba(251, 251, 247, 0.58), rgba(219, 233, 223, 0.24)),
+    #dbe9df;
+  border: 2rpx solid rgba(21, 23, 19, 0.12);
   border-radius: 30rpx;
-  box-shadow: 0 10rpx 0 #f1e4c8;
+  box-shadow: 0 22rpx 58rpx rgba(22, 25, 18, 0.08);
 }
 
 .cover-photo image {
@@ -61,10 +61,10 @@
   bottom: 18rpx;
   z-index: 2;
   padding: 8rpx 14rpx;
-  color: #725f45;
+  color: #143e31;
   font-size: 22rpx;
   font-weight: 800;
-  background: rgba(255, 253, 248, 0.9);
+  background: rgba(251, 251, 247, 0.9);
   border-radius: 999rpx;
 }
 
@@ -81,7 +81,7 @@
   bottom: 142rpx;
   left: 68rpx;
   height: 4rpx;
-  background: rgba(118, 96, 61, 0.2);
+  background: rgba(31, 96, 72, 0.2);
 }
 
 .cover-box-shape {
@@ -90,8 +90,8 @@
   bottom: 58rpx;
   left: 68rpx;
   height: 172rpx;
-  background: rgba(255, 253, 248, 0.42);
-  border: 4rpx solid rgba(118, 96, 61, 0.2);
+  background: rgba(251, 251, 247, 0.42);
+  border: 4rpx solid rgba(31, 96, 72, 0.2);
   border-radius: 22rpx;
 }
 
@@ -101,7 +101,7 @@
   bottom: 142rpx;
   left: 120rpx;
   height: 4rpx;
-  background: rgba(118, 96, 61, 0.2);
+  background: rgba(31, 96, 72, 0.2);
 }
 
 .stats-row {
@@ -116,13 +116,13 @@
   flex-direction: column;
   gap: 4rpx;
   padding: 18rpx 16rpx;
-  background: #fffdf8;
-  border: 2rpx solid #eadfc8;
+  background: #fbfbf7;
+  border: 2rpx solid rgba(21, 23, 19, 0.12);
   border-radius: 24rpx;
 }
 
 .stat-value {
-  color: #2f352c;
+  color: #151713;
   font-size: 30rpx;
   font-weight: 850;
 }
@@ -131,10 +131,10 @@
   display: grid;
   gap: 14rpx;
   padding: 18rpx;
-  background: #fffdf8;
-  border: 2rpx solid #eadfc8;
+  background: #fbfbf7;
+  border: 2rpx solid rgba(21, 23, 19, 0.12);
   border-radius: 30rpx;
-  box-shadow: 0 10rpx 0 #f1e4c8;
+  box-shadow: 0 22rpx 58rpx rgba(22, 25, 18, 0.08);
 }
 
 .carousel-head {
@@ -149,7 +149,7 @@
   align-items: center;
   gap: 10rpx;
   min-width: 0;
-  color: #647061;
+  color: #425147;
   font-size: 24rpx;
   font-weight: 800;
 }
@@ -171,18 +171,18 @@
 .carousel-dot {
   width: 14rpx;
   height: 14rpx;
-  background: #ecd79a;
+  background: #a9c8b5;
   border-radius: 999rpx;
 }
 
 .carousel-dot.active {
   width: 44rpx;
-  background: #ff7a59;
+  background: #1f6048;
 }
 
 .carousel-count {
   margin-left: 8rpx;
-  color: #7b7465;
+  color: #6f756d;
   font-size: 23rpx;
   font-weight: 700;
 }
@@ -195,19 +195,19 @@
 
 .mini-button {
   height: 72rpx;
-  color: #486f45;
+  color: #1f6048;
   font-size: 25rpx;
   font-weight: 800;
   line-height: 72rpx;
-  background: #e6f6d8;
-  border: 2rpx solid #c7e8b6;
+  background: #dbe9df;
+  border: 2rpx solid rgba(21, 23, 19, 0.08);
   border-radius: 22rpx;
 }
 
 .mini-button.secondary {
-  color: #7b5e1e;
-  background: #fff0b8;
-  border-color: #ecd79a;
+  color: #143e31;
+  background: #eef4ef;
+  border-color: rgba(21, 23, 19, 0.1);
 }
 
 .item-tags {
@@ -221,14 +221,18 @@
   max-width: 100%;
   min-height: 56rpx;
   padding: 12rpx 18rpx;
-  color: #2f352c;
+  color: #151713;
   font-size: 24rpx;
   font-weight: 750;
-  background: #fffdf8;
-  border: 2rpx solid #eadfc8;
+  background: #fbfbf7;
+  border: 2rpx solid rgba(21, 23, 19, 0.12);
   border-radius: 999rpx;
 }
 
 .detail-page .note-card {
   margin-top: 4rpx;
+}
+
+.quiet-note {
+  display: block;
 }

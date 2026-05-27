@@ -54,7 +54,12 @@ function createContentImage(input, index, timestamp) {
     label: (input && input.label) || `箱内照片 ${index + 1}`,
     sortOrder: Number.isFinite(input && input.sortOrder) ? input.sortOrder : index,
     createdAt: (input && input.createdAt) || timestamp,
-    itemCount: Number.isFinite(input && input.itemCount) ? input.itemCount : 0
+    itemCount: Number.isFinite(input && input.itemCount) ? input.itemCount : 0,
+    orientation: (input && input.orientation) || '',
+    width: Number.isFinite(input && input.width) ? input.width : 0,
+    height: Number.isFinite(input && input.height) ? input.height : 0,
+    analyzeStatus: (input && input.analyzeStatus) || '',
+    analyzedAt: (input && input.analyzedAt) || 0
   };
 }
 
@@ -83,11 +88,23 @@ function findSourceImage(rawItem, container) {
 function normalizeItem(rawItem, container, timestamp) {
   const itemId = rawItem._id || createId('item');
   const sourceImage = findSourceImage(rawItem, container);
+  const sourceImageIndex = sourceImage
+    ? (container.contentImages || []).findIndex((image) => image.imageId === sourceImage.imageId)
+    : -1;
+  const sourceImageLabel = sourceImage
+    ? (sourceImage.label || `照片 ${sourceImageIndex + 1}`)
+    : '';
+  const relativePosition = (rawItem.relativePosition || rawItem.positionText || '').trim();
+  const locationText = (rawItem.locationText || [sourceImageLabel, relativePosition].filter(Boolean).join(' · ')).trim();
   return Object.assign({}, rawItem, {
     _id: itemId,
     containerId: container._id,
     sourceImageId: sourceImage ? sourceImage.imageId : (rawItem.sourceImageId || ''),
     sourceImageFileId: sourceImage ? sourceImage.fileId : (rawItem.sourceImageFileId || container.contentImageFileId || ''),
+    sourceImageIndex: sourceImageIndex >= 0 ? sourceImageIndex : 0,
+    sourceImageLabel,
+    relativePosition,
+    locationText,
     confirmed: rawItem.confirmed !== false,
     createdAt: rawItem.createdAt || timestamp,
     updatedAt: timestamp,
@@ -284,6 +301,27 @@ function createStorageService(adapter) {
     });
     writeArray(storage, CONTAINERS_KEY, containers);
     writeArray(storage, ITEMS_KEY, items);
+  }
+
+  function deleteContainers(ids) {
+    const selected = (ids || []).reduce((map, id) => {
+      if (id) map[id] = true;
+      return map;
+    }, {});
+    const timestamp = now();
+    let deletedCount = 0;
+    const containers = readArray(storage, CONTAINERS_KEY).map((container) => {
+      if (!selected[container._id] || container.deletedAt) return container;
+      deletedCount += 1;
+      return Object.assign({}, container, { deletedAt: timestamp, updatedAt: timestamp });
+    });
+    const items = readArray(storage, ITEMS_KEY).map((item) => {
+      if (!selected[item.containerId]) return item;
+      return Object.assign({}, item, { deletedAt: timestamp, updatedAt: timestamp });
+    });
+    writeArray(storage, CONTAINERS_KEY, containers);
+    writeArray(storage, ITEMS_KEY, items);
+    return { deletedCount };
   }
 
   function removeDemoData() {
@@ -522,6 +560,7 @@ function createStorageService(adapter) {
     replaceItemsForImage,
     getContentImages,
     deleteContainer,
+    deleteContainers,
     removeDemoData,
     seedDemoData
   };

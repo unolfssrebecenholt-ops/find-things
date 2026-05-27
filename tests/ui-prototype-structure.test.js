@@ -20,11 +20,31 @@ function cssBlock(css, selector) {
   return match ? match[1] : '';
 }
 
+function assertCssHasAtLeast(css, selector, property, minRpx) {
+  const block = cssBlock(css, selector);
+  const match = block.match(new RegExp(`${property}\\s*:\\s*(\\d+)rpx`));
+  assert.ok(match, `${selector} should define ${property} in rpx`);
+  assert.ok(Number(match[1]) >= minRpx, `${selector} ${property} should be at least ${minRpx}rpx`);
+}
+
 test('project is named find-things while V1 remains only a version label', () => {
   const projectConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'project.config.json'), 'utf8'));
 
   assert.equal(projectConfig.projectname, 'find-things');
   assert.notEqual(projectConfig.projectname.toLowerCase(), 'v1');
+});
+
+test('dev-only folders are excluded from WeChat DevTools packaging cache', () => {
+  const projectConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'project.config.json'), 'utf8'));
+  const ignoredFolders = new Set(
+    (projectConfig.packOptions && projectConfig.packOptions.ignore || [])
+      .filter((entry) => entry.type === 'folder')
+      .map((entry) => entry.value)
+  );
+
+  for (const folder of ['.worktrees/', 'tests/', 'docs/', 'output/']) {
+    assert.ok(ignoredFolders.has(folder), `${folder} should be ignored by DevTools`);
+  }
 });
 
 test('wxml avoids brittle else chains and complex fallback expressions', () => {
@@ -44,28 +64,92 @@ test('home page keeps the task-first structure with Xiaolan empty state', () => 
 
   assert.match(wxml, /今天整理一点点/);
   assert.match(wxml, /一搜就知道/);
-  assert.match(wxml, /album-grid/);
+  assert.match(wxml, /hero-panel/);
+  assert.match(wxml, /container-stack/);
+  assert.match(wxml, /container-row/);
   assert.match(wxml, /bottom-nav/);
   assert.match(wxml, /最近整理/);
   assert.match(wxml, /小懒还没有东西可找/);
   assert.match(wxml, /xiaolan-sloth\.svg/);
+  assert.doesNotMatch(wxml, /album-grid/);
 });
 
-test('review page presents a plain photo and inventory list before editing', () => {
+test('home hero matches the six-screen sloth prototype index-ready card', () => {
+  const wxml = readMiniProgramFile('pages', 'home', 'index.wxml');
+  const wxss = readMiniProgramFile('pages', 'home', 'index.wxss');
+
+  assert.match(wxml, /hero-panel/);
+  assert.match(wxml, /hero-row/);
+  assert.match(wxml, /body-copy/);
+  assert.match(wxml, /mascot-orbit/);
+  assert.match(wxml, /action-grid/);
+  assert.match(wxml, /物品索引已准备好/);
+  assert.match(wxml, /把手机横过来/);
+  assert.match(wxml, /下次一搜就出来/);
+  assert.doesNotMatch(wxml, /hero-topline|hero-actions/);
+
+  assert.match(cssBlock(wxss, '.hero-panel'), /background:\s*linear-gradient\(180deg,\s*#ffffff 0%,\s*#f8f8f3 100%\)/);
+  assert.doesNotMatch(cssBlock(wxss, '.hero-panel'), /box-shadow|overflow:\s*hidden/);
+  assert.equal(cssBlock(wxss, '.hero-panel::before'), '');
+  assert.match(cssBlock(wxss, '.hero-row'), /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+152rpx/);
+  assert.match(cssBlock(wxss, '.mascot-orbit'), /background:\s*#fff2c8/);
+  assert.match(cssBlock(wxss, '.mascot-orbit'), /border-radius:\s*48rpx/);
+  assert.match(cssBlock(wxss, '.action-grid'), /grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+});
+
+test('capture analysis uses a custom recognizing layer instead of native loading only', () => {
+  const wxml = readMiniProgramFile('pages', 'capture', 'index.wxml');
+  const wxss = readMiniProgramFile('pages', 'capture', 'index.wxss');
+  const js = readMiniProgramFile('pages', 'capture', 'index.js');
+
+  assert.match(wxml, /recognizing-layer/);
+  assert.match(wxml, /recognizing-card/);
+  assert.match(wxml, /recognizing-steps/);
+  assert.match(wxml, /xiaolan-sloth\.svg/);
+  assert.match(wxss, /\.recognizing-layer[\s\S]*position:\s*fixed/);
+  assert.match(wxss, /\.recognizing-card/);
+  assert.match(wxss, /\.recognizing-steps/);
+  assert.match(js, /recognizing:\s*false/);
+  assert.match(js, /this\.setData\(\{\s*recognizing:\s*true\s*\}\)/);
+  assert.doesNotMatch(js, /wx\.showLoading/);
+});
+
+test('review confirmation page exposes the new normal-state chip, ratio guide, and safe bottom actions', () => {
+  const wxml = readMiniProgramFile('pages', 'capture', 'review.wxml');
+  const wxss = readMiniProgramFile('pages', 'capture', 'review.wxss');
+
+  assert.match(wxml, /sloth-chip/);
+  assert.match(wxml, /ratio-guide/);
+  assert.match(wxml, /ratio-landscape|ratio-portrait/);
+  assert.match(wxml, /补拍一张/);
+  assert.match(wxml, /保存容器/);
+  assert.doesNotMatch(wxml, /下一步：拍容器/);
+
+  assert.match(cssBlock(wxss, '.sloth-chip'), /border-radius:\s*999rpx/);
+  assert.match(cssBlock(wxss, '.ratio-guide'), /rgba\(219,\s*233,\s*223,\s*0\.44\)/);
+  assert.match(cssBlock(wxss, '.review-actions'), /env\(safe-area-inset-bottom\)/);
+});
+
+test('review page presents annotated photo and inventory list before editing', () => {
   const wxml = readMiniProgramFile('pages', 'capture', 'review.wxml');
   const wxss = readMiniProgramFile('pages', 'capture', 'review.wxss');
 
   assert.match(wxml, /segmented/);
+  assert.match(wxml, />标注</);
   assert.match(wxml, />清单</);
-  assert.match(wxml, />编辑</);
-  assert.match(wxml, /拍下一张/);
-  assert.match(wxml, /下一步：拍容器/);
+  assert.match(wxml, /补拍一张/);
+  assert.match(wxml, /保存容器/);
+  assert.doesNotMatch(wxml, /下一步：拍容器/);
   assert.match(wxml, /summary-panel/);
-  assert.match(wxml, /plain-photo/);
+  assert.match(wxml, /photo-map/);
+  assert.match(wxml, /class="plain-photo" mode="aspectFit"/);
+  assert.match(wxml, /annotation-box/);
+  assert.match(wxml, /wx:if="\{\{item\.hasAnnotation\}\}"/);
   assert.match(wxml, /quick-list/);
-  assert.doesNotMatch(wxml, /annotated-image/);
-  assert.doesNotMatch(wxml, />标注</);
-  assert.doesNotMatch(wxml, /标框/);
+  assert.doesNotMatch(wxml, /scan-overlay/);
+  assert.doesNotMatch(wxml, />识别中</);
+  assert.doesNotMatch(wxml, /item-editor/);
+  assert.doesNotMatch(wxml, /isEditMode/);
   assert.doesNotMatch(wxml, /list-expanded/);
   assert.doesNotMatch(wxml, /fake-input/);
   assert.doesNotMatch(wxml, /photo-strip/);
@@ -98,7 +182,12 @@ test('capture flows compress analysis images while preserving stored content pho
     assert.match(js, /prepareImageForAnalyze/);
     assert.match(js, /persistImage/);
     assert.match(js, /Promise\.all/);
+    assert.match(js, /createImageMetadata/);
   }
+
+  assert.match(reviewJs, /orientation:/);
+  assert.match(reviewJs, /analyzeStatus:/);
+  assert.match(detailJs, /analyzeStatus: 'analyzing'/);
 });
 
 test('container edit keeps a draft and returns home after saving', () => {
@@ -112,10 +201,33 @@ test('container edit keeps a draft and returns home after saving', () => {
   assert.doesNotMatch(js, /redirectTo/);
   assert.match(wxml, /保存并回首页/);
   assert.match(wxml, /返回修改/);
-  assert.match(wxml, /建议横拍/);
-  assert.match(wxml, /16:9/);
+  assert.match(wxml, /横过来拍，小懒看得更清楚/);
+  assert.doesNotMatch(wxml, />[^<]*(4:3|16:9)[^<]*</);
+  assert.doesNotMatch(js, /4:3|16:9/);
   assert.match(wxss, /\.save-actions[\s\S]*position: fixed/);
-  assert.match(wxss, /\.cover[\s\S]*height: 382rpx/);
+  assert.match(wxml, /outside-frame \{\{coverRatioClass\}\}/);
+  assert.match(wxml, /data-ratio="\{\{coverRatioText\}\}"/);
+  assert.doesNotMatch(cssBlock(wxss, '.cover'), /height:\s*382rpx/);
+});
+
+test('container save page follows the new cool-white pine prototype instead of the old warm-orange save UI', () => {
+  const wxml = readMiniProgramFile('pages', 'container', 'edit.wxml');
+  const wxss = readMiniProgramFile('pages', 'container', 'edit.wxss');
+
+  assert.match(wxml, /sloth-chip/);
+  assert.match(wxml, /form-panel/);
+  assert.match(wxml, /field-grid/);
+  assert.match(wxml, /adaptive-frame/);
+  assert.match(wxml, /ratio-landscape|ratio-portrait|data-ratio/);
+  assert.match(wxml, /coverRatioClass/);
+  assert.match(wxml, /coverRatioText/);
+  assert.doesNotMatch(wxml, /照片 \{\{index \+ 1\}\}/);
+
+  assert.doesNotMatch(wxss, /#fff7e8|#fff9ee|#fff0b8|#ff7a59|#eadfc8|#f1e4c8/);
+  assert.match(cssBlock(wxss, '.edit-page'), /#f3f2ed|linear-gradient\(180deg,\s*#f7f6f1 0%,\s*#f3f2ed 100%\)/);
+  assert.match(cssBlock(wxss, '.form-panel'), /#fbfbf7|#ffffff/);
+  assertCssHasAtLeast(wxss, '.field', 'height', 70);
+  assert.match(cssBlock(wxss, '.save-actions'), /env\(safe-area-inset-bottom\)/);
 });
 
 test('container tab opens a real container list page', () => {
@@ -128,8 +240,15 @@ test('container tab opens a real container list page', () => {
   assert.ok(appJson.pages.includes('pages/container/list'));
   assert.match(homeJs, /\/pages\/container\/list/);
   assert.match(searchJs, /\/pages\/container\/list/);
-  assert.match(listWxml, /全部容器/);
+  assert.match(listWxml, /家里的东西，都在这里/);
+  assert.match(listWxml, /compact-search/);
+  assert.match(listWxml, /library-summary/);
+  assert.match(listWxml, /rowModeClass/);
+  assert.match(listJs, /manage-row/);
+  assert.match(listWxml, /batch-bar/);
   assert.match(listJs, /listUserContainers/);
+  assert.match(listJs, /searchContainers/);
+  assert.match(listJs, /toggleManageMode/);
   assert.match(listWxml, /catchtap="showContainerActions"/);
   assert.match(listJs, /showActionSheet/);
   assert.match(listJs, /confirmDeleteContainer/);
@@ -147,8 +266,19 @@ test('search page uses photo-first result cards and playful assistant wording', 
   assert.match(cardWxml, /photo-wrap/);
   assert.match(cardWxml, /match-summary/);
   assert.match(cardWxml, /查看容器/);
+  assert.match(cardWxml, /locationText/);
   assert.match(cardWxss, /\.photo-badge[\s\S]*left:/);
-  assert.match(cardWxss, /\.match-summary[\s\S]*#fff0b8/);
+  assert.match(cardWxss, /\.match-summary[\s\S]*#dbe9df/);
+});
+
+test('search page includes the Xiaolan searching chip and relaxed bottom navigation spacing', () => {
+  const wxml = readMiniProgramFile('pages', 'search', 'index.wxml');
+  const appWxss = readMiniProgramFile('app.wxss');
+
+  assert.match(wxml, /sloth-chip/);
+  assert.match(wxml, /xiaolan-sloth\.svg/);
+  assert.match(wxml, /小懒在找/);
+  assertCssHasAtLeast(appWxss, '.nav-item', 'gap', 10);
 });
 
 test('user-facing recognition copy uses Xiaolan instead of raw AI labels', () => {
@@ -178,10 +308,13 @@ test('container detail keeps carousel indicators instead of photo switch buttons
   const wxss = readMiniProgramFile('pages', 'container', 'detail.wxss');
 
   assert.match(wxml, /detail-hero/);
+  assert.match(wxml, /detail-cover/);
+  assert.match(wxml, /photo-card/);
   assert.match(wxml, /carousel-indicator/);
   assert.match(wxml, /compact="{{true}}"/);
   assert.match(wxml, /重新识别这张/);
   assert.match(wxml, /添加照片/);
+  assert.match(wxml, /quiet-note/);
   assert.ok(wxml.indexOf('item-tags') < wxml.indexOf('note-card'));
   assert.match(wxss, /\.item-tags[\s\S]*flex-wrap: wrap/);
   assert.doesNotMatch(wxml, /照片 1<\/button>/);
@@ -195,6 +328,7 @@ test('photo display modes separate thumbnails from full-photo review surfaces', 
   const editWxml = readMiniProgramFile('pages', 'container', 'edit.wxml');
   const detailWxml = readMiniProgramFile('pages', 'container', 'detail.wxml');
   const annotatedWxml = readMiniProgramFile('components', 'annotated-image', 'index.wxml');
+  const reviewWxml = readMiniProgramFile('pages', 'capture', 'review.wxml');
 
   assert.match(homeWxml, /mode="aspectFill"/);
   assert.match(listWxml, /mode="aspectFill"/);
@@ -202,6 +336,7 @@ test('photo display modes separate thumbnails from full-photo review surfaces', 
   assert.match(editWxml, /mode="aspectFit"/);
   assert.match(detailWxml, /mode="aspectFit"/);
   assert.match(annotatedWxml, /mode="aspectFit"/);
+  assert.match(reviewWxml, /class="plain-photo" mode="aspectFit"/);
 });
 
 test('container cover surfaces use landscape framing', () => {
@@ -209,9 +344,26 @@ test('container cover surfaces use landscape framing', () => {
   const listWxss = readMiniProgramFile('pages', 'container', 'list.wxss');
   const detailWxss = readMiniProgramFile('pages', 'container', 'detail.wxss');
 
-  assert.match(homeWxss, /\.album-photo[\s\S]*height: 186rpx/);
+  assert.match(homeWxss, /\.container-thumb[\s\S]*height: 164rpx/);
   assert.match(listWxss, /\.container-photo[\s\S]*height: 124rpx/);
-  assert.match(detailWxss, /\.cover-photo[\s\S]*height: 382rpx/);
+  assert.match(detailWxss, /\.cover-photo[\s\S]*height: 360rpx/);
+});
+
+test('sloth minimal prototype visual tokens replace the warm orange style', () => {
+  const appWxss = readMiniProgramFile('app.wxss');
+  const searchWxss = readMiniProgramFile('pages', 'search', 'index.wxss');
+  const listWxss = readMiniProgramFile('pages', 'container', 'list.wxss');
+
+  assert.match(appWxss, /#f3f2ed/);
+  assert.match(appWxss, /#fbfbf7/);
+  assert.match(appWxss, /#1f6048/);
+  assert.match(appWxss, /rgba\(21,\s*23,\s*19,\s*0\.12\)/);
+  assert.doesNotMatch(cssBlock(appWxss, '.primary-button'), /#ff7a59/);
+  assert.doesNotMatch(cssBlock(appWxss, '.bottom-nav'), /#fff7e8|#eadfc8/);
+  assert.match(searchWxss, /\.search-mark[\s\S]*#1f6048/);
+  assert.match(cssBlock(listWxss, '.manage-toggle.active'), /background:\s*#1f6048/);
+  assert.match(cssBlock(listWxss, '.batch-bar'), /background:\s*rgba\(255,\s*255,\s*255,\s*0\.94\)/);
+  assert.match(cssBlock(listWxss, '.batch-delete'), /background:\s*#9f3d32/);
 });
 
 test('item editor uses a high-fidelity card layout instead of cramped inline controls', () => {

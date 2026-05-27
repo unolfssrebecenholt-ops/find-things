@@ -1,5 +1,6 @@
 const ai = require('../../services/ai');
 const imageStore = require('../../services/image-store');
+const { createImageMetadata } = require('../../utils/image-metadata');
 
 function getChosenPath(result) {
   if (result && result.tempFiles && result.tempFiles[0]) {
@@ -13,7 +14,8 @@ function getChosenPath(result) {
 
 Page({
   data: {
-    choosing: false
+    choosing: false,
+    recognizing: false
   },
 
   chooseImage() {
@@ -26,7 +28,7 @@ Page({
         mediaType: ['image'],
         sizeType: ['compressed'],
         sourceType: ['camera', 'album'],
-        success: (result) => this.analyze(getChosenPath(result)),
+        success: (result) => this.analyze(getChosenPath(result), { chooseResult: result }),
         fail: () => wx.showToast({ title: '已取消选择', icon: 'none' }),
         complete
       });
@@ -37,7 +39,7 @@ Page({
       count: 1,
       sizeType: ['compressed'],
       sourceType: ['camera', 'album'],
-      success: (result) => this.analyze(getChosenPath(result)),
+      success: (result) => this.analyze(getChosenPath(result), { chooseResult: result }),
       fail: () => wx.showToast({ title: '已取消选择', icon: 'none' }),
       complete
     });
@@ -45,7 +47,7 @@ Page({
 
   analyze(imagePath, options) {
     if (!imagePath) return;
-    wx.showLoading({ title: '小懒正在分析中' });
+    this.setData({ recognizing: true });
     const persistOriginal = imageStore.persistImage(imagePath, 'find-things/content');
     const analyzePrepared = imageStore.prepareImageForAnalyze(imagePath)
       .then((analyzePath) => ai.analyzeImage(Object.assign({
@@ -57,7 +59,10 @@ Page({
       .then(([storedPath, result]) => {
         return Object.assign({}, result, {
           imagePath: storedPath,
-          fileId: storedPath
+          fileId: storedPath,
+          imageMetadata: createImageMetadata(Object.assign({
+            chooseResult: options && options.chooseResult
+          }, result && result.imageMetadata || {}))
         });
       })
       .then((result) => {
@@ -71,11 +76,11 @@ Page({
           title: '小懒暂时没看清',
           content: error && error.message ? error.message : '请检查识别服务配置、合法域名和网络后重试。',
           showCancel: false,
-          confirmColor: '#ff7a59'
+          confirmColor: '#1f6048'
         });
       })
       .finally(() => {
-        wx.hideLoading();
+        this.setData({ recognizing: false });
       });
   }
 });

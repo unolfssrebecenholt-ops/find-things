@@ -59,6 +59,41 @@ test('normalizes multiple content image inputs and keeps legacy first image fiel
   assert.equal(saved.items[0].sourceImageFileId, '/tmp/b.jpg');
 });
 
+test('stores prototype-ready image metadata and item location text', () => {
+  const service = storage.createStorageService(createMemoryAdapter());
+  const saved = service.saveContainer({
+    name: '书桌左侧抽屉',
+    contentImages: [
+      {
+        imageId: 'drawer_left',
+        fileId: '/tmp/drawer-left.jpg',
+        label: '照片 1',
+        orientation: 'landscape',
+        width: 1600,
+        height: 900,
+        analyzeStatus: 'ready',
+        analyzedAt: 100
+      }
+    ],
+    items: [
+      {
+        displayName: '蓝色绘画本',
+        sourceImageId: 'drawer_left',
+        relativePosition: '右上',
+        confirmed: true
+      }
+    ]
+  });
+
+  assert.equal(saved.container.contentImages[0].orientation, 'landscape');
+  assert.equal(saved.container.contentImages[0].width, 1600);
+  assert.equal(saved.container.contentImages[0].height, 900);
+  assert.equal(saved.container.contentImages[0].analyzeStatus, 'ready');
+  assert.equal(saved.items[0].sourceImageIndex, 0);
+  assert.equal(saved.items[0].sourceImageLabel, '照片 1');
+  assert.equal(saved.items[0].locationText, '照片 1 · 右上');
+});
+
 test('adds content images up to the free limit and reports upgrade prompt after that', () => {
   const service = storage.createStorageService(createMemoryAdapter());
   const saved = service.saveContainer({
@@ -66,10 +101,17 @@ test('adds content images up to the free limit and reports upgrade prompt after 
     contentImageFileId: '/tmp/one.jpg'
   });
 
-  const second = service.addContentImage(saved.container._id, { fileId: '/tmp/two.jpg', label: '右侧' });
+  const second = service.addContentImage(saved.container._id, {
+    fileId: '/tmp/two.jpg',
+    label: '右侧',
+    analyzeStatus: 'ready',
+    analyzedAt: 200
+  });
 
   assert.equal(storage.FREE_CONTENT_IMAGE_LIMIT, 2);
   assert.equal(second.contentImages.length, 2);
+  assert.equal(second.contentImages[1].analyzeStatus, 'ready');
+  assert.equal(second.contentImages[1].analyzedAt, 200);
   assert.throws(
     () => service.addContentImage(saved.container._id, { fileId: '/tmp/three.jpg' }),
     /免费版最多支持 2 张箱内照片/
@@ -207,6 +249,28 @@ test('deletes a container and its items', () => {
   assert.deepEqual(service.listItems(), []);
 });
 
+test('batch deletes selected containers and their items', () => {
+  const service = storage.createStorageService(createMemoryAdapter());
+  const first = service.saveContainer({
+    name: '书桌左侧抽屉',
+    items: [{ displayName: '蓝色绘画本', confirmed: true }]
+  });
+  const second = service.saveContainer({
+    name: '客厅工具盒',
+    items: [{ displayName: '卷尺', confirmed: true }]
+  });
+  const third = service.saveContainer({
+    name: '卧室 3 号箱',
+    items: [{ displayName: '围巾', confirmed: true }]
+  });
+
+  const result = service.deleteContainers([first.container._id, second.container._id]);
+
+  assert.equal(result.deletedCount, 2);
+  assert.deepEqual(service.listContainers().map((container) => container._id), [third.container._id]);
+  assert.deepEqual(service.listItems().map((item) => item.displayName), ['围巾']);
+});
+
 test('seeds demo data when storage is empty', () => {
   const service = storage.createStorageService(createMemoryAdapter());
   const seeded = service.seedDemoData();
@@ -218,7 +282,7 @@ test('seeds demo data when storage is empty', () => {
   assert.equal(service.listContainers().length, seeded.containers.length);
 });
 
-test('seeded demo data fills the home album grid with warm prototype containers', () => {
+test('seeded demo data fills the prototype container list with sample containers', () => {
   const service = storage.createStorageService(createMemoryAdapter());
   service.seedDemoData();
 

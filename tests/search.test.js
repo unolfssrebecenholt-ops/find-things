@@ -221,3 +221,22 @@ test('search result includes matched source image ids and file ids', () => {
   assert.equal(result.matchedImageId, result.item.sourceImageId);
   assert.equal(result.matchedImageFileId, result.item.sourceImageFileId);
 });
+
+test('container search matches names locations and contained items', () => {
+  const service = storage.createStorageService(createMemoryAdapter());
+  service.seedDemoData();
+
+  const locationResults = search.searchContainers('书桌', {
+    containers: service.listContainers(),
+    items: service.listItems()
+  });
+  const itemResults = search.searchContainers('卷尺', {
+    containers: service.listContainers(),
+    items: service.listItems()
+  });
+
+  assert.equal(locationResults[0].container.name, '书桌左侧抽屉');
+  assert.match(locationResults[0].matchSummary, /名称|位置|物品/);
+  assert.equal(itemResults[0].container.name, '客厅工具盒');
+  assert.match(itemResults[0].matchSummary, /卷尺/);
+});

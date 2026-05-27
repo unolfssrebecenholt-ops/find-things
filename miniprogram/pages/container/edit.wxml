@@ -1,53 +1,69 @@
 <view class="page edit-page">
-  <view class="edit-head">
-    <text class="eyebrow">最后一步</text>
-    <text class="page-title">保存这个容器</text>
-    <text class="subtle">名称和位置会用于搜索定位；物品清单来自上一页确认结果。</text>
-  </view>
-
-  <view class="form-section">
-    <view class="field-group">
-      <text class="field-label">容器名称</text>
-      <input class="field" placeholder="例如书桌左侧抽屉" value="{{name}}" bindinput="inputName" />
+  <view class="page-top">
+    <view class="title-stack">
+      <text class="eyebrow">最后一步</text>
+      <text class="page-title">保存这个容器</text>
     </view>
-    <view class="field-group">
-      <text class="field-label">位置</text>
-      <input class="field" placeholder="例如卧室 / 书桌" value="{{locationPath}}" bindinput="inputLocation" />
+    <view class="sloth-chip">
+      <image src="../../assets/xiaolan-sloth.svg" mode="aspectFit"></image>
+      <text>已看清</text>
     </view>
   </view>
 
-  <view class="section-row compact-row">
-    <text class="section-heading">外观照片</text>
-    <text class="text-link">建议横拍</text>
+  <view class="form-panel">
+    <view class="field-grid">
+      <view class="field-group name-field">
+        <text class="field-label">容器名称</text>
+        <input class="field" placeholder="例如书桌左侧抽屉" value="{{name}}" bindinput="inputName" />
+      </view>
+      <view class="field-group location-field">
+        <text class="field-label">位置</text>
+        <input class="field" placeholder="卧室 / 书桌" value="{{locationPath}}" bindinput="inputLocation" />
+      </view>
+    </view>
+    <view class="chips">
+      <text class="chip">{{itemCountText}}</text>
+      <text class="chip">{{contentImageCountText}}</text>
+      <text class="chip">可搜索</text>
+    </view>
   </view>
-  <view class="cover-panel">
-    <image wx:if="{{hasCoverImage}}" class="cover" mode="aspectFit" src="{{coverImageFileId}}"></image>
-    <view wx:if="{{showCoverPlaceholder}}" class="cover-placeholder">
-      <text class="cover-title">手机横拍外观照片</text>
-      <text class="subtle">横拍通常是 16:9，更适合首页和容器列表展示。</text>
+
+  <view class="photo-section">
+    <view class="section-row compact-row">
+      <text class="section-heading">外观照片</text>
+      <text class="text-link">横过来拍，小懒看得更清楚</text>
+    </view>
+    <view class="adaptive-frame outside-frame {{coverRatioClass}}" data-ratio="{{coverRatioText}}">
+      <image wx:if="{{hasCoverImage}}" class="cover" mode="aspectFit" src="{{coverImageFileId}}"></image>
+      <view wx:if="{{showCoverPlaceholder}}" class="cover-placeholder">
+        <text class="photo-caption">容器外观</text>
+        <text class="subtle">横过来拍，小懒看得更清楚，首页列表也更稳。</text>
+      </view>
     </view>
     <view class="cover-actions">
-      <button class="ghost-button action" bindtap="chooseCover">拍/选横向封面</button>
+      <button class="primary-button action" bindtap="chooseCover">拍/选封面</button>
       <button wx:if="{{contentImageFileId}}" class="soft-button action" bindtap="useContentAsCover">用箱内图</button>
     </view>
   </view>
 
-  <view class="section-row compact-row">
-    <text class="section-heading">箱内照片</text>
-    <text class="text-link">{{contentImages.length}} 张</text>
-  </view>
-  <view wx:if="{{hasContentImages}}" class="photo-grid">
-    <view wx:for="{{contentImages}}" wx:key="imageId" class="photo-summary-item">
-      <image wx:if="{{item.fileId}}" class="photo-thumb" mode="aspectFit" src="{{item.fileId}}"></image>
-      <view class="photo-copy">
-        <text class="photo-summary-name">照片 {{index + 1}}</text>
-        <text class="photo-summary-meta">{{item.itemCount}} 件物品</text>
+  <view class="photo-section">
+    <view class="section-row compact-row">
+      <text class="section-heading">箱内照片</text>
+      <text class="text-link">{{contentImageCountText}}</text>
+    </view>
+    <view wx:if="{{hasContentImages}}" class="inside-photo-grid">
+      <view wx:for="{{contentImages}}" wx:key="imageId" class="adaptive-frame inside-frame {{item.ratioClass}}" data-ratio="{{item.ratioText}}">
+        <image wx:if="{{item.fileId}}" class="inside-photo" mode="aspectFit" src="{{item.fileId}}"></image>
+        <view class="photo-copy">
+          <text class="photo-caption">{{item.summaryTitle}}</text>
+          <text class="photo-summary-meta">{{item.summaryMeta}}</text>
+        </view>
       </view>
     </view>
   </view>
 
   <view class="section-row compact-row">
-    <text class="section-heading">将保存 {{items.length}} 件物品</text>
+    <text class="section-heading">将保存 {{itemCountText}}</text>
     <text class="text-link" bindtap="goBack">返回修改</text>
   </view>
   <view class="item-preview">
@@ -55,11 +71,11 @@
       <text class="item-index">{{index + 1}}</text>
       <text class="item-name">{{item.displayName}}</text>
     </view>
-    <view wx:if="{{hiddenItemCount}}" class="more-row">还有 {{hiddenItemCount}} 件会一起保存</view>
+    <view wx:if="{{hasHiddenItems}}" class="more-row">还有 {{hiddenItemCount}} 件会一起保存</view>
   </view>
 
   <view class="save-actions">
-    <button class="soft-button" bindtap="goBack">返回修改</button>
-    <button class="primary-button" bindtap="save">保存并回首页</button>
+    <button class="soft-button back-button" bindtap="goBack">返回修改</button>
+    <button class="primary-button save-button" bindtap="save">保存并回首页</button>
   </view>
 </view>

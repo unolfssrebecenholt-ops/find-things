@@ -23,4 +23,35 @@
     <button class="primary-button action" loading="{{choosing}}" bindtap="chooseImage">拍照或选图</button>
   </view>
 
+  <view wx:if="{{recognizing}}" class="recognizing-layer">
+    <view class="recognizing-card">
+      <view class="recognizing-top">
+        <view class="recognizing-orbit">
+          <image mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
+        </view>
+        <view class="recognizing-copy">
+          <text class="recognizing-title">小懒正在分析中</text>
+          <text class="recognizing-desc">正在压缩照片、识别物品，再保存原图。</text>
+        </view>
+      </view>
+      <view class="recognizing-steps">
+        <view class="recognizing-step active">
+          <text class="recognizing-dot"></text>
+          <text>整理照片光线</text>
+          <text class="recognizing-state">完成</text>
+        </view>
+        <view class="recognizing-step active">
+          <text class="recognizing-dot"></text>
+          <text>圈出可见物品</text>
+          <text class="recognizing-state">进行中</text>
+        </view>
+        <view class="recognizing-step">
+          <text class="recognizing-dot"></text>
+          <text>生成容器清单</text>
+          <text class="recognizing-state">马上</text>
+        </view>
+      </view>
+      <view class="recognizing-hint">小懒会先看清大件，再慢慢扒拉细节。</view>
+    </view>
+  </view>
 </view>

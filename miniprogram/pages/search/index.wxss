@@ -5,21 +5,20 @@
   padding-top: 42rpx;
 }
 
-.search-head {
+.page-top {
   display: flex;
-  flex-direction: column;
-  gap: 8rpx;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22rpx;
   padding: 6rpx 4rpx 2rpx;
 }
 
-.search-kicker {
-  display: flex;
-  align-items: center;
-  min-height: 34rpx;
+.search-heading {
+  min-width: 0;
+  flex: 1;
 }
 
 .search-title {
-  margin-top: 0;
   font-size: 50rpx;
   line-height: 1.14;
 }
@@ -31,17 +30,17 @@
   align-items: center;
   min-height: 96rpx;
   padding: 10rpx 10rpx 10rpx 22rpx;
-  background: #fffdf8;
-  border: 2rpx solid #eadfc8;
+  background: #fbfbf7;
+  border: 2rpx solid rgba(21, 23, 19, 0.12);
   border-radius: 28rpx;
-  box-shadow: 0 8rpx 0 #f1e4c8;
+  box-shadow: 0 18rpx 46rpx rgba(22, 25, 18, 0.07);
 }
 
 .search-mark {
   position: relative;
   width: 28rpx;
   height: 28rpx;
-  border: 4rpx solid #ff7a59;
+  border: 4rpx solid #1f6048;
   border-radius: 50%;
 }
 
@@ -52,7 +51,7 @@
   width: 15rpx;
   height: 5rpx;
   content: "";
-  background: #ff7a59;
+  background: #1f6048;
   border-radius: 999rpx;
   transform: rotate(45deg);
 }
@@ -60,7 +59,7 @@
 .search-input {
   min-width: 0;
   height: 76rpx;
-  color: #2f352c;
+  color: #151713;
   font-size: 30rpx;
   font-weight: 650;
 }
@@ -75,12 +74,12 @@
 .chip {
   min-height: 58rpx;
   padding: 12rpx 20rpx;
-  color: #725f45;
+  color: #425147;
   font-size: 24rpx;
   font-weight: 750;
   line-height: 32rpx;
-  background: #fffdf8;
-  border: 2rpx solid #eadfc8;
+  background: #fbfbf7;
+  border: 2rpx solid rgba(21, 23, 19, 0.12);
   border-radius: 999rpx;
 }
 

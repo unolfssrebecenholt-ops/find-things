@@ -3,6 +3,7 @@ const imageStore = require('../../services/image-store');
 const storage = require('../../services/storage');
 const { withDisplayIndexes } = require('../../utils/geometry');
 const { navigateHome } = require('../../utils/navigation');
+const { createImageMetadata } = require('../../utils/image-metadata');
 
 const FREE_CONTENT_IMAGE_LIMIT = storage.FREE_CONTENT_IMAGE_LIMIT || 2;
 
@@ -188,7 +189,7 @@ Page({
           title: '小懒暂时没看清',
           content: error && error.message ? error.message : '请检查识别服务配置、合法域名和网络后重试。',
           showCancel: false,
-          confirmColor: '#ff7a59'
+          confirmColor: '#1f6048'
         });
       })
       .finally(() => {
@@ -203,7 +204,7 @@ Page({
         content: `默认可保存 ${FREE_CONTENT_IMAGE_LIMIT} 张箱内照片，更多照片可在升级后使用。`,
         showCancel: false,
         confirmText: '知道了',
-        confirmColor: '#ff7a59'
+        confirmColor: '#1f6048'
       });
       return;
     }
@@ -217,7 +218,8 @@ Page({
         fileId,
         label: `照片 ${index + 1}`,
         sortOrder: index,
-        itemCount: 0
+        itemCount: 0,
+        analyzeStatus: 'analyzing'
       };
       wx.showLoading({ title: '小懒正在分析中' });
       const persistOriginal = imageStore.persistImage(fileId, 'find-things/content');
@@ -227,6 +229,10 @@ Page({
       Promise.all([persistOriginal, analyzePrepared])
         .then(([storedPath, analyzed]) => {
           imageInput.fileId = storedPath;
+          Object.assign(imageInput, createImageMetadata({
+            chooseResult: result,
+            imageMetadata: analyzed.imageMetadata
+          }));
           if (typeof storage.addContentImage === 'function') {
             const savedImage = storage.addContentImage(this.data.container._id, imageInput);
             const image = pickAddedContentImage(savedImage, imageInput, index);
@@ -250,7 +256,7 @@ Page({
             title: '小懒暂时没看清',
             content: error && error.message ? error.message : '请检查识别服务配置、合法域名和网络后重试。',
             showCancel: false,
-            confirmColor: '#ff7a59'
+            confirmColor: '#1f6048'
           });
         })
         .finally(() => {

@@ -5,7 +5,8 @@
   padding-top: 26rpx;
   padding-bottom: 154rpx;
   background:
-    linear-gradient(180deg, #fff9ec 0%, #f4faee 54%, #fff7e8 100%);
+    linear-gradient(90deg, rgba(21, 23, 19, 0.035) 1px, transparent 1px) 0 0 / 72rpx 72rpx,
+    linear-gradient(180deg, #f7f6f1 0%, #f3f2ed 100%);
 }
 
 .page-top {
@@ -31,132 +32,129 @@
   max-width: 72rpx;
   height: 72rpx;
   padding: 0;
-  color: #ff7a59;
+  color: #1f6048;
   font-size: 42rpx;
   font-weight: 700;
   line-height: 1;
-  background: #fffdf8;
-  border: 2rpx solid #eadfc8;
+  background: #fbfbf7;
+  border: 2rpx solid rgba(21, 23, 19, 0.12);
   border-radius: 50%;
-  box-shadow: 0 8rpx 0 #f1e4c8;
+  box-shadow: 0 18rpx 38rpx rgba(22, 25, 18, 0.08);
 }
 
-.hero-card {
-  position: relative;
+.hero-panel {
   display: grid;
-  gap: 20rpx;
+  gap: 36rpx;
+  max-width: 100%;
   margin-top: 24rpx;
-  padding: 28rpx;
-  overflow: hidden;
-  background: #fffdf8;
-  border: 2rpx solid #eadfc8;
-  border-radius: 34rpx;
-  box-shadow: 0 12rpx 0 #f1e4c8;
+  padding: 40rpx;
+  background: linear-gradient(180deg, #ffffff 0%, #f8f8f3 100%);
+  border: 2rpx solid rgba(21, 23, 19, 0.12);
+  border-radius: 56rpx;
 }
 
-.hero-card::before {
-  position: absolute;
-  top: 18rpx;
-  right: 28rpx;
-  width: 120rpx;
-  height: 22rpx;
-  content: "";
-  background: #fff0b8;
-  border-radius: 999rpx;
-  transform: rotate(-8deg);
-}
-
-.hero-topline {
-  position: relative;
-  z-index: 1;
+.hero-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 104rpx;
-  gap: 18rpx;
+  grid-template-columns: minmax(0, 1fr) 152rpx;
+  gap: 24rpx;
   align-items: center;
 }
 
 .hero-copy {
   display: grid;
   gap: 10rpx;
+  min-width: 0;
 }
 
 .hero-title {
   display: block;
-  color: #2f352c;
-  font-size: 38rpx;
+  color: #151713;
+  font-size: 40rpx;
   font-weight: 800;
   line-height: 1.22;
 }
 
-.hero-mascot {
-  width: 104rpx;
-  height: 104rpx;
+.body-copy {
+  display: block;
+  margin-top: 14rpx;
+  color: #6f756d;
+  font-size: 26rpx;
+  line-height: 1.55;
 }
 
-.hero-actions {
+.mascot-orbit {
   display: grid;
-  grid-template-columns: 1.3fr 1fr;
-  gap: 16rpx;
-  min-width: 0;
-  overflow: hidden;
+  place-items: center;
+  width: 152rpx;
+  height: 152rpx;
+  background: #fff2c8;
+  border: 2rpx solid rgba(21, 23, 19, 0.08);
+  border-radius: 48rpx;
 }
 
-.hero-actions .primary-button {
-  box-shadow: 0 8rpx 0 #d9553a;
+.hero-mascot {
+  width: 116rpx;
+  height: 116rpx;
 }
 
-.album-grid {
+.action-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20rpx;
+  min-width: 0;
+}
+
+.action-grid .primary-button,
+.action-grid .soft-button {
+  min-width: 0;
+  max-width: 100%;
+  height: 100rpx;
+  padding: 0 16rpx;
+  border-radius: 999rpx;
+}
+
+.container-stack {
+  display: grid;
   gap: 14rpx;
 }
 
-.album-card {
-  overflow: hidden;
-  background: #fffdf8;
-  border: 2rpx solid #eadfc8;
+.container-row {
+  display: grid;
+  grid-template-columns: 164rpx minmax(0, 1fr);
+  align-items: center;
+  gap: 18rpx;
+  min-height: 190rpx;
+  padding: 14rpx;
+  background: #fbfbf7;
+  border: 2rpx solid rgba(21, 23, 19, 0.12);
   border-radius: 28rpx;
-  box-shadow: 0 8rpx 0 #f1e4c8;
+  box-shadow: 0 18rpx 46rpx rgba(22, 25, 18, 0.07);
 }
 
-.album-photo {
+.container-thumb {
   position: relative;
   width: 100%;
-  height: 186rpx;
+  height: 164rpx;
   overflow: hidden;
-  background: #dff3df;
+  background: #dbe9df;
+  border-radius: 22rpx;
 }
 
-.album-photo image {
+.container-thumb image {
   width: 100%;
   height: 100%;
 }
 
 .tone-1 {
-  background: #ffe6c8;
+  background: #e7ede2;
 }
 
 .tone-2 {
-  background: #e8edc7;
+  background: #dde9e8;
 }
 
 .tone-3 {
-  background: #dfeefd;
-}
-
-.album-count {
-  position: absolute;
-  right: 12rpx;
-  bottom: 12rpx;
-  z-index: 2;
-  padding: 6rpx 12rpx;
-  color: #7b5e1e;
-  font-size: 20rpx;
-  font-weight: 800;
-  line-height: 1;
-  opacity: 0;
-  background: rgba(255, 250, 238, 0.9);
-  border-radius: 999rpx;
+  background: #e9e7d9;
 }
 
 .photo-illustration {
@@ -171,15 +169,15 @@
   bottom: 44rpx;
   width: 86rpx;
   height: 18rpx;
-  background: rgba(255, 122, 89, 0.42);
+  background: rgba(31, 96, 72, 0.26);
   border-radius: 6rpx;
 }
 
 .illu-line.wide {
   bottom: 74rpx;
   width: 132rpx;
-  background: rgba(255, 253, 248, 0.72);
-  box-shadow: inset 0 0 0 1rpx rgba(117, 100, 68, 0.08);
+  background: rgba(251, 251, 247, 0.78);
+  box-shadow: inset 0 0 0 1rpx rgba(21, 23, 19, 0.08);
 }
 
 .illu-dot {
@@ -188,27 +186,32 @@
   bottom: 34rpx;
   width: 62rpx;
   height: 74rpx;
-  background: rgba(255, 253, 248, 0.7);
+  background: rgba(251, 251, 247, 0.7);
   border-radius: 8rpx;
   box-shadow: inset 0 0 0 1rpx rgba(117, 100, 68, 0.08);
 }
 
-.album-meta {
+.container-meta {
   display: flex;
-  min-height: 112rpx;
   flex-direction: column;
-  gap: 6rpx;
-  padding: 14rpx 16rpx 16rpx;
+  gap: 8rpx;
+  min-width: 0;
 }
 
-.album-name {
+.container-name {
   overflow: hidden;
-  color: #2f352c;
-  font-size: 27rpx;
+  color: #151713;
+  font-size: 30rpx;
   font-weight: 800;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.container-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
 }
 
 .home-page .bottom-nav {
@@ -218,7 +221,7 @@
   gap: 0;
   min-height: 112rpx;
   padding: 12rpx 28rpx 18rpx;
-  background: rgba(255, 253, 248, 0.96);
+  background: rgba(251, 251, 247, 0.94);
   border-right: 0;
   border-bottom: 0;
   border-left: 0;

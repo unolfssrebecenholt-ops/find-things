@@ -29,7 +29,7 @@
     }
 
     body {
-      min-width: 2120px;
+      min-width: 2520px;
       margin: 0;
       color: var(--ink);
       background:
@@ -44,7 +44,7 @@
     }
 
     .board {
-      width: 2100px;
+      width: 2500px;
       margin: 0 auto;
       padding: 44px 48px 56px;
     }
@@ -92,7 +92,7 @@
 
     .phones {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(6, 1fr);
       gap: 24px;
     }
 
@@ -987,6 +987,44 @@
       backdrop-filter: blur(18px);
     }
 
+    .fixed-bottom .button {
+      min-width: 0;
+      padding-right: 12px;
+      padding-left: 12px;
+      white-space: nowrap;
+    }
+
+    .review-summary {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .review-summary-card {
+      min-height: 78px;
+      padding: 13px;
+      background: rgba(255, 255, 255, 0.76);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+    }
+
+    .review-summary-card strong {
+      display: block;
+      font-size: 18px;
+      font-weight: 840;
+      line-height: 1;
+    }
+
+    .review-summary-card span {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 690;
+      line-height: 1.35;
+    }
+
     .recognizing-layer {
       position: absolute;
       inset: 0;
@@ -1113,6 +1151,169 @@
 
     .review-phone .phone-content {
       padding-bottom: 100px;
+    }
+
+    .save-phone .phone-content {
+      padding-bottom: 118px;
+    }
+
+    .form-panel {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: 1fr 0.86fr;
+      gap: 10px;
+    }
+
+    .field {
+      min-width: 0;
+    }
+
+    .field label {
+      display: block;
+      margin: 0 0 7px 2px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 760;
+    }
+
+    .field-value {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+      height: 44px;
+      padding: 0 12px;
+      overflow: hidden;
+      color: var(--ink);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 780;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .photo-section {
+      margin-top: 14px;
+    }
+
+    .photo-section .section-row {
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
+
+    .adaptive-frame {
+      position: relative;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      background:
+        linear-gradient(90deg, rgba(21, 23, 19, 0.045) 1px, transparent 1px) 0 0 / 60px 60px,
+        linear-gradient(0deg, rgba(21, 23, 19, 0.045) 1px, transparent 1px) 0 0 / 60px 60px,
+        #eef3ed;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+    }
+
+    .adaptive-frame::after {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      padding: 5px 8px;
+      color: var(--pine-dark);
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 780;
+      content: attr(data-ratio);
+    }
+
+    .outside-frame {
+      aspect-ratio: 16 / 9;
+    }
+
+    .inside-photo-grid {
+      display: grid;
+      grid-template-columns: 1fr 0.68fr;
+      gap: 10px;
+    }
+
+    .inside-photo-grid .adaptive-frame {
+      min-height: 126px;
+    }
+
+    .photo-shape {
+      position: relative;
+      width: 82%;
+      height: 70%;
+      overflow: hidden;
+      background: #d9e7de;
+      border: 1px solid rgba(31, 96, 72, 0.16);
+      border-radius: 16px;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42);
+    }
+
+    .photo-shape.wide {
+      aspect-ratio: 16 / 9;
+      height: auto;
+    }
+
+    .photo-shape.tall {
+      aspect-ratio: 3 / 4;
+      width: 64%;
+      height: auto;
+      background: #dde6eb;
+    }
+
+    .photo-shape::before,
+    .photo-shape::after {
+      position: absolute;
+      content: "";
+      background: rgba(255, 255, 255, 0.72);
+      border-radius: 9px;
+    }
+
+    .photo-shape::before {
+      top: 22%;
+      left: 14%;
+      width: 28%;
+      height: 30%;
+    }
+
+    .photo-shape::after {
+      right: 14%;
+      bottom: 18%;
+      width: 28%;
+      height: 36%;
+    }
+
+    .photo-caption {
+      position: absolute;
+      top: 10px;
+      left: 12px;
+      color: var(--pine);
+      font-size: 11px;
+      font-weight: 820;
+    }
+
+    .save-actions {
+      grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+      gap: 8px;
+      padding-bottom: 24px;
+    }
+
+    .save-actions .button {
+      height: 48px;
+      font-size: 14px;
     }
 
     .search-box {
@@ -1449,7 +1650,7 @@
     <header class="board-head">
       <div>
         <h1 class="board-title">拍箱找物 UI 重构原型</h1>
-        <p class="board-note">冷白基底、松针绿主操作、细线分层。保留小懒树懒形象，但从大面积卡通装饰收敛为品牌助手和空状态记忆点。五屏覆盖首页、识别确认、搜索、容器列表和容器详情。</p>
+        <p class="board-note">冷白基底、松针绿主操作、细线分层。保留小懒树懒形象，但从大面积卡通装饰收敛为品牌助手和空状态记忆点。六屏覆盖首页、识别确认、保存容器、搜索、容器列表和容器详情。</p>
       </div>
       <div class="palette" aria-label="色板">
         <span>冷白 · 松针绿 · 烟灰线</span>
@@ -1459,7 +1660,7 @@
       </div>
     </header>
 
-    <section class="phones" aria-label="五屏总览">
+    <section class="phones" aria-label="六屏总览">
       <article class="phone-wrap">
         <div class="screen-label"><span>01 首页</span><span>Home</span></div>
         <div class="phone">
@@ -1591,47 +1792,96 @@
                 <span class="meta-pill confidence">90%</span>
               </div>
             </div>
+            <div class="review-summary">
+              <div class="review-summary-card">
+                <strong>4 件已识别</strong>
+                <span>名称、位置和可见文字都已进入清单，可逐项改名。</span>
+              </div>
+              <div class="review-summary-card">
+                <strong>2 张余量</strong>
+                <span>还可补拍箱内细节，再一起保存容器。</span>
+              </div>
+            </div>
           </div>
           <div class="fixed-bottom">
-            <button class="button button-soft">拍下一张</button>
-            <button class="button button-primary">下一步</button>
-          </div>
-          <div class="recognizing-layer" aria-label="识别中加载框">
-            <div class="recognizing-card">
-              <div class="recognizing-top">
-                <div class="recognizing-orbit">
-                  <img src="../../miniprogram/assets/xiaolan-sloth.svg" alt="" />
-                </div>
-                <div>
-                  <span class="recognizing-title">小懒正在认真找找看</span>
-                  <span class="recognizing-copy">物品、文字和位置都在排队被看见，请稍等小懒一下。</span>
-                </div>
-              </div>
-              <div class="recognizing-steps">
-                <div class="recognizing-step active">
-                  <span class="recognizing-dot"></span>
-                  <span>先看清照片细节</span>
-                  <span class="recognizing-state">看着呢</span>
-                </div>
-                <div class="recognizing-step">
-                  <span class="recognizing-dot"></span>
-                  <span>认出物品和文字</span>
-                  <span class="recognizing-state">马上来</span>
-                </div>
-                <div class="recognizing-step">
-                  <span class="recognizing-dot"></span>
-                  <span>整理成可搜索清单</span>
-                  <span class="recognizing-state">马上来</span>
-                </div>
-              </div>
-              <div class="recognizing-hint">先别溜走，小懒快整理好了。照片越清楚，之后越好找。</div>
-            </div>
+            <button class="button button-soft">补拍一张</button>
+            <button class="button button-primary">保存容器</button>
           </div>
         </div>
       </article>
 
       <article class="phone-wrap">
-        <div class="screen-label"><span>03 找东西</span><span>Search</span></div>
+        <div class="screen-label"><span>03 保存容器</span><span>Save</span></div>
+        <div class="phone save-phone">
+          <div class="status"><span>9:41</span><span>5G <span class="battery"></span></span></div>
+          <div class="island"></div>
+          <div class="phone-content">
+            <div class="page-top">
+              <div>
+                <span class="kicker">最后一步</span>
+                <h2 class="page-title">保存这个容器</h2>
+              </div>
+              <div class="sloth-chip">
+                <img src="../../miniprogram/assets/xiaolan-sloth.svg" alt="" />
+                <span>已看清</span>
+              </div>
+            </div>
+
+            <section class="form-panel">
+              <div class="field-grid">
+                <div class="field">
+                  <label>容器名称</label>
+                  <div class="field-value">书桌左侧抽屉</div>
+                </div>
+                <div class="field">
+                  <label>位置</label>
+                  <div class="field-value">卧室 / 书桌</div>
+                </div>
+              </div>
+              <div class="chips">
+                <span class="chip">4 件物品</span>
+                <span class="chip">2 张箱内照</span>
+                <span class="chip">可搜索</span>
+              </div>
+            </section>
+
+            <section class="photo-section">
+              <div class="section-row">
+                <h3>外观照片</h3>
+                <span class="text-link">可选</span>
+              </div>
+              <div class="adaptive-frame outside-frame" data-ratio="自适应 4:3 / 16:9">
+                <span class="photo-caption">容器外观</span>
+                <div class="photo-shape wide"></div>
+              </div>
+            </section>
+
+            <section class="photo-section">
+              <div class="section-row">
+                <h3>箱内照片</h3>
+                <span class="text-link">2 张</span>
+              </div>
+              <div class="inside-photo-grid">
+                <div class="adaptive-frame" data-ratio="横屏">
+                  <span class="photo-caption">箱内视角</span>
+                  <div class="photo-shape wide"></div>
+                </div>
+                <div class="adaptive-frame" data-ratio="竖拍">
+                  <span class="photo-caption">补充细节</span>
+                  <div class="photo-shape tall"></div>
+                </div>
+              </div>
+            </section>
+          </div>
+          <div class="fixed-bottom save-actions">
+            <button class="button button-soft">返回修改</button>
+            <button class="button button-primary">保存并回首页</button>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone-wrap">
+        <div class="screen-label"><span>04 找东西</span><span>Search</span></div>
         <div class="phone">
           <div class="status"><span>9:41</span><span>5G <span class="battery"></span></span></div>
           <div class="island"></div>
@@ -1700,7 +1950,7 @@
       </article>
 
       <article class="phone-wrap">
-        <div class="screen-label"><span>04 容器列表</span><span>Containers</span></div>
+        <div class="screen-label"><span>05 容器列表</span><span>Containers</span></div>
         <div class="phone">
           <div class="status"><span>9:41</span><span>5G <span class="battery"></span></span></div>
           <div class="island"></div>
@@ -1812,7 +2062,7 @@
       </article>
 
       <article class="phone-wrap">
-        <div class="screen-label"><span>05 容器详情</span><span>Detail</span></div>
+        <div class="screen-label"><span>06 容器详情</span><span>Detail</span></div>
         <div class="phone">
           <div class="status"><span>9:41</span><span>5G <span class="battery"></span></span></div>
           <div class="island"></div>

@@ -58,6 +58,7 @@ function searchItems(query, data) {
       const semantic = semanticMatch(query, item);
       const validSemantic = isValidSemanticMatch(semantic);
       const semanticScore = validSemantic ? semantic.score : 0;
+      const semanticPercent = Math.max(0, Math.min(100, Math.round(semanticScore)));
       const keywordScore = scored.keywordScore || 0;
       const score = scored.score + semanticScore;
       return {
@@ -69,8 +70,10 @@ function searchItems(query, data) {
         contentImage: (contentImage && contentImage.fileId) || container.contentImageFileId || '',
         matchedImageId: (contentImage && contentImage.imageId) || item.sourceImageId || '',
         matchedImageFileId: (contentImage && contentImage.fileId) || item.sourceImageFileId || '',
+        locationText: item.locationText || [contentImage && contentImage.label, item.relativePosition].filter(Boolean).join(' · '),
         matchType: getMatchType(keywordScore, semanticScore),
         semanticScore,
+        semanticPercent,
         matchSummary: validSemantic ? semantic.summary : (scored.reasons[0] || ''),
         score,
         keywordScore,
@@ -96,6 +99,77 @@ function searchItems(query, data) {
     });
 }
 
+function normalizeText(value) {
+  return String(value || '').toLowerCase();
+}
+
+function includesToken(text, token) {
+  return normalizeText(text).indexOf(normalizeText(token)) >= 0;
+}
+
+function scoreContainer(tokens, container, items) {
+  const reasons = [];
+  let score = 0;
+  const name = container.name || '';
+  const location = container.locationPath || '';
+  const containerItems = (items || []).filter((item) => item.containerId === container._id);
+
+  tokens.forEach((token) => {
+    if (includesToken(name, token)) {
+      score += 80;
+      reasons.push(`名称包含「${token}」`);
+    }
+    if (includesToken(location, token)) {
+      score += 60;
+      reasons.push(`位置包含「${token}」`);
+    }
+    const matchedItem = containerItems.find((item) => {
+      return includesToken(item.displayName, token)
+        || includesToken(item.visibleText, token)
+        || includesToken(item.description, token)
+        || (item.aliases || []).some((alias) => includesToken(alias, token))
+        || (item.colors || []).some((color) => includesToken(color, token))
+        || (item.features || []).some((feature) => includesToken(feature, token));
+    });
+    if (matchedItem) {
+      score += 70;
+      reasons.push(`物品包含「${matchedItem.displayName || token}」`);
+    }
+  });
+
+  return {
+    score,
+    reasons: reasons.filter((reason, index) => reasons.indexOf(reason) === index)
+  };
+}
+
+function searchContainers(query, data) {
+  const tokens = normalizeQuery(query);
+  if (!tokens.length) return [];
+
+  const containers = data && data.containers ? data.containers : storage.listContainers();
+  const items = data && data.items ? data.items : storage.listItems();
+
+  return (containers || [])
+    .map((container) => {
+      const scored = scoreContainer(tokens, container, items);
+      const imageCount = (container.contentImages || []).length;
+      return {
+        resultId: container._id,
+        container,
+        score: scored.score,
+        reasons: scored.reasons,
+        matchSummary: scored.reasons[0] || `${container.itemCount || 0} 件物品 · ${imageCount} 张照片`
+      };
+    })
+    .filter((result) => result.score > 0)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return (b.container.updatedAt || 0) - (a.container.updatedAt || 0);
+    });
+}
+
 module.exports = {
-  searchItems
+  searchItems,
+  searchContainers
 };

@@ -1,17 +1,58 @@
 <view class="page container-list-page">
   <view class="list-head">
-    <text class="eyebrow">容器</text>
-    <text class="page-title">全部容器</text>
+    <view class="list-title-copy">
+      <text class="eyebrow">全部容器</text>
+      <text class="page-title">家里的东西，都在这里</text>
+    </view>
+    <view class="page-actions">
+      <button class="manage-toggle {{manageButtonClass}}" bindtap="toggleManageMode">{{manageLabel}}</button>
+      <button class="add-container" bindtap="goCapture">+</button>
+    </view>
   </view>
 
-  <view wx:if="{{hasContainers}}" class="container-stack">
+  <view class="list-toolbar">
+    <view class="compact-search">
+      <view class="search-mark"></view>
+      <input
+        class="search-input"
+        placeholder="搜索容器或位置"
+        value="{{query}}"
+        bindinput="inputQuery"
+      />
+    </view>
+    <view class="compact-filter" aria-hidden="true">⌄</view>
+  </view>
+
+  <view class="library-summary">
+    <view class="summary-tile">
+      <text class="summary-value">{{summary.containerCount}}</text>
+      <text class="subtle">个容器已保存</text>
+    </view>
+    <view class="summary-tile">
+      <text class="summary-value">{{summary.itemCount}}</text>
+      <text class="subtle">件物品可搜索</text>
+    </view>
+  </view>
+
+  <view wx:if="{{hasContainers}}" class="section-row">
+    <text class="section-title">最近更新</text>
+    <text class="text-link">按时间</text>
+  </view>
+
+  <view wx:if="{{hasContainers}}" class="container-stack container-list">
     <view
       wx:for="{{containers}}"
       wx:key="_id"
-      class="container-row"
+      class="container-row featured {{rowModeClass}}"
       bindtap="openContainer"
       data-id="{{item._id}}"
     >
+      <view
+        wx:if="{{isManaging}}"
+        class="select-dot {{item.selectClass}}"
+        catchtap="toggleSelect"
+        data-id="{{item._id}}"
+      ></view>
       <view class="container-photo">
         <image wx:if="{{item.coverPhoto}}" mode="aspectFill" src="{{item.coverPhoto}}"></image>
         <view wx:if="{{item.showPlaceholder}}" class="photo-placeholder">
@@ -19,15 +60,18 @@
           <view class="placeholder-line"></view>
         </view>
       </view>
-      <view class="container-copy">
-        <text class="container-name">{{item.name}}</text>
-        <text class="subtle">{{item.displayLocation}}</text>
-        <view class="meta-row">
-          <text class="pill">{{item.itemCount}} 件物品</text>
-          <text class="pill">{{item.imageCount}} 张照片</text>
+      <view class="container-body">
+        <view>
+          <text class="container-name">{{item.name}}</text>
+          <text class="subtle">{{item.displaySubtitle}}</text>
+        </view>
+        <view class="container-meta-line">
+          <text class="meta-pill">{{item.statusPill}}</text>
+          <text class="meta-pill">{{item.imageCount}} 张照片</text>
         </view>
       </view>
       <view
+        wx:if="{{showRowMoreActions}}"
         class="more-action"
         catchtap="showContainerActions"
         data-id="{{item._id}}"
@@ -38,6 +82,13 @@
         <view class="more-dot"></view>
         <view class="more-dot"></view>
       </view>
+      <button
+        wx:if="{{isManaging}}"
+        class="row-delete"
+        catchtap="confirmDeleteFromRow"
+        data-id="{{item._id}}"
+        data-name="{{item.name}}"
+      >删除</button>
     </view>
   </view>
 
@@ -50,6 +101,14 @@
       </view>
     </view>
     <button class="empty-action" bindtap="goCapture">拍照整理</button>
+  </view>
+
+  <view wx:if="{{showBatchBar}}" class="batch-bar">
+    <view class="batch-copy">
+      <text class="batch-title">已选 {{selectedCount}} 个容器</text>
+      <text class="batch-subcopy">删掉后，小懒也会忘记里面的物品</text>
+    </view>
+    <button class="batch-delete" bindtap="confirmBatchDelete">批量删除</button>
   </view>
 
   <view class="bottom-nav">

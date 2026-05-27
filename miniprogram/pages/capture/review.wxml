@@ -4,20 +4,29 @@
       <text class="eyebrow">书桌左侧抽屉</text>
       <text class="page-title">确认识别结果</text>
     </view>
-    <text class="pill">{{currentLabel}} · {{items.length}} 件</text>
+    <view class="sloth-chip">
+      <image mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
+      <text>{{items.length}} 件</text>
+    </view>
   </view>
 
   <view class="segmented">
+    <button
+      class="segment {{viewMode == 'annotated' ? 'active' : ''}}"
+      data-mode="annotated"
+      bindtap="switchViewMode"
+    >标注</button>
     <button
       class="segment {{viewMode == 'summary' ? 'active' : ''}}"
       data-mode="summary"
       bindtap="switchViewMode"
     >清单</button>
-    <button
-      class="segment {{viewMode == 'edit' ? 'active' : ''}}"
-      data-mode="edit"
-      bindtap="switchViewMode"
-    >编辑</button>
+  </view>
+
+  <view class="ratio-guide">
+    <text>横过来拍更清楚</text>
+    <text class="ratio-guide-strong">小懒好找</text>
+    <text>竖着拍也收</text>
   </view>
 
   <view wx:if="{{showAiWarning}}" class="warning-card xiaolan-row">
@@ -26,15 +35,26 @@
   </view>
 
   <view wx:if="{{isSummaryMode}}" class="summary-panel">
-    <view class="photo-stage">
+    <view class="photo-map ratio-landscape {{ratioClass}}">
       <image class="plain-photo" mode="aspectFit" src="{{imagePath}}"></image>
+      <view wx:if="{{isAnnotatedMode}}" class="annotation-layer">
+        <view
+          wx:for="{{items}}"
+          wx:key="tempId"
+          wx:if="{{item.hasAnnotation}}"
+          class="annotation-box"
+          style="{{item.annotationStyle}}"
+        >
+          <text class="annotation-index">{{item.displayIndex}}</text>
+        </view>
+      </view>
     </view>
     <view class="summary-card">
       <view>
         <text class="summary-title">已识别 {{items.length}} 件</text>
-        <text class="subtle">不在图片上画框，按清单核对名称和方位，避免误导。</text>
+        <text class="subtle">按标注和清单核对名称、颜色和方位。</text>
       </view>
-      <text class="pill">清单</text>
+      <text class="pill">{{currentLabel}}</text>
     </view>
     <view class="quick-list">
       <view wx:for="{{items}}" wx:key="tempId" class="quick-item">
@@ -51,16 +71,42 @@
     </view>
   </view>
 
-  <view wx:if="{{isEditMode}}" class="edit-panel">
-    <view class="editor-card">
-      <item-editor items="{{items}}" bind:change="handleItemsChange"></item-editor>
-    </view>
-  </view>
-
   <view wx:if="{{warnings.length}}" class="note-card">{{warnings[0]}}</view>
 
   <view class="review-actions">
-    <button class="soft-button" bindtap="addNextPhoto">拍下一张</button>
-    <button class="primary-button" bindtap="goNext">下一步：拍容器</button>
+    <button class="soft-button" bindtap="addNextPhoto">补拍一张</button>
+    <button class="primary-button" bindtap="goNext">保存容器</button>
+  </view>
+
+  <view wx:if="{{recognizing}}" class="recognizing-layer">
+    <view class="recognizing-card">
+      <view class="recognizing-top">
+        <view class="recognizing-orbit">
+          <image mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
+        </view>
+        <view class="recognizing-copy">
+          <text class="recognizing-title">小懒正在分析中</text>
+          <text class="recognizing-desc">补拍照片会加入同一个容器清单。</text>
+        </view>
+      </view>
+      <view class="recognizing-steps">
+        <view class="recognizing-step active">
+          <text class="recognizing-dot"></text>
+          <text>合并补拍照片</text>
+          <text class="recognizing-state">完成</text>
+        </view>
+        <view class="recognizing-step active">
+          <text class="recognizing-dot"></text>
+          <text>校对已有清单</text>
+          <text class="recognizing-state">进行中</text>
+        </view>
+        <view class="recognizing-step">
+          <text class="recognizing-dot"></text>
+          <text>更新物品位置</text>
+          <text class="recognizing-state">马上</text>
+        </view>
+      </view>
+      <view class="recognizing-hint">小懒会把新照片和旧清单放在一起看。</view>
+    </view>
   </view>
 </view>

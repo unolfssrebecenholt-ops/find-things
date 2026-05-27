@@ -31,7 +31,24 @@
   "editorSetting": {},
   "simulatorPluginLibVersion": {},
   "packOptions": {
-    "ignore": [],
+    "ignore": [
+      {
+        "type": "folder",
+        "value": ".worktrees/"
+      },
+      {
+        "type": "folder",
+        "value": "tests/"
+      },
+      {
+        "type": "folder",
+        "value": "docs/"
+      },
+      {
+        "type": "folder",
+        "value": "output/"
+      }
+    ],
     "include": []
   },
   "libVersion": "3.16.0"

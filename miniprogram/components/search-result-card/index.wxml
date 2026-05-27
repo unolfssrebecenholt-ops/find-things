@@ -9,9 +9,12 @@
     <text wx:if="{{viewModel.photoLabel}}" class="photo-badge">{{viewModel.photoLabel}}</text>
   </view>
   <view class="result-copy">
-    <text class="match-summary">{{viewModel.matchSummary}}</text>
+    <view class="match-row">
+      <text wx:if="{{viewModel.semanticPercentText}}" class="semantic-percent">{{viewModel.semanticPercentText}}</text>
+      <text class="match-summary">{{viewModel.matchSummary}}</text>
+    </view>
     <text class="result-name">{{result.item.displayName}}</text>
-    <text class="result-location">{{result.containerName}} · 点击查看所在容器</text>
+    <text class="result-location">{{result.containerName}} · {{viewModel.locationText}}</text>
     <text class="result-cta">查看容器</text>
   </view>
 </view>

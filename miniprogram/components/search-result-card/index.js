@@ -2,16 +2,27 @@ const { isMockAssetPath } = require('../../utils/mock-assets');
 
 function createMatchSummary(result) {
   if (result.matchSummary) return result.matchSummary;
-  if (result.semanticScore) {
-    const score = Number(result.semanticScore) || 0;
-    return `语义 ${Math.round(score <= 1 ? score * 100 : score)}%`;
-  }
   if (result.matchType) {
     const labels = { name: '名称', feature: '特征', semantic: '语义', hybrid: '综合' };
     return labels[result.matchType] || '匹配';
   }
   const firstReason = (result.reasons || [])[0];
   return firstReason || '匹配';
+}
+
+function toPercent(value) {
+  const score = Number(value);
+  if (!Number.isFinite(score) || score < 0) return '';
+  const percent = Math.round(score <= 1 ? score * 100 : score);
+  return Math.max(0, Math.min(100, percent));
+}
+
+function createSemanticPercentText(result) {
+  const value = result.semanticPercent !== undefined && result.semanticPercent !== null
+    ? result.semanticPercent
+    : result.semanticScore;
+  const percent = toPercent(value);
+  return percent === '' ? '' : `语义 ${percent}%`;
 }
 
 function createPhotoLabel(result) {
@@ -47,7 +58,9 @@ Component({
           hasPhoto,
           showPlaceholder: !hasPhoto,
           photoLabel: createPhotoLabel(safeResult),
+          semanticPercentText: createSemanticPercentText(safeResult),
           matchSummary: createMatchSummary(safeResult),
+          locationText: safeResult.locationText || '点击查看所在容器',
           reasons: (safeResult.reasons || []).slice(0, 2)
         }
       });
@@ -60,7 +73,9 @@ Component({
       hasPhoto: false,
       showPlaceholder: true,
       photoLabel: '',
+      semanticPercentText: '',
       matchSummary: '',
+      locationText: '',
       reasons: []
     }
   },

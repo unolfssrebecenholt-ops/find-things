@@ -1,7 +1,7 @@
 page {
   min-height: 100%;
-  color: #2f352c;
-  background: #fff7e8;
+  color: #151713;
+  background: #f3f2ed;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
@@ -18,7 +18,7 @@ swiper {
 button {
   margin: 0;
   padding: 0;
-  border-radius: 22rpx;
+  border-radius: 24rpx;
 }
 
 button::after {
@@ -29,12 +29,13 @@ button::after {
   min-height: 100vh;
   padding: 34rpx 36rpx 156rpx;
   background:
-    linear-gradient(180deg, #fff9ec 0%, #f4faee 56%, #fff7e8 100%);
+    linear-gradient(90deg, rgba(21, 23, 19, 0.035) 1px, transparent 1px) 0 0 / 72rpx 72rpx,
+    linear-gradient(180deg, #f7f6f1 0%, #f3f2ed 100%);
 }
 
 .eyebrow {
   display: block;
-  color: #71915f;
+  color: #1f6048;
   font-size: 24rpx;
   font-weight: 750;
   line-height: 1.25;
@@ -43,14 +44,14 @@ button::after {
 .page-title {
   display: block;
   margin-top: 8rpx;
-  color: #2f352c;
+  color: #151713;
   font-size: 50rpx;
   font-weight: 850;
   line-height: 1.18;
 }
 
 .subtle {
-  color: #7b7465;
+  color: #6f756d;
   font-size: 25rpx;
   line-height: 1.5;
 }
@@ -72,20 +73,20 @@ button::after {
 
 .primary-button {
   color: #ffffff;
-  background: #ff7a59;
-  box-shadow: 0 10rpx 0 #d9553a;
+  background: #1f6048;
+  box-shadow: 0 18rpx 42rpx rgba(31, 96, 72, 0.2);
 }
 
 .soft-button {
-  color: #486f45;
-  background: #e6f6d8;
-  box-shadow: 0 8rpx 0 #c7e8b6;
+  color: #143e31;
+  background: #dbe9df;
+  box-shadow: none;
 }
 
 .ghost-button {
-  color: #486f45;
-  background: #fffdf8;
-  border: 2rpx solid #eadfc8;
+  color: #143e31;
+  background: #fbfbf7;
+  border: 2rpx solid rgba(21, 23, 19, 0.12);
 }
 
 .primary-button:active,
@@ -105,14 +106,14 @@ button::after {
 }
 
 .section-heading {
-  color: #2f352c;
+  color: #151713;
   font-size: 32rpx;
   font-weight: 800;
   line-height: 1.25;
 }
 
 .text-link {
-  color: #ff7a59;
+  color: #1f6048;
   font-size: 24rpx;
   font-weight: 700;
 }
@@ -123,32 +124,33 @@ button::after {
   max-width: 100%;
   min-height: 42rpx;
   padding: 6rpx 14rpx;
-  color: #5d6d33;
+  color: #1f6048;
   font-size: 22rpx;
   font-weight: 700;
   line-height: 1.25;
-  background: #fff0b8;
+  background: #dbe9df;
+  border: 1rpx solid rgba(21, 23, 19, 0.08);
   border-radius: 999rpx;
 }
 
 .empty-state {
   padding: 30rpx;
-  color: #7b7465;
+  color: #6f756d;
   font-size: 27rpx;
   line-height: 1.55;
-  background: #fffdf8;
-  border: 2rpx solid #eadfc8;
+  background: #fbfbf7;
+  border: 2rpx solid rgba(21, 23, 19, 0.12);
   border-radius: 30rpx;
-  box-shadow: 0 10rpx 0 #f1e4c8;
+  box-shadow: 0 20rpx 54rpx rgba(22, 25, 18, 0.08);
 }
 
 .note-card {
   padding: 22rpx 24rpx;
-  color: #775f28;
+  color: #425147;
   font-size: 24rpx;
   line-height: 1.45;
-  background: #fff2c8;
-  border: 2rpx solid #ecd79a;
+  background: #eef4ef;
+  border: 2rpx solid rgba(21, 23, 19, 0.1);
   border-radius: 26rpx;
 }
 
@@ -177,10 +179,36 @@ button::after {
 }
 
 .xiaolan-name {
-  color: #2f352c;
+  color: #151713;
   font-size: 28rpx;
   font-weight: 850;
   line-height: 1.25;
+}
+
+.sloth-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 14rpx;
+  flex: none;
+  min-width: 0;
+  height: 80rpx;
+  padding: 10rpx 20rpx 10rpx 10rpx;
+  color: #143e31;
+  font-size: 24rpx;
+  font-weight: 760;
+  line-height: 1;
+  white-space: nowrap;
+  background: rgba(219, 233, 223, 0.78);
+  border: 2rpx solid rgba(31, 96, 72, 0.16);
+  border-radius: 999rpx;
+}
+
+.sloth-chip-avatar,
+.sloth-chip image {
+  display: block;
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 50%;
 }
 
 .empty-state.with-xiaolan {
@@ -200,9 +228,9 @@ button::after {
   font-size: 25rpx;
   font-weight: 800;
   line-height: 68rpx;
-  background: #ff7a59;
+  background: #1f6048;
   border-radius: 999rpx;
-  box-shadow: 0 8rpx 0 #d9553a;
+  box-shadow: 0 14rpx 32rpx rgba(31, 96, 72, 0.2);
 }
 
 .bottom-nav {
@@ -213,10 +241,10 @@ button::after {
   z-index: 30;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  height: 152rpx;
-  padding: 16rpx 28rpx 32rpx;
-  background: rgba(255, 253, 248, 0.96);
-  border-top: 2rpx solid rgba(234, 223, 200, 0.9);
+  height: 136rpx;
+  padding: 14rpx 28rpx 26rpx;
+  background: rgba(251, 251, 247, 0.94);
+  border-top: 2rpx solid rgba(21, 23, 19, 0.12);
   backdrop-filter: blur(18rpx);
 }
 
@@ -225,15 +253,15 @@ button::after {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5rpx;
+  gap: 10rpx;
   min-height: 104rpx;
-  color: #8a7f6e;
+  color: #8b9288;
   font-size: 22rpx;
   font-weight: 700;
 }
 
 .nav-item.active {
-  color: #ff7a59;
+  color: #1f6048;
 }
 
 .nav-icon {

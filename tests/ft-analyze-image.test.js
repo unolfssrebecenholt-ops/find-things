@@ -26,7 +26,7 @@ function withEnv(values, fn) {
   }
 }
 
-function loadAnalyzeFunction() {
+function loadAnalyzeFunction(options = {}) {
   const modulePath = path.join(__dirname, '..', 'cloudfunctions', 'ftAnalyzeImage', 'index.js');
   const originalLoad = Module._load;
   delete require.cache[require.resolve(modulePath)];
@@ -39,6 +39,9 @@ function loadAnalyzeFunction() {
           return Promise.resolve({ fileContent: Buffer.from('image') });
         }
       };
+    }
+    if (request === './local.config' && Object.prototype.hasOwnProperty.call(options, 'localConfig')) {
+      return options.localConfig;
     }
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -104,6 +107,89 @@ test('cloud function maps AI timeout to a user-readable payload', () => {
 
   assert.equal(payload.errorCode, 'AI_REQUEST_TIMEOUT');
   assert.equal(payload.items.length, 0);
-  assert.match(payload.errorMessage, /AI 识别超时/);
-  assert.match(payload.warnings[0], /AI 识别超时/);
+  assert.match(payload.errorMessage, /小懒看得有点久/);
+  assert.match(payload.warnings[0], /小懒看得有点久/);
+  assert.doesNotMatch(payload.errorMessage, /AI 识别/);
+});
+
+test('cloud function maps self-signed certificate errors to a diagnostic payload', () => {
+  const analyzeFunction = loadAnalyzeFunction();
+  const error = new Error('self signed certificate');
+  error.code = 'DEPTH_ZERO_SELF_SIGNED_CERT';
+  const payload = analyzeFunction._test.publicError(error);
+
+  assert.equal(payload.errorCode, 'AI_TLS_CERTIFICATE_INVALID');
+  assert.match(payload.errorMessage, /证书/);
+});
+
+test('cloud function maps provider certificate chain errors to a diagnostic payload', () => {
+  const analyzeFunction = loadAnalyzeFunction();
+  const certificateErrorCodes = [
+    'SELF_SIGNED_CERT_IN_CHAIN',
+    'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+    'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+    'CERT_HAS_EXPIRED',
+    'ERR_TLS_CERT_ALTNAME_INVALID'
+  ];
+
+  for (const code of certificateErrorCodes) {
+    const error = new Error('certificate verification failed');
+    error.code = code;
+    const payload = analyzeFunction._test.publicError(error);
+
+    assert.equal(payload.errorCode, 'AI_TLS_CERTIFICATE_INVALID');
+  }
+});
+
+test('cloud function maps refused provider connections to an unreachable service payload', () => {
+  const analyzeFunction = loadAnalyzeFunction();
+  const error = new Error('connect ECONNREFUSED 154.9.232.80:443');
+  error.code = 'ECONNREFUSED';
+  const payload = analyzeFunction._test.publicError(error);
+
+  assert.equal(payload.errorCode, 'AI_SERVICE_UNREACHABLE');
+  assert.match(payload.errorMessage, /小懒没连上识别服务/);
+  assert.doesNotMatch(payload.errorMessage, /AI 识别失败/);
+});
+
+test('cloud function maps transient network errors to an unreachable service payload', () => {
+  const analyzeFunction = loadAnalyzeFunction();
+  const networkErrorCodes = ['ENOTFOUND', 'EAI_AGAIN', 'ECONNRESET', 'ENETUNREACH', 'EHOSTUNREACH'];
+
+  for (const code of networkErrorCodes) {
+    const error = new Error('network unavailable');
+    error.code = code;
+    const payload = analyzeFunction._test.publicError(error);
+
+    assert.equal(payload.errorCode, 'AI_SERVICE_UNREACHABLE');
+    assert.match(payload.errorMessage, /识别服务/);
+  }
+});
+
+test('cloud function can opt in to self-signed compatible provider TLS mode', () => {
+  const analyzeFunction = loadAnalyzeFunction();
+
+  withEnv({ OPENAI_COMPAT_TLS_REJECT_UNAUTHORIZED: 'false' }, () => {
+    const options = analyzeFunction._test.createPostOptions(
+      'https://llmhub.ltd/v1/chat/completions',
+      'test-key',
+      '{}'
+    );
+    assert.equal(options.rejectUnauthorized, false);
+  });
+});
+
+test('cloud function accepts boolean false from local TLS compatibility config', () => {
+  const analyzeFunction = loadAnalyzeFunction({
+    localConfig: { tlsRejectUnauthorized: false }
+  });
+
+  withEnv({ OPENAI_COMPAT_TLS_REJECT_UNAUTHORIZED: undefined }, () => {
+    const options = analyzeFunction._test.createPostOptions(
+      'https://llmhub.ltd/v1/chat/completions',
+      'test-key',
+      '{}'
+    );
+    assert.equal(options.rejectUnauthorized, false);
+  });
 });

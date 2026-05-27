@@ -2,6 +2,18 @@ const aiConfig = require('../config/ai');
 const mockAi = require('./mock-ai');
 const { normalizeBbox, withDisplayIndexes } = require('../utils/geometry');
 
+const NETWORK_UNREACHABLE_ERROR_CODES = [
+  'AI_SERVICE_UNREACHABLE',
+  'ECONNREFUSED',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ECONNRESET',
+  'ENETUNREACH',
+  'EHOSTUNREACH',
+  'ECONNABORTED',
+  'EPIPE'
+];
+
 function hasWx() {
   return typeof wx !== 'undefined';
 }
@@ -409,10 +421,34 @@ function callCloudAnalyze(config, imagePath) {
   });
 }
 
+function normalizeCloudErrorCode(code) {
+  return NETWORK_UNREACHABLE_ERROR_CODES.indexOf(code) >= 0
+    ? 'AI_SERVICE_UNREACHABLE'
+    : code;
+}
+
+function friendlyAnalyzeErrorMessage(code, message) {
+  const normalizedCode = normalizeCloudErrorCode(code);
+  const messages = {
+    AI_KEY_MISSING: '小懒还没接上识别服务，请检查云函数环境变量 OPENAI_COMPAT_API_KEY。',
+    AI_REQUEST_TIMEOUT: '小懒看得有点久，请换一张更清晰或更小的照片后重试。',
+    AI_TLS_CERTIFICATE_INVALID: '小懒没法信任识别服务的证书，请换可信服务地址或配置证书后重试。',
+    AI_SERVICE_UNREACHABLE: '小懒没连上识别服务，请稍后重试或检查服务地址。',
+    AI_REQUEST_FAILED: '小懒请求识别服务失败，请稍后重试。',
+    AI_ANALYZE_FAILED: '小懒暂时没看清，请重试或手动添加物品。'
+  };
+  if (messages[normalizedCode]) return messages[normalizedCode];
+  if (/AI\s*识别失败|AI\s*识别|AI\s*服务/.test(String(message || ''))) {
+    return messages.AI_ANALYZE_FAILED;
+  }
+  return message || messages.AI_ANALYZE_FAILED;
+}
+
 function unwrapCloudAnalyzePayload(payload) {
   if (payload && payload.errorCode) {
-    const error = new Error(payload.errorMessage || '小懒暂时没看清，请重试或手动添加物品。');
-    error.code = payload.errorCode;
+    const code = normalizeCloudErrorCode(payload.errorCode);
+    const error = new Error(friendlyAnalyzeErrorMessage(code, payload.errorMessage));
+    error.code = code;
     throw error;
   }
   return payload;
@@ -456,6 +492,7 @@ module.exports = {
   saveRuntimeConfig,
   getSettingsViewModel,
   unwrapCloudAnalyzePayload,
+  friendlyAnalyzeErrorMessage,
   normalizeAiPayload,
   normalizeAiItem,
   parseJsonPayload,

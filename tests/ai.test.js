@@ -65,9 +65,24 @@ test('throws user-readable cloud analyze error payloads', () => {
   assert.throws(
     () => ai.unwrapCloudAnalyzePayload({
       errorCode: 'AI_REQUEST_TIMEOUT',
-      errorMessage: 'AI 识别超时，请换一张更清晰或更小的照片后重试。'
+      errorMessage: '小懒看得有点久，请换一张更清晰或更小的照片后重试。'
     }),
-    /AI 识别超时/
+    /小懒看得有点久/
+  );
+});
+
+test('rewrites stale cloud network failures into Xiaolan copy', () => {
+  assert.throws(
+    () => ai.unwrapCloudAnalyzePayload({
+      errorCode: 'ECONNREFUSED',
+      errorMessage: 'AI 识别失败，请重试或手动添加物品。'
+    }),
+    (error) => {
+      assert.equal(error.code, 'AI_SERVICE_UNREACHABLE');
+      assert.match(error.message, /小懒没连上识别服务/);
+      assert.doesNotMatch(error.message, /AI 识别失败/);
+      return true;
+    }
   );
 });
 

@@ -1,6 +1,3 @@
 {
-  "navigationBarTitleText": "确认识别",
-  "usingComponents": {
-    "item-editor": "/components/item-editor/index"
-  }
+  "navigationBarTitleText": "确认识别"
 }

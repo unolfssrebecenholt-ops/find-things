@@ -7,15 +7,17 @@
     <button class="round-action" bindtap="goCapture">+</button>
   </view>
 
-  <view class="hero-card">
-    <view class="hero-topline">
+  <view class="hero-panel">
+    <view class="hero-row">
       <view class="hero-copy">
-        <text class="hero-title">小懒陪你整理一箱</text>
-        <text class="subtle">拍一下、确认清单，下次直接搜。</text>
+        <text class="hero-title">物品索引已准备好</text>
+        <text class="body-copy">拍箱内物品时，把手机横过来，小懒会看得更清楚。存好后，下次一搜就出来。</text>
       </view>
-      <image class="hero-mascot" mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
+      <view class="mascot-orbit">
+        <image class="hero-mascot" mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
+      </view>
     </view>
-    <view class="hero-actions">
+    <view class="action-grid">
       <button class="primary-button" bindtap="goCapture">拍一箱</button>
       <button class="soft-button" bindtap="goSearch">找东西</button>
     </view>
@@ -26,27 +28,29 @@
     <text class="text-link" bindtap="showContainers">全部容器</text>
   </view>
 
-  <view wx:if="{{hasRecentContainers}}" class="album-grid">
+  <view wx:if="{{hasRecentContainers}}" class="container-stack">
     <view
       wx:for="{{recentContainers}}"
       wx:key="_id"
-      class="album-card"
+      class="container-row"
       bindtap="openContainer"
       data-id="{{item._id}}"
     >
-      <view class="album-photo tone-{{index}}">
+      <view class="container-thumb tone-{{index}}">
         <image wx:if="{{item.coverPhoto}}" mode="aspectFill" src="{{item.coverPhoto}}"></image>
-        <text class="album-count">{{item.itemCount}} 件</text>
         <view wx:if="{{item.showPlaceholder}}" class="photo-illustration">
           <view class="illu-line wide"></view>
           <view class="illu-line"></view>
           <view class="illu-dot"></view>
         </view>
       </view>
-      <view class="album-meta">
-        <text class="album-name">{{item.name}}</text>
-        <text class="subtle">{{item.itemCount}} 件物品</text>
-        <text class="pill">{{item.displayStatus}}</text>
+      <view class="container-meta">
+        <text class="container-name">{{item.name}}</text>
+        <text class="subtle">{{item.displayLocation}}</text>
+        <view class="container-pills">
+          <text class="pill">{{item.itemCount}} 件物品</text>
+          <text class="pill">{{item.displayStatus}}</text>
+        </view>
       </view>
     </view>
   </view>
