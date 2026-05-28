@@ -236,3 +236,165 @@
 .quiet-note {
   display: block;
 }
+
+.recognizing-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 56rpx;
+  background: rgba(251, 251, 247, 0.66);
+  backdrop-filter: blur(16rpx);
+}
+
+.recognizing-card {
+  width: 100%;
+  max-width: 560rpx;
+  padding: 44rpx;
+  color: #151713;
+  background: rgba(255, 255, 255, 0.92);
+  border: 2rpx solid rgba(21, 23, 19, 0.12);
+  border-radius: 56rpx;
+  box-shadow: 0 48rpx 108rpx rgba(22, 25, 18, 0.14);
+}
+
+.recognizing-top {
+  display: flex;
+  align-items: center;
+  gap: 28rpx;
+}
+
+.recognizing-orbit {
+  position: relative;
+  display: grid;
+  width: 128rpx;
+  height: 128rpx;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.recognizing-orbit::before {
+  position: absolute;
+  inset: 10rpx;
+  z-index: 0;
+  content: "";
+  background: #fff2c8;
+  border-radius: 50%;
+}
+
+.recognizing-spinner {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 128rpx;
+  height: 128rpx;
+  animation: recognizing-orbit-spin 1.05s linear infinite;
+  transform-origin: center;
+}
+
+.recognizing-mascot {
+  position: relative;
+  z-index: 2;
+  width: 88rpx;
+  height: 88rpx;
+}
+
+@keyframes recognizing-orbit-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.recognizing-copy {
+  display: block;
+  min-width: 0;
+}
+
+.recognizing-title {
+  display: block;
+  color: #151713;
+  font-size: 38rpx;
+  font-weight: 840;
+  line-height: 1.2;
+}
+
+.recognizing-desc {
+  display: block;
+  margin-top: 12rpx;
+  color: #6f756d;
+  font-size: 24rpx;
+  font-weight: 660;
+  line-height: 1.45;
+}
+
+.recognizing-progress-pill {
+  display: inline-block;
+  margin-top: 14rpx;
+  padding: 8rpx 16rpx;
+  color: #ffffff;
+  background: #1f6048;
+  border-radius: 999rpx;
+  font-size: 23rpx;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.recognizing-steps {
+  display: grid;
+  gap: 16rpx;
+  margin-top: 36rpx;
+}
+
+.recognizing-step {
+  display: grid;
+  grid-template-columns: 36rpx minmax(0, 1fr) auto;
+  gap: 18rpx;
+  align-items: center;
+  color: #6f756d;
+  font-size: 24rpx;
+  font-weight: 720;
+}
+
+.recognizing-step.active {
+  color: #151713;
+}
+
+.recognizing-dot {
+  display: block;
+  width: 16rpx;
+  height: 16rpx;
+  margin: 0 auto;
+  background: rgba(31, 96, 72, 0.26);
+  border-radius: 50%;
+}
+
+.recognizing-step.active .recognizing-dot {
+  width: 20rpx;
+  height: 20rpx;
+  background: #1f6048;
+}
+
+.recognizing-state {
+  color: #1f6048;
+  font-size: 22rpx;
+  font-weight: 820;
+  white-space: nowrap;
+}
+
+.recognizing-hint {
+  margin-top: 34rpx;
+  padding: 22rpx 24rpx;
+  color: #143e31;
+  background: rgba(219, 233, 223, 0.56);
+  border: 2rpx solid rgba(31, 96, 72, 0.1);
+  border-radius: 32rpx;
+  font-size: 24rpx;
+  font-weight: 700;
+  line-height: 1.45;
+}

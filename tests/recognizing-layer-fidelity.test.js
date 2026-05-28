@@ -22,9 +22,13 @@ function assertRecognizingLayerMarkup(wxml, pageName) {
   assert.match(wxml, /recognizing-mascot/, `${pageName} should keep Xiaolan separate from the spinner`);
   assert.match(wxml, /recognizing-title/, `${pageName} should include a title`);
   assert.match(wxml, /recognizing-copy/, `${pageName} should include explanatory copy`);
+  assert.match(wxml, /\{\{recognizingDescText\}\}/, `${pageName} should bind live progress into the main recognizing description`);
+  assert.match(wxml, /recognizing-progress-pill/, `${pageName} should show a visible live progress pill`);
   assert.match(wxml, /recognizing-dot/, `${pageName} should include step dots`);
   assert.match(wxml, /recognizing-state/, `${pageName} should include step statuses`);
+  assert.match(wxml, /\{\{recognizingProgressStateText\}\}/, `${pageName} should show the live count in the step status`);
   assert.match(wxml, /recognizing-hint/, `${pageName} should include the bottom playful hint`);
+  assert.match(wxml, /\{\{recognizingHintText\}\}/, `${pageName} should bind live recognized item progress into the hint`);
   assert.equal((wxml.match(/class="recognizing-step(?:\s|")/g) || []).length, 3, `${pageName} should render three richer steps`);
   assert.doesNotMatch(wxml, /<view class="recognizing-step active"><\/view>/, `${pageName} should not use empty bar steps`);
 }

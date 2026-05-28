@@ -15,7 +15,12 @@ function getChosenPath(result) {
 Page({
   data: {
     choosing: false,
-    recognizing: false
+    recognizing: false,
+    recognizingDescText: '小懒正在认真扒拉照片，稍等一下下。',
+    recognizingHintText: '这会儿适合眨眨眼，别和小懒一起紧张。',
+    recognizingProgressCount: 0,
+    recognizingProgressText: '正在找线索',
+    recognizingProgressStateText: '快啦'
   },
 
   chooseImage() {
@@ -47,13 +52,36 @@ Page({
 
   analyze(imagePath, options) {
     if (!imagePath) return;
-    this.setData({ recognizing: true });
+    this.setData({
+      recognizing: true,
+      recognizingDescText: '小懒正在认真扒拉照片，稍等一下下。',
+      recognizingHintText: '这会儿适合眨眨眼，别和小懒一起紧张。',
+      recognizingProgressCount: 0,
+      recognizingProgressText: '正在找线索',
+      recognizingProgressStateText: '快啦'
+    });
+    const handleProgress = (progress) => {
+      const count = Number(progress && progress.recognizedItemCount) || 0;
+      if (count > 0) {
+        console.log('[ftAnalyzeImage:page_progress]', {
+          recognizedItemCount: count
+        });
+        this.setData({
+          recognizingDescText: `小懒已经认出来 ${count} 件物品了。`,
+          recognizingHintText: `小懒已经认出来 ${count} 件物品了，正在继续扒拉细节。`,
+          recognizingProgressCount: count,
+          recognizingProgressText: `已认出 ${count} 件`,
+          recognizingProgressStateText: `${count} 件`
+        });
+      }
+    };
     const persistOriginal = imageStore.persistImage(imagePath, 'find-things/content');
     const persistThumbnail = imageStore.persistThumbnail(imagePath, 'find-things/thumbs');
     const analyzePrepared = imageStore.prepareImageForAnalyze(imagePath)
       .then((analyzePath) => ai.analyzeImage(Object.assign({
         imagePath: analyzePath,
-        allowMockFallback: false
+        allowMockFallback: false,
+        onProgress: handleProgress
       }, options || {})));
 
     Promise.all([persistOriginal, persistThumbnail, analyzePrepared])

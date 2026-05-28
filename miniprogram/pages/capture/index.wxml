@@ -32,7 +32,8 @@
         </view>
         <view class="recognizing-copy">
           <text class="recognizing-title">小懒正在分析中</text>
-          <text class="recognizing-desc">小懒正在认真扒拉照片，稍等一下下。</text>
+          <text class="recognizing-desc">{{recognizingDescText}}</text>
+          <text class="recognizing-progress-pill">{{recognizingProgressText}}</text>
         </view>
       </view>
       <view class="recognizing-steps">
@@ -49,10 +50,10 @@
         <view class="recognizing-step">
           <text class="recognizing-dot"></text>
           <text>马上带着线索回来</text>
-          <text class="recognizing-state">快啦</text>
+          <text class="recognizing-state">{{recognizingProgressStateText}}</text>
         </view>
       </view>
-      <view class="recognizing-hint">这会儿适合眨眨眼，别和小懒一起紧张。</view>
+      <view class="recognizing-hint">{{recognizingHintText}}</view>
     </view>
   </view>
 </view>

@@ -40,8 +40,12 @@ function loadAnalyzeFunction(options = {}) {
   const modulePath = path.join(__dirname, '..', 'cloudfunctions', 'ftAnalyzeImage', 'index.js');
   const originalLoad = Module._load;
   const taskRows = Object.assign({}, options.taskRows || {});
+  const taskUpdates = options.taskUpdates || [];
   delete require.cache[require.resolve(modulePath)];
   Module._load = function patchedLoad(request, parent, isMain) {
+    if (request === 'https' && options.https) {
+      return options.https;
+    }
     if (request === 'wx-server-sdk') {
       return {
         DYNAMIC_CURRENT_ENV: 'dynamic',
@@ -60,6 +64,11 @@ function loadAnalyzeFunction(options = {}) {
                     },
                     set({ data }) {
                       taskRows[id] = Object.assign({ _id: id }, data);
+                      return Promise.resolve({});
+                    },
+                    update({ data }) {
+                      taskUpdates.push({ id, data });
+                      taskRows[id] = Object.assign({ _id: id }, taskRows[id] || {}, data);
                       return Promise.resolve({});
                     }
                   };
@@ -84,6 +93,59 @@ function loadAnalyzeFunction(options = {}) {
   } finally {
     Module._load = originalLoad;
   }
+}
+
+function createMockHttps(responseBody, options = {}) {
+  const { EventEmitter } = require('node:events');
+  return {
+    request(requestOptions, callback) {
+      const request = new EventEmitter();
+      request.write = () => {};
+      request.end = () => {
+        const response = new EventEmitter();
+        response.statusCode = options.statusCode || 200;
+        response.headers = options.headers || {};
+        callback(response);
+        process.nextTick(() => {
+          response.emit('data', Buffer.from(responseBody));
+          response.emit('end');
+        });
+      };
+      request.setTimeout = () => request;
+      request.destroy = (error) => {
+        if (error) request.emit('error', error);
+      };
+      return request;
+    }
+  };
+}
+
+function createMockSseHttps(events, options = {}) {
+  const { EventEmitter } = require('node:events');
+  return {
+    request(requestOptions, callback) {
+      const request = new EventEmitter();
+      request.write = () => {};
+      request.end = () => {
+        const response = new EventEmitter();
+        response.statusCode = options.statusCode || 200;
+        response.headers = Object.assign({ 'content-type': 'text/event-stream' }, options.headers || {});
+        callback(response);
+        process.nextTick(() => {
+          for (const event of events) {
+            response.emit('data', Buffer.from(`data: ${event}\n\n`));
+          }
+          response.emit('data', Buffer.from('data: [DONE]\n\n'));
+          response.emit('end');
+        });
+      };
+      request.setTimeout = () => request;
+      request.destroy = (error) => {
+        if (error) request.emit('error', error);
+      };
+      return request;
+    }
+  };
 }
 
 test('cloud function AI request timeout defaults to 120s for relay failover', () => {
@@ -189,6 +251,184 @@ test('cloud function can read relay entries from environment JSON', () => {
     assert.equal(relays.length, 1);
     assert.equal(relays[0].id, 'env-primary');
   });
+});
+
+test('cloud function builds chat completions payload for chat endpoint relays', () => {
+  const analyzeFunction = loadAnalyzeFunction();
+  const request = analyzeFunction._test.buildAiRequest({
+    endpoint: '/v1/chat/completions',
+    model: 'gpt-5.5'
+  }, 'data:image/jpeg;base64,aW1hZ2U=', 12);
+
+  assert.equal(request.payloadKind, 'chat_completions');
+  assert.equal(request.payload.model, 'gpt-5.5');
+  assert.equal(request.payload.response_format.type, 'json_object');
+  assert.equal(request.payload.messages[0].content[0].type, 'text');
+  assert.equal(request.payload.messages[0].content[1].type, 'image_url');
+  assert.equal(request.payload.messages[0].content[1].image_url.url, 'data:image/jpeg;base64,aW1hZ2U=');
+  assert.ok(request.requestBytes > 0);
+});
+
+test('cloud function builds responses payload for responses endpoint relays', () => {
+  const analyzeFunction = loadAnalyzeFunction();
+  const request = analyzeFunction._test.buildAiRequest({
+    endpoint: '/v1/responses',
+    model: 'gpt-5.5'
+  }, 'data:image/jpeg;base64,aW1hZ2U=', 12);
+
+  assert.equal(request.payloadKind, 'responses');
+  assert.equal(request.payload.model, 'gpt-5.5');
+  assert.equal(request.payload.text.format.type, 'json_object');
+  assert.equal(request.payload.stream, undefined);
+  assert.equal(request.payload.response_format, undefined);
+  assert.equal(request.payload.input[0].content[0].type, 'input_text');
+  assert.equal(request.payload.input[0].content[1].type, 'input_image');
+  assert.equal(request.payload.input[0].content[1].image_url, 'data:image/jpeg;base64,aW1hZ2U=');
+  assert.ok(request.requestBytes > 0);
+});
+
+test('cloud function adds stream flag only for streaming relays', () => {
+  const analyzeFunction = loadAnalyzeFunction();
+  const request = analyzeFunction._test.buildAiRequest({
+    endpoint: '/v1/responses',
+    model: 'gpt-5.5',
+    stream: true
+  }, 'data:image/jpeg;base64,aW1hZ2U=', 12);
+
+  assert.equal(request.stream, true);
+  assert.equal(request.payload.stream, true);
+});
+
+test('cloud function extracts JSON text from responses API payloads', () => {
+  const analyzeFunction = loadAnalyzeFunction();
+
+  assert.equal(
+    analyzeFunction._test.extractAiResponseText('responses', { output_text: '{"items":[]}' }),
+    '{"items":[]}'
+  );
+  assert.equal(
+    analyzeFunction._test.extractAiResponseText('responses', {
+      output: [
+        {
+          content: [
+            { type: 'output_text', text: '{"items":[{"displayName":"red box"}]}' }
+          ]
+        }
+      ]
+    }),
+    '{"items":[{"displayName":"red box"}]}'
+  );
+});
+
+test('cloud function stores AI endpoint details with successful analyze task', async () => {
+  const analyzeFunction = loadAnalyzeFunction({
+    https: createMockHttps(JSON.stringify({
+      output_text: '{"items":[{"displayName":"red box"}]}'
+    })),
+    localConfig: {
+      relays: [
+        {
+          id: 'responses-test',
+          baseUrl: 'https://relay.example.com',
+          endpoint: '/v1/responses',
+          model: 'gpt-5.5',
+          apiKey: 'test-key',
+          timeoutMs: 60000
+        }
+      ]
+    }
+  });
+
+  await analyzeFunction.main({
+    taskId: 'task_endpoint_details',
+    imageDataUrl: 'data:image/jpeg;base64,aW1hZ2U=',
+    maxItems: 4
+  });
+  const task = await analyzeFunction.main({ action: 'getTask', taskId: 'task_endpoint_details' });
+
+  assert.equal(task.status, 'success');
+  assert.equal(task.aiRequest.endpoint, '/v1/responses');
+  assert.equal(task.aiRequest.payloadKind, 'responses');
+  assert.equal(task.aiRequest.relayId, 'responses-test');
+  assert.equal(task.aiRequest.model, 'gpt-5.5');
+  assert.equal(task.aiRequest.timeoutMs, 60000);
+  assert.ok(task.aiRequest.durationMs >= 0);
+  assert.equal(task.aiRequest.statusCode, 200);
+  assert.equal(task.result.items[0].displayName, 'red box');
+});
+
+test('cloud function can measure streaming responses without changing final result', async () => {
+  const analyzeFunction = loadAnalyzeFunction({
+    https: createMockSseHttps([
+      JSON.stringify({ type: 'response.output_text.delta', delta: '{"items":[' }),
+      JSON.stringify({ type: 'response.output_text.delta', delta: '{"displayName":"streamed box"}]}' })
+    ]),
+    localConfig: {
+      relays: [
+        {
+          id: 'responses-stream-test',
+          baseUrl: 'https://relay.example.com',
+          endpoint: '/v1/responses',
+          model: 'gpt-5.5',
+          apiKey: 'test-key',
+          timeoutMs: 60000,
+          stream: true
+        }
+      ]
+    }
+  });
+
+  await analyzeFunction.main({
+    taskId: 'task_stream_details',
+    imageDataUrl: 'data:image/jpeg;base64,aW1hZ2U=',
+    maxItems: 4
+  });
+  const task = await analyzeFunction.main({ action: 'getTask', taskId: 'task_stream_details' });
+
+  assert.equal(task.status, 'success');
+  assert.equal(task.result.items[0].displayName, 'streamed box');
+  assert.equal(task.aiRequest.endpoint, '/v1/responses');
+  assert.equal(task.aiRequest.payloadKind, 'responses');
+  assert.equal(task.aiRequest.stream, true);
+  assert.ok(task.aiRequest.firstChunkMs >= 0);
+  assert.equal(task.aiRequest.eventCount, 2);
+  assert.equal(task.aiRequest.statusCode, 200);
+});
+
+test('cloud function writes streaming recognized item progress while response is still running', async () => {
+  const taskUpdates = [];
+  const analyzeFunction = loadAnalyzeFunction({
+    taskUpdates,
+    https: createMockSseHttps([
+      JSON.stringify({ type: 'response.output_text.delta', delta: '{"items":[{"displayName":"box"}' }),
+      JSON.stringify({ type: 'response.output_text.delta', delta: ',{"displayName":"clip"}]}' })
+    ]),
+    localConfig: {
+      relays: [
+        {
+          id: 'responses-progress-test',
+          baseUrl: 'https://relay.example.com',
+          endpoint: '/v1/responses',
+          model: 'gpt-5.5',
+          apiKey: 'test-key',
+          timeoutMs: 60000,
+          stream: true
+        }
+      ]
+    }
+  });
+
+  await analyzeFunction.main({
+    taskId: 'task_stream_progress',
+    imageDataUrl: 'data:image/jpeg;base64,aW1hZ2U=',
+    maxItems: 4
+  });
+
+  const progressCounts = taskUpdates
+    .filter((update) => update.id === 'task_stream_progress' && update.data.progress)
+    .map((update) => update.data.progress.recognizedItemCount);
+
+  assert.deepEqual(progressCounts, [1, 2]);
 });
 
 test('cloud function exposes analyze task polling results', async () => {

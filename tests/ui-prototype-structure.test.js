@@ -110,7 +110,7 @@ test('capture analysis uses a custom recognizing layer instead of native loading
   assert.match(wxss, /\.recognizing-card/);
   assert.match(wxss, /\.recognizing-steps/);
   assert.match(js, /recognizing:\s*false/);
-  assert.match(js, /this\.setData\(\{\s*recognizing:\s*true\s*\}\)/);
+  assert.match(js, /this\.setData\(\{\s*recognizing:\s*true,[\s\S]*recognizingHintText:/);
   assert.doesNotMatch(js, /wx\.showLoading/);
 });
 

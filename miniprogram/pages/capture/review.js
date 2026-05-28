@@ -80,6 +80,11 @@ Page({
     aiStatusText: '',
     ratioClass: 'ratio-landscape',
     recognizing: false,
+    recognizingDescText: '下一张照片会加入同一个容器清单。',
+    recognizingHintText: '这会儿适合眨眨眼，别和小懒一起紧张。',
+    recognizingProgressCount: 0,
+    recognizingProgressText: '正在找线索',
+    recognizingProgressStateText: '快啦',
     photoLimit: CONTENT_IMAGE_LIMIT
   },
 
@@ -198,11 +203,37 @@ Page({
     const success = (result) => {
       const imagePath = getChosenPath(result);
       if (!imagePath) return;
-      this.setData({ recognizing: true });
+      this.setData({
+        recognizing: true,
+        recognizingDescText: '下一张照片会加入同一个容器清单。',
+        recognizingHintText: '这会儿适合眨眨眼，别和小懒一起紧张。',
+        recognizingProgressCount: 0,
+        recognizingProgressText: '正在找线索',
+        recognizingProgressStateText: '快啦'
+      });
+      const handleProgress = (progress) => {
+        const count = Number(progress && progress.recognizedItemCount) || 0;
+        if (count > 0) {
+          console.log('[ftAnalyzeImage:page_progress]', {
+            recognizedItemCount: count
+          });
+          this.setData({
+            recognizingDescText: `小懒已经认出来 ${count} 件物品了。`,
+            recognizingHintText: `小懒已经认出来 ${count} 件物品了，正在继续扒拉细节。`,
+            recognizingProgressCount: count,
+            recognizingProgressText: `已认出 ${count} 件`,
+            recognizingProgressStateText: `${count} 件`
+          });
+        }
+      };
       const persistOriginal = imageStore.persistImage(imagePath, 'find-things/content');
       const persistThumbnail = imageStore.persistThumbnail(imagePath, 'find-things/thumbs');
       const analyzePrepared = imageStore.prepareImageForAnalyze(imagePath)
-        .then((analyzePath) => ai.analyzeImage({ imagePath: analyzePath, allowMockFallback: false }));
+        .then((analyzePath) => ai.analyzeImage({
+          imagePath: analyzePath,
+          allowMockFallback: false,
+          onProgress: handleProgress
+        }));
 
       Promise.all([persistOriginal, persistThumbnail, analyzePrepared])
         .then(([storedPath, thumbPath, analyzed]) => {

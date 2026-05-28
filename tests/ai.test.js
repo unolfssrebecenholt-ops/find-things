@@ -43,6 +43,41 @@ async function withImmediateTimers(fn) {
   }
 }
 
+async function withQueuedTimers(fn) {
+  const previousSetTimeout = global.setTimeout;
+  const previousClearTimeout = global.clearTimeout;
+  const timers = [];
+  let nextId = 1;
+  const activeTimers = new Set();
+  global.setTimeout = (callback, delayMs) => {
+    const id = nextId;
+    nextId += 1;
+    activeTimers.add(id);
+    timers.push({ id, callback, delayMs });
+    return id;
+  };
+  global.clearTimeout = (id) => {
+    activeTimers.delete(id);
+  };
+  const runNextTimer = async () => {
+    const timer = timers.shift();
+    if (!timer) return false;
+    if (activeTimers.has(timer.id)) {
+      activeTimers.delete(timer.id);
+      timer.callback();
+      await Promise.resolve();
+      await Promise.resolve();
+    }
+    return true;
+  };
+  try {
+    await fn({ timers, runNextTimer });
+  } finally {
+    global.setTimeout = previousSetTimeout;
+    global.clearTimeout = previousClearTimeout;
+  }
+}
+
 test('defaults to cloud transport so deployed function environment variables are used', () => {
   const config = ai.getRuntimeConfig();
 
@@ -145,6 +180,202 @@ test('polls analyze task when the initial cloud call times out', async () => {
 
       assert.equal(result.items[0].displayName, '黑色鼠标');
       assert.ok(callCount >= 3);
+    });
+  } finally {
+    if (previousWx === undefined) {
+      delete global.wx;
+    } else {
+      global.wx = previousWx;
+    }
+  }
+});
+
+test('polls analyze task when the initial cloud call fails after task creation', async () => {
+  const previousWx = global.wx;
+  let callCount = 0;
+  global.wx = {
+    getStorageSync() {},
+    cloud: {
+      callFunction(options) {
+        callCount += 1;
+        if (!options.data.action) {
+          return Promise.reject(new Error('cloud.callFunction:fail interrupted while function kept running'));
+        }
+        return Promise.resolve({
+          result: {
+            status: 'success',
+            result: {
+              items: [{ displayName: '娴佸紡璇嗗埆鐩掑瓙', inContainer: true }]
+            }
+          }
+        });
+      }
+    }
+  };
+
+  try {
+    await withImmediateTimers(async () => {
+      const result = await ai.analyzeImage({
+        imagePath: 'cloud://env/path/photo.jpg',
+        allowMockFallback: false
+      });
+
+      assert.equal(result.items[0].displayName, '娴佸紡璇嗗埆鐩掑瓙');
+      assert.equal(callCount, 2);
+    });
+  } finally {
+    if (previousWx === undefined) {
+      delete global.wx;
+    } else {
+      global.wx = previousWx;
+    }
+  }
+});
+
+test('reports analyze progress from task polling while waiting for final result', async () => {
+  const previousWx = global.wx;
+  const progressCounts = [];
+  let callCount = 0;
+  global.wx = {
+    getStorageSync() {},
+    cloud: {
+      callFunction(options) {
+        callCount += 1;
+        if (!options.data.action) {
+          return Promise.reject(new Error('cloud.callFunction:fail errCode: -501002 ESOCKETTIMEDOUT'));
+        }
+        if (callCount === 2) {
+          return Promise.resolve({
+            result: {
+              status: 'processing',
+              progress: { recognizedItemCount: 2 }
+            }
+          });
+        }
+        return Promise.resolve({
+          result: {
+            status: 'success',
+            result: {
+              items: [{ displayName: '榛戣壊榧犳爣', inContainer: true }]
+            }
+          }
+        });
+      }
+    }
+  };
+
+  try {
+    await withImmediateTimers(async () => {
+      const result = await ai.analyzeImage({
+        imagePath: 'cloud://env/path/photo.jpg',
+        allowMockFallback: false,
+        onProgress(progress) {
+          progressCounts.push(progress.recognizedItemCount);
+        }
+      });
+
+      assert.equal(result.items[0].displayName, '榛戣壊榧犳爣');
+      assert.deepEqual(progressCounts, [2]);
+    });
+  } finally {
+    if (previousWx === undefined) {
+      delete global.wx;
+    } else {
+      global.wx = previousWx;
+    }
+  }
+});
+
+test('reports analyze progress while the initial cloud call is still running', async () => {
+  const previousWx = global.wx;
+  const progressCounts = [];
+  let resolveInitialCall;
+  let initialCallResolved = false;
+  let progressPollCount = 0;
+  global.wx = {
+    getStorageSync() {},
+    cloud: {
+      callFunction(options) {
+        if (!options.data.action) {
+          return new Promise((resolve) => {
+            resolveInitialCall = (value) => {
+              initialCallResolved = true;
+              resolve(value);
+            };
+          });
+        }
+        progressPollCount += 1;
+        return Promise.resolve({
+          result: {
+            status: 'processing',
+            progress: { recognizedItemCount: 3 }
+          }
+        });
+      }
+    }
+  };
+
+  try {
+    await withQueuedTimers(async ({ runNextTimer }) => {
+      const resultPromise = ai.analyzeImage({
+        imagePath: 'cloud://env/path/photo.jpg',
+        allowMockFallback: false,
+        onProgress(progress) {
+          progressCounts.push(progress.recognizedItemCount);
+        }
+      });
+
+      await Promise.resolve();
+      await Promise.resolve();
+      await runNextTimer();
+
+      assert.equal(initialCallResolved, false);
+      assert.equal(progressPollCount, 1);
+      assert.deepEqual(progressCounts, [3]);
+
+      resolveInitialCall({
+        result: {
+          items: [{ displayName: '榛戣壊榧犳爣', inContainer: true }]
+        }
+      });
+      const result = await resultPromise;
+      assert.equal(result.items[0].displayName, '榛戣壊榧犳爣');
+    });
+  } finally {
+    if (previousWx === undefined) {
+      delete global.wx;
+    } else {
+      global.wx = previousWx;
+    }
+  }
+});
+
+test('keeps the original cloud call error when fallback polling cannot recover', async () => {
+  const previousWx = global.wx;
+  let callCount = 0;
+  global.wx = {
+    getStorageSync() {},
+    cloud: {
+      callFunction(options) {
+        callCount += 1;
+        if (!options.data.action) {
+          return Promise.reject(new Error('cloud.callFunction:fail bad request'));
+        }
+        return Promise.resolve({ result: { status: 'processing' } });
+      }
+    }
+  };
+
+  try {
+    await withImmediateTimers(async () => {
+      await assert.rejects(
+        ai.analyzeImage({
+          imagePath: 'cloud://env/path/photo.jpg',
+          allowMockFallback: false
+        }),
+        /cloud\.callFunction:fail bad request/
+      );
+      assert.equal(callCount, 11);
     });
   } finally {
     if (previousWx === undefined) {

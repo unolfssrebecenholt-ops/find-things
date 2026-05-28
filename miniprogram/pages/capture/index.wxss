@@ -208,6 +208,18 @@
   line-height: 1.45;
 }
 
+.recognizing-progress-pill {
+  display: inline-block;
+  margin-top: 14rpx;
+  padding: 8rpx 16rpx;
+  color: #ffffff;
+  background: #1f6048;
+  border-radius: 999rpx;
+  font-size: 23rpx;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
 .recognizing-steps {
   display: grid;
   gap: 16rpx;

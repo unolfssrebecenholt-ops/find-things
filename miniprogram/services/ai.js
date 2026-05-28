@@ -14,6 +14,15 @@ const NETWORK_UNREACHABLE_ERROR_CODES = [
   'ECONNABORTED',
   'EPIPE'
 ];
+const RECOVER_INITIAL_CLOUD_FAILURE_POLL_OPTIONS = {
+  intervalMs: 3000,
+  maxWaitMs: 30000,
+  maxAttempts: 10
+};
+const LIVE_PROGRESS_POLL_OPTIONS = {
+  intervalMs: 3000,
+  maxWaitMs: 270000
+};
 
 function hasWx() {
   return typeof wx !== 'undefined';
@@ -440,20 +449,74 @@ function requestOpenAiCompatible(config, imageDataUrl) {
   return tryNext(0);
 }
 
-function callCloudAnalyze(config, imagePath) {
+function reportAnalyzeTaskProgress(config, taskId, onProgress) {
+  return wx.cloud.callFunction({
+    name: config.cloudFunctionName,
+    data: { action: 'getTask', taskId }
+  }).then((result) => {
+    const payload = result && result.result;
+    if (payload && payload.status === 'processing' && payload.progress && typeof onProgress === 'function') {
+      console.log('[ftAnalyzeImage:service_progress]', payload.progress);
+      onProgress(payload.progress);
+    }
+    return payload;
+  });
+}
+
+function startAnalyzeProgressPolling(config, taskId, onProgress, options) {
+  if (typeof onProgress !== 'function') {
+    return { stop() {} };
+  }
+  const intervalMs = (options && options.intervalMs) || LIVE_PROGRESS_POLL_OPTIONS.intervalMs;
+  const maxWaitMs = (options && options.maxWaitMs) || LIVE_PROGRESS_POLL_OPTIONS.maxWaitMs;
+  const startedAt = Date.now();
+  let stopped = false;
+  let timer = null;
+  const schedule = () => {
+    if (stopped || Date.now() - startedAt >= maxWaitMs) return;
+    timer = setTimeout(() => {
+      reportAnalyzeTaskProgress(config, taskId, onProgress)
+        .catch(() => null)
+        .then(() => {
+          schedule();
+        });
+    }, intervalMs);
+  };
+  schedule();
+  return {
+    stop() {
+      stopped = true;
+      if (timer !== null) clearTimeout(timer);
+    }
+  };
+}
+
+function callCloudAnalyze(config, imagePath, options) {
   if (!hasWx() || !wx.cloud || !wx.cloud.callFunction) {
     return Promise.reject(new Error('当前环境不可调用云函数'));
   }
   return uploadImageForCloudAnalyze(imagePath).then((imageInput) => {
     const taskId = createTaskId();
     const data = Object.assign({ maxItems: config.maxItems, taskId }, imageInput);
-    return wx.cloud.callFunction({
+    const cloudRequest = wx.cloud.callFunction({
       name: config.cloudFunctionName,
       data
-    })
+    });
+    const progressPolling = startAnalyzeProgressPolling(config, taskId, options && options.onProgress);
+    return cloudRequest
       .catch((error) => {
-        if (!isCloudCallTimeout(error)) throw error;
-        return pollAnalyzeTask(config, taskId);
+        progressPolling.stop();
+        const pollOptions = Object.assign({ onProgress: options && options.onProgress },
+          isCloudCallTimeout(error)
+            ? {}
+            : RECOVER_INITIAL_CLOUD_FAILURE_POLL_OPTIONS);
+        return pollAnalyzeTask(config, taskId, pollOptions).catch(() => {
+          throw error;
+        });
+      })
+      .then((result) => {
+        progressPolling.stop();
+        return result;
       })
       .then((result) => normalizeCloudAnalyzeResult(result && result.result ? result.result : result, imageInput));
   });
@@ -511,19 +574,27 @@ function isCloudCallTimeout(error) {
 function pollAnalyzeTask(config, taskId, options) {
   const intervalMs = (options && options.intervalMs) || 3000;
   const maxWaitMs = (options && options.maxWaitMs) || 270000;
+  const maxAttempts = options && options.maxAttempts;
+  const onProgress = options && options.onProgress;
   const startedAt = Date.now();
+  let attempts = 0;
   const poll = () => wx.cloud.callFunction({
     name: config.cloudFunctionName,
     data: { action: 'getTask', taskId }
   }).then((result) => {
+    attempts += 1;
     const payload = result && result.result;
     if (payload && payload.status === 'success' && payload.result) {
       return payload.result;
     }
+    if (payload && payload.status === 'processing' && payload.progress && typeof onProgress === 'function') {
+      console.log('[ftAnalyzeImage:service_progress]', payload.progress);
+      onProgress(payload.progress);
+    }
     if (payload && payload.status === 'failed') {
       unwrapCloudAnalyzePayload(payload);
     }
-    if (Date.now() - startedAt >= maxWaitMs) {
+    if (Date.now() - startedAt >= maxWaitMs || (maxAttempts && attempts >= maxAttempts)) {
       const error = new Error(friendlyAnalyzeErrorMessage('AI_REQUEST_TIMEOUT'));
       error.code = 'AI_REQUEST_TIMEOUT';
       throw error;
@@ -562,7 +633,7 @@ function analyzeImage(options) {
   const allowMockFallback = !(options && options.allowMockFallback === false) && config.fallbackToMock;
 
   const run = config.transport === 'cloud'
-    ? callCloudAnalyze(config, imagePath)
+    ? callCloudAnalyze(config, imagePath, options || {})
     : readImageAsDataUrl(imagePath)
       .then((imageDataUrl) => requestOpenAiCompatible(config, imageDataUrl));
 

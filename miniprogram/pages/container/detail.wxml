@@ -107,6 +107,40 @@
       <text>容器</text>
     </view>
   </view>
+
+  <view wx:if="{{recognizing}}" class="recognizing-layer">
+    <view class="recognizing-card">
+      <view class="recognizing-top">
+        <view class="recognizing-orbit">
+          <image class="recognizing-spinner" mode="aspectFit" src="/assets/loading-orbit-arc.svg"></image>
+          <image class="recognizing-mascot" mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
+        </view>
+        <view class="recognizing-copy">
+          <text class="recognizing-title">小懒正在分析中</text>
+          <text class="recognizing-desc">{{recognizingDescText}}</text>
+          <text class="recognizing-progress-pill">{{recognizingProgressText}}</text>
+        </view>
+      </view>
+      <view class="recognizing-steps">
+        <view class="recognizing-step active">
+          <text class="recognizing-dot"></text>
+          <text>先把耐心放进口袋</text>
+          <text class="recognizing-state">稳住</text>
+        </view>
+        <view class="recognizing-step active">
+          <text class="recognizing-dot"></text>
+          <text>小懒正在探头探脑</text>
+          <text class="recognizing-state">看着呢</text>
+        </view>
+        <view class="recognizing-step">
+          <text class="recognizing-dot"></text>
+          <text>马上带着线索回来</text>
+          <text class="recognizing-state">{{recognizingProgressStateText}}</text>
+        </view>
+      </view>
+      <view class="recognizing-hint">{{recognizingHintText}}</view>
+    </view>
+  </view>
 </view>
 <view class="page" wx:if="{{showMissingContainer}}">
   <view class="empty-state with-xiaolan">

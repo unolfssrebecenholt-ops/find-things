@@ -57,6 +57,12 @@ Page({
     currentImageIndex: 0,
     currentPhotoLabel: '照片 1/1',
     addPhotoLabel: '添加照片',
+    recognizing: false,
+    recognizingDescText: '小懒正在认真扒拉照片，稍等一下下。',
+    recognizingHintText: '这会儿适合眨眨眼，别和小懒一起紧张。',
+    recognizingProgressCount: 0,
+    recognizingProgressText: '正在找线索',
+    recognizingProgressStateText: '快啦',
     photoLimit: CONTENT_IMAGE_LIMIT
   },
 
@@ -182,8 +188,13 @@ Page({
     const image = (this.data.contentImages || [])[this.data.currentImageIndex];
     if (!image) return;
 
-    wx.showLoading({ title: '小懒正在重新看这张' });
-    ai.analyzeImage({ imagePath: image.fileId, allowMockFallback: false })
+    this.showRecognizingLayer('小懒正在重新看这张，旧线索先放一边。');
+    const handleProgress = (progress) => this.updateRecognizingProgress(progress);
+    ai.analyzeImage({
+      imagePath: image.fileId,
+      allowMockFallback: false,
+      onProgress: handleProgress
+    })
       .then((analyzed) => {
         const items = withDisplayIndexes(analyzed.items || []).map((item) => Object.assign({}, item, {
           sourceImageId: image.imageId,
@@ -224,7 +235,7 @@ Page({
         });
       })
       .finally(() => {
-        wx.hideLoading();
+        this.setData({ recognizing: false });
       });
   },
 
@@ -252,11 +263,16 @@ Page({
         itemCount: 0,
         analyzeStatus: 'analyzing'
       };
-      wx.showLoading({ title: '小懒正在分析中' });
+      this.showRecognizingLayer('这张照片会加入当前容器清单。');
+      const handleProgress = (progress) => this.updateRecognizingProgress(progress);
       const persistOriginal = imageStore.persistImage(fileId, 'find-things/content');
       const persistThumbnail = imageStore.persistThumbnail(fileId, 'find-things/thumbs');
       const analyzePrepared = imageStore.prepareImageForAnalyze(fileId)
-        .then((analyzePath) => ai.analyzeImage({ imagePath: analyzePath, allowMockFallback: false }));
+        .then((analyzePath) => ai.analyzeImage({
+          imagePath: analyzePath,
+          allowMockFallback: false,
+          onProgress: handleProgress
+        }));
 
       Promise.all([persistOriginal, persistThumbnail, analyzePrepared])
         .then(([storedPath, thumbPath, analyzed]) => {
@@ -313,7 +329,7 @@ Page({
           });
         })
         .finally(() => {
-          wx.hideLoading();
+          this.setData({ recognizing: false });
         });
     };
 
@@ -328,6 +344,32 @@ Page({
       return;
     }
     wx.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['camera', 'album'], success });
+  },
+
+  showRecognizingLayer(descText) {
+    this.setData({
+      recognizing: true,
+      recognizingDescText: descText || '小懒正在认真扒拉照片，稍等一下下。',
+      recognizingHintText: '这会儿适合眨眨眼，别和小懒一起紧张。',
+      recognizingProgressCount: 0,
+      recognizingProgressText: '正在找线索',
+      recognizingProgressStateText: '快啦'
+    });
+  },
+
+  updateRecognizingProgress(progress) {
+    const count = Number(progress && progress.recognizedItemCount) || 0;
+    if (count <= 0) return;
+    console.log('[ftAnalyzeImage:page_progress]', {
+      recognizedItemCount: count
+    });
+    this.setData({
+      recognizingDescText: `小懒已经认出来 ${count} 件物品了。`,
+      recognizingHintText: `小懒已经认出来 ${count} 件物品了，正在继续扒拉细节。`,
+      recognizingProgressCount: count,
+      recognizingProgressText: `已认出 ${count} 件`,
+      recognizingProgressStateText: `${count} 件`
+    });
   },
 
   deleteContainer() {

@@ -14,6 +14,7 @@ const FUNCTION_TIMEOUT_HEADROOM_MS = 15000;
 const DEFAULT_AI_REQUEST_TIMEOUT_MS = 120000;
 const MIN_AI_REQUEST_TIMEOUT_MS = 5000;
 const STALE_TASK_GRACE_MS = 10000;
+const AI_RESPONSE_META = Symbol('aiResponseMeta');
 const TLS_CERTIFICATE_ERROR_CODES = new Set([
   'DEPTH_ZERO_SELF_SIGNED_CERT',
   'SELF_SIGNED_CERT_IN_CHAIN',
@@ -73,12 +74,35 @@ async function writeTask(taskId, data) {
       taskId,
       status: payload.status,
       hasResult: !!payload.result,
-      hasError: !!payload.errorCode
+      hasError: !!payload.errorCode,
+      aiRequest: payload.aiRequest || null
     });
   } catch (error) {
     logWarn('识别任务状态写入失败', {
       taskId,
       status: payload.status,
+      errorMessage: error && error.message ? error.message : String(error)
+    });
+  }
+}
+
+async function updateTaskProgress(taskId, progress) {
+  if (!taskId || !progress) return;
+  const collection = taskCollection();
+  if (!collection) return;
+  const payload = {
+    updatedAt: nowMs(),
+    progress
+  };
+  try {
+    await collection.doc(taskId).update({ data: payload });
+    logInfo('识别任务进度已写入数据库', {
+      taskId,
+      progress
+    });
+  } catch (error) {
+    logWarn('识别任务进度写入失败', {
+      taskId,
       errorMessage: error && error.message ? error.message : String(error)
     });
   }
@@ -125,6 +149,29 @@ function dataUrlBytes(dataUrl) {
   const match = String(dataUrl || '').match(/^data:[^;]+;base64,(.*)$/);
   if (!match) return Buffer.byteLength(String(dataUrl || ''));
   return Math.floor(match[1].length * 3 / 4);
+}
+
+function summarizeAiRequest(meta) {
+  const source = meta || {};
+  return {
+    relayId: source.relayId || '',
+    relayName: source.relayName || '',
+    host: source.host || '',
+    endpoint: source.endpoint || '',
+    payloadKind: source.payloadKind || '',
+    model: source.model || '',
+    timeoutMs: source.timeoutMs || 0,
+    requestBytes: source.requestBytes || 0,
+    imageBytes: source.imageBytes || 0,
+    maxItems: source.maxItems || 0,
+    stream: source.stream === true,
+    firstChunkMs: source.stream === true && source.firstChunkMs != null ? source.firstChunkMs : null,
+    eventCount: source.stream === true ? source.eventCount || 0 : 0,
+    durationMs: source.durationMs || 0,
+    statusCode: source.statusCode || 0,
+    responseBytes: source.responseBytes || 0,
+    responseItemCount: source.responseItemCount == null ? null : source.responseItemCount
+  };
 }
 
 function logTiming(stage, startedAt, extra) {
@@ -181,6 +228,10 @@ function configValue(name, fallback, localKey) {
 
 function isFalseValue(value) {
   return /^(false|0|no)$/i.test(String(value).trim());
+}
+
+function isTrueValue(value) {
+  return /^(true|1|yes)$/i.test(String(value).trim());
 }
 
 function tlsRejectUnauthorized() {
@@ -250,7 +301,8 @@ function normalizeRelay(relay, index) {
     endpoint: relay.endpoint || DEFAULT_ENDPOINT,
     model: relay.model || env('OPENAI_COMPAT_MODEL', 'gpt-5.5', 'model'),
     apiKey: relay.apiKey || '',
-    timeoutMs: boundedInteger(relay.timeoutMs || relay.timeout, aiRequestTimeoutMs(), MIN_AI_REQUEST_TIMEOUT_MS, aiRequestTimeoutMs())
+    timeoutMs: boundedInteger(relay.timeoutMs || relay.timeout, aiRequestTimeoutMs(), MIN_AI_REQUEST_TIMEOUT_MS, aiRequestTimeoutMs()),
+    stream: relay.stream === true || isTrueValue(relay.stream)
   };
 }
 
@@ -286,6 +338,15 @@ function relayEndpointUrl(relay) {
   const baseUrl = String(relay.baseUrl || '').replace(/\/+$/, '');
   const endpoint = relay.endpoint || DEFAULT_ENDPOINT;
   return `${baseUrl}${endpoint.charAt(0) === '/' ? endpoint : `/${endpoint}`}`;
+}
+
+function relayPayloadKind(relay) {
+  const endpoint = String(relay && relay.endpoint || DEFAULT_ENDPOINT).toLowerCase();
+  return endpoint.indexOf('/responses') >= 0 ? 'responses' : 'chat_completions';
+}
+
+function shouldStreamRelay(relay) {
+  return relay && relay.stream === true;
 }
 
 function relayLogSummary(relay) {
@@ -333,6 +394,131 @@ function extractMessageContent(response) {
     return content.map((part) => part.text || '').join('\n');
   }
   return String(content || '');
+}
+
+function extractResponsesContent(response) {
+  if (response && typeof response.output_text === 'string') return response.output_text;
+  const output = Array.isArray(response && response.output) ? response.output : [];
+  return output.flatMap((item) => Array.isArray(item.content) ? item.content : [])
+    .map((part) => part.text || part.output_text || '')
+    .join('\n');
+}
+
+function extractAiResponseText(payloadKind, response) {
+  return payloadKind === 'responses'
+    ? extractResponsesContent(response)
+    : extractMessageContent(response);
+}
+
+function extractStreamTextDelta(payloadKind, event) {
+  if (!event || typeof event !== 'object') return '';
+  if (typeof event.delta === 'string') return event.delta;
+  if (typeof event.output_text === 'string') return event.output_text;
+  if (payloadKind === 'responses') {
+    const output = Array.isArray(event.output) ? event.output : [];
+    const outputText = output.flatMap((item) => Array.isArray(item.content) ? item.content : [])
+      .map((part) => part.text || part.output_text || '')
+      .join('');
+    if (outputText) return outputText;
+  }
+  const choice = event.choices && event.choices[0];
+  const delta = choice && choice.delta;
+  if (delta) {
+    if (typeof delta.content === 'string') return delta.content;
+    if (Array.isArray(delta.content)) {
+      return delta.content.map((part) => part.text || '').join('');
+    }
+  }
+  const message = choice && choice.message;
+  if (message && typeof message.content === 'string') return message.content;
+  return '';
+}
+
+function estimateStreamItemCount(text) {
+  const matches = String(text || '').match(/"displayName"\s*:/g);
+  return matches ? matches.length : 0;
+}
+
+function parseSsePayload(text, payloadKind) {
+  const events = [];
+  const lines = String(text || '').split(/\r?\n/);
+  let dataLines = [];
+  for (const line of lines) {
+    if (!line) {
+      if (dataLines.length) {
+        events.push(dataLines.join('\n'));
+        dataLines = [];
+      }
+      continue;
+    }
+    if (line.startsWith('data:')) {
+      dataLines.push(line.slice(5).trimStart());
+    }
+  }
+  if (dataLines.length) events.push(dataLines.join('\n'));
+
+  let textContent = '';
+  let eventCount = 0;
+  for (const rawEvent of events) {
+    if (!rawEvent || rawEvent === '[DONE]') continue;
+    let parsed;
+    try {
+      parsed = JSON.parse(rawEvent);
+    } catch (error) {
+      continue;
+    }
+    eventCount += 1;
+    textContent += extractStreamTextDelta(payloadKind, parsed);
+  }
+  const response = payloadKind === 'responses'
+    ? { output_text: textContent }
+    : { choices: [{ message: { content: textContent } }] };
+  response[AI_RESPONSE_META] = { eventCount };
+  return response;
+}
+
+function buildAiRequest(relay, imageDataUrl, maxItems) {
+  const payloadKind = relayPayloadKind(relay);
+  const prompt = buildPrompt(maxItems);
+  const stream = shouldStreamRelay(relay);
+  const payload = payloadKind === 'responses'
+    ? {
+        model: relay.model,
+        temperature: 0.1,
+        text: { format: { type: 'json_object' } },
+        input: [
+          {
+            role: 'user',
+            content: [
+              { type: 'input_text', text: prompt },
+              { type: 'input_image', image_url: imageDataUrl }
+            ]
+          }
+        ]
+      }
+    : {
+        model: relay.model,
+        temperature: 0.1,
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: imageDataUrl } }
+            ]
+          }
+        ]
+      };
+  if (stream) {
+    payload.stream = true;
+  }
+  return {
+    payloadKind,
+    stream,
+    payload,
+    requestBytes: Buffer.byteLength(JSON.stringify(payload))
+  };
 }
 
 function parseJsonPayload(text) {
@@ -406,7 +592,7 @@ function remoteImageToDataUrl(url) {
   });
 }
 
-async function callAi(imageDataUrl, maxItems) {
+async function callAi(imageDataUrl, maxItems, taskId) {
   const relays = getRelays();
   logInfo('准备请求识别中转站', {
     relayCount: relays.length,
@@ -424,43 +610,68 @@ async function callAi(imageDataUrl, maxItems) {
   for (const relay of relays) {
     if (!relay.apiKey) continue;
     const url = relayEndpointUrl(relay);
-    const payload = {
-      model: relay.model,
-      temperature: 0.1,
-      response_format: { type: 'json_object' },
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: buildPrompt(maxItems) },
-            { type: 'image_url', image_url: { url: imageDataUrl } }
-          ]
-        }
-      ]
-    };
+    const request = buildAiRequest(relay, imageDataUrl, maxItems);
     try {
       logInfo('即将请求中转站', Object.assign(relayLogSummary(relay), {
-        requestBytes: Buffer.byteLength(JSON.stringify(payload))
+        payloadKind: request.payloadKind,
+        requestBytes: request.requestBytes,
+        imageBytes: dataUrlBytes(imageDataUrl),
+        maxItems
       }));
-      const response = await timed('ai_request', () => postJson(url, payload, relay.apiKey, relay.timeoutMs), {
+      const requestSummary = Object.assign({}, relayLogSummary(relay), {
+        taskId,
+        payloadKind: request.payloadKind,
+        stream: request.stream,
+        requestBytes: request.requestBytes,
+        imageBytes: dataUrlBytes(imageDataUrl),
+        maxItems
+      });
+      console.log('[ftAnalyzeImage:ai_request_start]', requestSummary);
+      const aiStartedAt = nowMs();
+      const response = await timed('ai_request', () => postJson(url, request.payload, relay.apiKey, relay.timeoutMs, {
+        payloadKind: request.payloadKind,
+        stream: request.stream,
+        taskId
+      }), {
         host: new URL(url).host,
         relayId: relay.id,
+        taskId,
+        endpoint: relay.endpoint,
+        payloadKind: request.payloadKind,
+        stream: request.stream,
         model: relay.model,
-        requestBytes: Buffer.byteLength(JSON.stringify(payload)),
+        requestBytes: request.requestBytes,
         imageBytes: dataUrlBytes(imageDataUrl),
         maxItems,
         timeoutMs: relay.timeoutMs
       });
-      logInfo('中转站请求成功，准备解析模型返回', relayLogSummary(relay));
-      return parseJsonPayload(extractMessageContent(response));
+      const result = parseJsonPayload(extractAiResponseText(request.payloadKind, response));
+      const aiRequest = summarizeAiRequest(Object.assign({}, requestSummary, response[AI_RESPONSE_META] || {}, {
+        durationMs: nowMs() - aiStartedAt,
+        responseItemCount: result && Array.isArray(result.items) ? result.items.length : null
+      }));
+      logInfo('中转站请求成功，准备解析模型返回', Object.assign(relayLogSummary(relay), {
+        payloadKind: request.payloadKind,
+        requestBytes: request.requestBytes,
+        imageBytes: dataUrlBytes(imageDataUrl),
+        maxItems,
+        responseItemCount: result && Array.isArray(result.items) ? result.items.length : null
+      }));
+      console.log('[ftAnalyzeImage:ai_request_summary]', aiRequest);
+      return { result, aiRequest };
     } catch (error) {
       errors.push(error);
       logWarn('中转站请求失败，准备尝试下一个可用通道', Object.assign(relayLogSummary(relay), {
+        payloadKind: request.payloadKind,
+        requestBytes: request.requestBytes,
+        imageBytes: dataUrlBytes(imageDataUrl),
         code: error && error.code,
         errorMessage: error && error.message ? error.message : String(error)
       }));
       console.warn('[ftAnalyzeImage:relay_failed]', {
         relayId: relay.id,
+        endpoint: relay.endpoint,
+        payloadKind: request.payloadKind,
         code: error && error.code,
         message: error && error.message ? error.message : String(error)
       });
@@ -470,12 +681,18 @@ async function callAi(imageDataUrl, maxItems) {
   throw errors[errors.length - 1] || new Error('AI request failed');
 }
 
-function postJson(url, payload, apiKey, timeoutMs) {
+function postJson(url, payload, apiKey, timeoutMs, requestMeta) {
   const body = JSON.stringify(payload);
   const effectiveTimeoutMs = timeoutMs || aiRequestTimeoutMs();
+  const meta = requestMeta || {};
   return new Promise((resolve, reject) => {
     let settled = false;
     let request;
+    let firstChunkMs = null;
+    let streamText = '';
+    let streamEventCount = 0;
+    let lastProgressItemCount = 0;
+    const requestStartedAt = nowMs();
     const finish = (callback) => {
       if (settled) return;
       settled = true;
@@ -491,6 +708,7 @@ function postJson(url, payload, apiKey, timeoutMs) {
     logInfo('HTTP 请求已创建，准备发送到中转站', {
       host: target.host,
       path: `${target.pathname}${target.search}`,
+      payloadKind: meta.payloadKind || '',
       timeoutMs: effectiveTimeoutMs,
       bodyBytes: Buffer.byteLength(body)
     });
@@ -498,6 +716,7 @@ function postJson(url, payload, apiKey, timeoutMs) {
       const error = createTimeoutError();
       logWarn('中转站请求达到本通道超时时间，主动结束请求', {
         host: target.host,
+        payloadKind: meta.payloadKind || '',
         timeoutMs: effectiveTimeoutMs
       });
       if (request) {
@@ -509,14 +728,65 @@ function postJson(url, payload, apiKey, timeoutMs) {
     request = https.request(createPostOptions(url, apiKey, body), (response) => {
       logInfo('中转站已返回 HTTP 响应头', {
         host: target.host,
+        payloadKind: meta.payloadKind || '',
         statusCode: response.statusCode
       });
       const chunks = [];
-      response.on('data', (chunk) => chunks.push(chunk));
+      let sseBuffer = '';
+      const handleStreamEvent = (rawEvent) => {
+        if (!rawEvent || rawEvent === '[DONE]') return;
+        let parsed;
+        try {
+          parsed = JSON.parse(rawEvent);
+        } catch (error) {
+          return;
+        }
+        streamEventCount += 1;
+        streamText += extractStreamTextDelta(meta.payloadKind, parsed);
+        const recognizedItemCount = estimateStreamItemCount(streamText);
+        if (recognizedItemCount > lastProgressItemCount) {
+          lastProgressItemCount = recognizedItemCount;
+          updateTaskProgress(meta.taskId, {
+            stage: 'ai_stream',
+            recognizedItemCount,
+            eventCount: streamEventCount
+          });
+        }
+      };
+      const handleStreamChunk = (chunkText) => {
+        if (!meta.stream) return;
+        sseBuffer += chunkText;
+        const parts = sseBuffer.split(/\r?\n\r?\n/);
+        sseBuffer = parts.pop() || '';
+        for (const part of parts) {
+          const dataLines = part.split(/\r?\n/)
+            .filter((line) => line.startsWith('data:'))
+            .map((line) => line.slice(5).trimStart());
+          if (dataLines.length) {
+            handleStreamEvent(dataLines.join('\n'));
+          }
+        }
+      };
+      response.on('data', (chunk) => {
+        if (firstChunkMs == null) {
+          firstChunkMs = nowMs() - requestStartedAt;
+        }
+        chunks.push(chunk);
+        handleStreamChunk(chunk.toString('utf8'));
+      });
       response.on('end', () => {
+        if (meta.stream && sseBuffer) {
+          const dataLines = sseBuffer.split(/\r?\n/)
+            .filter((line) => line.startsWith('data:'))
+            .map((line) => line.slice(5).trimStart());
+          if (dataLines.length) {
+            handleStreamEvent(dataLines.join('\n'));
+          }
+        }
         const responseText = Buffer.concat(chunks).toString('utf8');
         logInfo('中转站响应体接收完成', {
           host: target.host,
+          payloadKind: meta.payloadKind || '',
           statusCode: response.statusCode,
           responseBytes: Buffer.byteLength(responseText)
         });
@@ -527,7 +797,17 @@ function postJson(url, payload, apiKey, timeoutMs) {
           return;
         }
         try {
-          finish(() => resolve(JSON.parse(responseText)));
+          const parsed = meta.stream
+            ? parseSsePayload(responseText, meta.payloadKind)
+            : JSON.parse(responseText);
+          const existingMeta = parsed[AI_RESPONSE_META] || {};
+          parsed[AI_RESPONSE_META] = Object.assign({}, existingMeta, {
+            stream: meta.stream === true,
+            firstChunkMs,
+            statusCode: response.statusCode,
+            responseBytes: Buffer.byteLength(responseText)
+          });
+          finish(() => resolve(parsed));
         } catch (error) {
           finish(() => reject(new Error('AI response is not JSON')));
         }
@@ -536,6 +816,7 @@ function postJson(url, payload, apiKey, timeoutMs) {
     request.on('error', (error) => {
       logWarn('中转站 HTTP 请求发生错误', {
         host: target.host,
+        payloadKind: meta.payloadKind || '',
         code: error && error.code,
         errorMessage: error && error.message ? error.message : String(error)
       });
@@ -544,6 +825,7 @@ function postJson(url, payload, apiKey, timeoutMs) {
     request.setTimeout(effectiveTimeoutMs, () => {
       logWarn('底层 socket 达到本通道超时时间', {
         host: target.host,
+        payloadKind: meta.payloadKind || '',
         timeoutMs: effectiveTimeoutMs
       });
       request.destroy(createTimeoutError());
@@ -552,6 +834,7 @@ function postJson(url, payload, apiKey, timeoutMs) {
     request.end();
     logInfo('HTTP 请求体已发送到中转站', {
       host: target.host,
+      payloadKind: meta.payloadKind || '',
       bodyBytes: Buffer.byteLength(body)
     });
   });
@@ -610,7 +893,8 @@ exports.main = async (event) => {
       taskId: event.taskId,
       status: task.status,
       hasResult: !!task.result,
-      hasError: !!task.errorCode
+      hasError: !!task.errorCode,
+      aiRequest: task.aiRequest || null
     });
     return task;
   }
@@ -642,16 +926,20 @@ exports.main = async (event) => {
       });
       return Object.assign({ taskId }, emptyResult);
     }
-    const result = await callAi(imageDataUrl, maxItems);
+    const aiResponse = await callAi(imageDataUrl, maxItems, taskId);
+    const result = aiResponse.result;
+    const aiRequest = aiResponse.aiRequest;
     await writeTask(taskId, {
       status: 'success',
       finishedAt: nowMs(),
-      result
+      result,
+      aiRequest
     });
     logTiming('total', startedAt, {
       source,
       taskId,
-      itemCount: result && Array.isArray(result.items) ? result.items.length : 0
+      itemCount: result && Array.isArray(result.items) ? result.items.length : 0,
+      aiRequest
     });
     return Object.assign({ taskId }, result);
   } catch (error) {
@@ -674,6 +962,9 @@ exports._test = {
   staleTaskMs,
   normalizeMaxItems,
   buildPrompt,
+  buildAiRequest,
+  extractAiResponseText,
+  estimateStreamItemCount,
   createPostOptions,
   getRelays,
   relayEndpointUrl,
