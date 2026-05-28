@@ -2,11 +2,14 @@
   <view class="list-head">
     <view class="list-title-copy">
       <text class="eyebrow">全部容器</text>
-      <text class="page-title">家里的东西，都在这里</text>
+      <view class="page-title list-page-title">
+        <text>家里的东西，</text>
+        <text>都在这里</text>
+      </view>
     </view>
     <view class="page-actions">
-      <button class="manage-toggle {{manageButtonClass}}" bindtap="toggleManageMode">{{manageLabel}}</button>
-      <button class="add-container" bindtap="goCapture">+</button>
+      <view class="manage-toggle {{manageButtonClass}}" bindtap="toggleManageMode">{{manageLabel}}</view>
+      <view class="add-container" bindtap="goCapture">+</view>
     </view>
   </view>
 
@@ -53,21 +56,22 @@
         catchtap="toggleSelect"
         data-id="{{item._id}}"
       ></view>
-      <view class="container-photo">
-        <image wx:if="{{item.coverPhoto}}" mode="aspectFill" src="{{item.coverPhoto}}"></image>
+      <view class="container-photo tone-{{item.toneClass}}">
+        <image wx:if="{{item.coverPhoto}}" class="cover-image" mode="aspectFill" lazy-load="{{true}}" src="{{item.coverPhoto}}"></image>
         <view wx:if="{{item.showPlaceholder}}" class="photo-placeholder">
           <view class="placeholder-line wide"></view>
           <view class="placeholder-line"></view>
         </view>
       </view>
       <view class="container-body">
-        <view>
+        <view class="container-copy">
           <text class="container-name">{{item.name}}</text>
-          <text class="subtle">{{item.displaySubtitle}}</text>
+          <text class="container-subtitle">{{item.displaySubtitle}}</text>
         </view>
         <view class="container-meta-line">
+          <text class="meta-pill count-pill">{{item.itemCountLabel}}</text>
           <text class="meta-pill">{{item.statusPill}}</text>
-          <text class="meta-pill">{{item.imageCount}} 张照片</text>
+          <text class="meta-pill">{{item.imageCountLabel}}</text>
         </view>
       </view>
       <view

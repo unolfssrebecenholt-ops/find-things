@@ -4,8 +4,9 @@ const storage = require('../../services/storage');
 const { withDisplayIndexes } = require('../../utils/geometry');
 const { navigateHome } = require('../../utils/navigation');
 const { createImageMetadata } = require('../../utils/image-metadata');
+const { getContainerPreview } = require('../../utils/image-preview');
 
-const FREE_CONTENT_IMAGE_LIMIT = storage.FREE_CONTENT_IMAGE_LIMIT || 2;
+const CONTENT_IMAGE_LIMIT = storage.CONTENT_IMAGE_LIMIT || 5;
 
 function getChosenPath(result) {
   if (result && result.tempFiles && result.tempFiles[0]) {
@@ -33,8 +34,10 @@ function pickAddedContentImage(result, imageInput, index) {
 }
 
 function createContainerViewModel(container) {
+  const preview = getContainerPreview(container);
   return Object.assign({}, container, {
-    displayLocation: container.locationPath || '未填写位置'
+    displayLocation: container.locationPath || '未填写位置',
+    coverDisplayFileId: preview.thumb || container.coverImageFileId || ''
   });
 }
 
@@ -54,7 +57,7 @@ Page({
     currentImageIndex: 0,
     currentPhotoLabel: '照片 1/1',
     addPhotoLabel: '添加照片',
-    freeLimit: FREE_CONTENT_IMAGE_LIMIT
+    photoLimit: CONTENT_IMAGE_LIMIT
   },
 
   onLoad(options) {
@@ -66,10 +69,20 @@ Page({
   },
 
   load() {
-    if (typeof storage.removeDemoData === 'function') {
-      storage.removeDemoData();
-    }
-    const container = storage.getContainer(this.data.id);
+    const loadContainer = typeof storage.removeDemoDataAsync === 'function'
+      ? storage.removeDemoDataAsync().then(() => storage.getContainerAsync(this.data.id))
+      : Promise.resolve(storage.getContainer(this.data.id));
+    loadContainer
+      .then((container) => this.renderContainer(container))
+      .catch((error) => {
+        wx.showToast({
+          title: error && error.message ? error.message : '数据同步失败',
+          icon: 'none'
+        });
+      });
+  },
+
+  renderContainer(container) {
     if (!container) {
       this.setData({
         container: null,
@@ -86,34 +99,45 @@ Page({
       return;
     }
 
-    const items = storage.getItemsByContainer(container._id);
-    const baseImages = this.getContentImages(container);
-    const contentImages = baseImages.map((image, index) => {
-      const imageItems = items.filter((item) => {
-        if (item.sourceImageId && image.imageId) return item.sourceImageId === image.imageId;
-        if (item.sourceImageFileId && image.fileId) return item.sourceImageFileId === image.fileId;
-        return index === 0;
-      });
-      return Object.assign({}, image, {
-        label: image.label || `照片 ${index + 1}`,
-        sortOrder: image.sortOrder || index,
-        itemCount: image.itemCount || imageItems.length,
-        items: withDisplayIndexes(imageItems)
-      });
-    });
+    const loadItems = typeof storage.getItemsByContainerAsync === 'function'
+      ? Promise.all([storage.getItemsByContainerAsync(container._id), storage.getContentImagesAsync(container._id)])
+      : Promise.resolve([storage.getItemsByContainer(container._id), this.getContentImages(container)]);
 
-    this.setData({
-      container: createContainerViewModel(container),
-      hasContainer: true,
-      showMissingContainer: false,
-      hasCoverImage: !!container.coverImageFileId,
-      showCoverPlaceholder: !container.coverImageFileId,
-      items,
-      contentImages,
-      hasContentImages: contentImages.length > 0,
-      showContentEmpty: contentImages.length === 0
-    });
-    this.syncCurrentImage(this.data.currentImageIndex);
+    loadItems
+      .then(([items, baseImages]) => {
+        const contentImages = baseImages.map((image, index) => {
+          const imageItems = items.filter((item) => {
+            if (item.sourceImageId && image.imageId) return item.sourceImageId === image.imageId;
+            if (item.sourceImageFileId && image.fileId) return item.sourceImageFileId === image.fileId;
+            return index === 0;
+          });
+          return Object.assign({}, image, {
+            label: image.label || `照片 ${index + 1}`,
+            sortOrder: image.sortOrder || index,
+            itemCount: image.itemCount || imageItems.length,
+            items: withDisplayIndexes(imageItems)
+          });
+        });
+
+        this.setData({
+          container: createContainerViewModel(container),
+          hasContainer: true,
+          showMissingContainer: false,
+          hasCoverImage: !!(container.coverThumbFileId || container.coverImageFileId),
+          showCoverPlaceholder: !(container.coverThumbFileId || container.coverImageFileId),
+          items,
+          contentImages,
+          hasContentImages: contentImages.length > 0,
+          showContentEmpty: contentImages.length === 0
+        });
+        this.syncCurrentImage(this.data.currentImageIndex);
+      })
+      .catch((error) => {
+        wx.showToast({
+          title: error && error.message ? error.message : '数据同步失败',
+          icon: 'none'
+        });
+      });
   },
 
   getContentImages(container) {
@@ -128,6 +152,7 @@ Page({
       return [{
         imageId: 'legacy_content_1',
         fileId: container.contentImageFileId,
+        thumbFileId: container.contentThumbFileId || '',
         label: '照片 1',
         sortOrder: 0,
         itemCount: container.itemCount || 0
@@ -145,7 +170,7 @@ Page({
       currentImageIndex: safeIndex,
       currentItems: image.items || [],
       currentPhotoLabel: `照片 ${safeIndex + 1}/${Math.max(contentImages.length, 1)}`,
-      addPhotoLabel: contentImages.length >= FREE_CONTENT_IMAGE_LIMIT ? '添加照片' : `加第 ${nextPhotoNumber} 张`
+      addPhotoLabel: contentImages.length >= CONTENT_IMAGE_LIMIT ? '添加照片' : `加第 ${nextPhotoNumber} 张`
     });
   },
 
@@ -165,6 +190,12 @@ Page({
           sourceImageFileId: image.fileId
         }));
 
+        if (typeof storage.replaceItemsForImageAsync === 'function') {
+          return storage.replaceItemsForImageAsync(this.data.container._id, image.imageId, items).then(() => {
+            wx.showToast({ title: '已重新识别', icon: 'success' });
+            this.load();
+          });
+        }
         if (typeof storage.replaceItemsForImage === 'function') {
           storage.replaceItemsForImage(this.data.container._id, image.imageId, items);
           wx.showToast({ title: '已重新识别', icon: 'success' });
@@ -198,10 +229,10 @@ Page({
   },
 
   addContentPhoto() {
-    if ((this.data.contentImages || []).length >= FREE_CONTENT_IMAGE_LIMIT) {
+    if ((this.data.contentImages || []).length >= CONTENT_IMAGE_LIMIT) {
       wx.showModal({
-        title: '免费额度已用完',
-        content: `默认可保存 ${FREE_CONTENT_IMAGE_LIMIT} 张箱内照片，更多照片可在升级后使用。`,
+        title: '照片数量已达上限',
+        content: `当前最多可保存 ${CONTENT_IMAGE_LIMIT} 张箱内照片。`,
         showCancel: false,
         confirmText: '知道了',
         confirmColor: '#1f6048'
@@ -223,16 +254,38 @@ Page({
       };
       wx.showLoading({ title: '小懒正在分析中' });
       const persistOriginal = imageStore.persistImage(fileId, 'find-things/content');
+      const persistThumbnail = imageStore.persistThumbnail(fileId, 'find-things/thumbs');
       const analyzePrepared = imageStore.prepareImageForAnalyze(fileId)
         .then((analyzePath) => ai.analyzeImage({ imagePath: analyzePath, allowMockFallback: false }));
 
-      Promise.all([persistOriginal, analyzePrepared])
-        .then(([storedPath, analyzed]) => {
+      Promise.all([persistOriginal, persistThumbnail, analyzePrepared])
+        .then(([storedPath, thumbPath, analyzed]) => {
           imageInput.fileId = storedPath;
+          imageInput.thumbFileId = thumbPath || '';
           Object.assign(imageInput, createImageMetadata({
             chooseResult: result,
             imageMetadata: analyzed.imageMetadata
           }));
+          if (typeof storage.addContentImageAsync === 'function') {
+            return storage.addContentImageAsync(this.data.container._id, imageInput).then((savedImage) => {
+              const image = pickAddedContentImage(savedImage, imageInput, index);
+              const items = withDisplayIndexes(analyzed.items || []).map((item) => Object.assign({}, item, {
+                sourceImageId: image.imageId,
+                sourceImageFileId: image.fileId
+              }));
+              if (typeof storage.replaceItemsForImageAsync === 'function') {
+                return storage.replaceItemsForImageAsync(this.data.container._id, image.imageId, items);
+              }
+              if (typeof storage.replaceItemsForImage === 'function') {
+                storage.replaceItemsForImage(this.data.container._id, image.imageId, items);
+              }
+              return null;
+            }).then(() => {
+              wx.showToast({ title: '已添加照片', icon: 'success' });
+              this.load();
+              this.syncCurrentImage(index);
+            });
+          }
           if (typeof storage.addContentImage === 'function') {
             const savedImage = storage.addContentImage(this.data.container._id, imageInput);
             const image = pickAddedContentImage(savedImage, imageInput, index);
@@ -287,9 +340,20 @@ Page({
       confirmColor: '#a33b2f',
       success: (result) => {
         if (!result.confirm) return;
-        storage.deleteContainer(this.data.container._id);
-        wx.showToast({ title: '已删除', icon: 'success' });
-        navigateHome();
+        const runDelete = typeof storage.deleteContainerAsync === 'function'
+          ? storage.deleteContainerAsync(this.data.container._id)
+          : Promise.resolve(storage.deleteContainer(this.data.container._id));
+        runDelete
+          .then(() => {
+            wx.showToast({ title: '已删除', icon: 'success' });
+            navigateHome();
+          })
+          .catch((error) => {
+            wx.showToast({
+              title: error && error.message ? error.message : '数据同步失败',
+              icon: 'none'
+            });
+          });
       }
     });
   },

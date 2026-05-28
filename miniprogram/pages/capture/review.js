@@ -4,7 +4,7 @@ const storage = require('../../services/storage');
 const { withDisplayIndexes } = require('../../utils/geometry');
 const { createImageMetadata } = require('../../utils/image-metadata');
 
-const FREE_CONTENT_IMAGE_LIMIT = storage.FREE_CONTENT_IMAGE_LIMIT || 2;
+const CONTENT_IMAGE_LIMIT = storage.CONTENT_IMAGE_LIMIT || 5;
 
 function getChosenPath(result) {
   if (result && result.tempFiles && result.tempFiles[0]) {
@@ -69,14 +69,18 @@ Page({
     currentIndex: 0,
     viewMode: 'annotated',
     isAnnotatedMode: true,
-    isSummaryMode: true,
+    isPhotoMode: true,
+    isListMode: false,
+    annotatedSegmentClass: 'active',
+    summarySegmentClass: '',
+    listModeClass: '',
     showAddPhotoHint: true,
     currentLabel: '照片 1/1',
     showAiWarning: false,
     aiStatusText: '',
     ratioClass: 'ratio-landscape',
     recognizing: false,
-    freeLimit: FREE_CONTENT_IMAGE_LIMIT
+    photoLimit: CONTENT_IMAGE_LIMIT
   },
 
   onLoad() {
@@ -95,6 +99,7 @@ Page({
   createImageDraft(draft, index) {
     const imageId = draft.imageId || createImageId(index);
     const fileId = draft.fileId || draft.imagePath || draft.contentImageFileId || '';
+    const thumbFileId = draft.thumbFileId || draft.thumbnailFileId || draft.previewFileId || '';
     const imageMetadata = draft.imageMetadata || {};
     const items = withDisplayIndexes(draft.items || []).map((item) => Object.assign({}, item, {
       sourceImageId: imageId,
@@ -103,6 +108,7 @@ Page({
     return {
       imageId,
       fileId,
+      thumbFileId,
       imagePath: fileId,
       label: `照片 ${index + 1}`,
       sortOrder: index,
@@ -126,7 +132,7 @@ Page({
     const items = withDisplayIndexes(draft.items || []).map(createItemViewModel);
     this.setData({
       currentIndex: safeIndex,
-      showAddPhotoHint: imageDrafts.length < FREE_CONTENT_IMAGE_LIMIT,
+      showAddPhotoHint: imageDrafts.length < CONTENT_IMAGE_LIMIT,
       currentLabel: `照片 ${safeIndex + 1}/${Math.max(imageDrafts.length, 1)}`,
       imagePath: draft.imagePath || draft.fileId || '',
       ratioClass: getRatioClass(draft),
@@ -145,10 +151,15 @@ Page({
 
   switchViewMode(event) {
     const viewMode = event.currentTarget.dataset.mode || 'annotated';
+    const isListMode = viewMode === 'summary';
     this.setData({
       viewMode,
       isAnnotatedMode: viewMode === 'annotated',
-      isSummaryMode: viewMode === 'annotated' || viewMode === 'summary'
+      isPhotoMode: !isListMode,
+      isListMode,
+      annotatedSegmentClass: viewMode === 'annotated' ? 'active' : '',
+      summarySegmentClass: isListMode ? 'active' : '',
+      listModeClass: isListMode ? 'list-only' : ''
     });
   },
 
@@ -166,17 +177,17 @@ Page({
     });
     this.setData({
       imageDrafts,
-      showAddPhotoHint: imageDrafts.length < FREE_CONTENT_IMAGE_LIMIT
+      showAddPhotoHint: imageDrafts.length < CONTENT_IMAGE_LIMIT
     });
     this.setCurrentImage(this.data.currentIndex);
     wx.setStorageSync('captureDraft', { imageDrafts });
   },
 
   addNextPhoto() {
-    if ((this.data.imageDrafts || []).length >= FREE_CONTENT_IMAGE_LIMIT) {
+    if ((this.data.imageDrafts || []).length >= CONTENT_IMAGE_LIMIT) {
       wx.showModal({
-        title: '免费额度已用完',
-        content: `默认可保存 ${FREE_CONTENT_IMAGE_LIMIT} 张箱内照片，更多照片可在升级后使用。`,
+        title: '照片数量已达上限',
+        content: `当前最多可保存 ${CONTENT_IMAGE_LIMIT} 张箱内照片。`,
         showCancel: false,
         confirmText: '知道了',
         confirmColor: '#1f6048'
@@ -189,14 +200,16 @@ Page({
       if (!imagePath) return;
       this.setData({ recognizing: true });
       const persistOriginal = imageStore.persistImage(imagePath, 'find-things/content');
+      const persistThumbnail = imageStore.persistThumbnail(imagePath, 'find-things/thumbs');
       const analyzePrepared = imageStore.prepareImageForAnalyze(imagePath)
         .then((analyzePath) => ai.analyzeImage({ imagePath: analyzePath, allowMockFallback: false }));
 
-      Promise.all([persistOriginal, analyzePrepared])
-        .then(([storedPath, analyzed]) => {
+      Promise.all([persistOriginal, persistThumbnail, analyzePrepared])
+        .then(([storedPath, thumbPath, analyzed]) => {
           return Object.assign({}, analyzed, {
             imagePath: storedPath,
             fileId: storedPath,
+            thumbFileId: thumbPath || '',
             imageMetadata: createImageMetadata({
               chooseResult: result,
               imageMetadata: analyzed.imageMetadata
@@ -208,7 +221,7 @@ Page({
           const imageDrafts = (this.data.imageDrafts || []).concat(nextDraft);
           this.setData({
             imageDrafts,
-            showAddPhotoHint: imageDrafts.length < FREE_CONTENT_IMAGE_LIMIT
+            showAddPhotoHint: imageDrafts.length < CONTENT_IMAGE_LIMIT
           });
           wx.setStorageSync('captureDraft', { imageDrafts });
           this.setCurrentImage(imageDrafts.length - 1);
@@ -257,6 +270,7 @@ Page({
     const contentImages = imageDrafts.map((draft, index) => ({
       imageId: draft.imageId,
       fileId: draft.fileId,
+      thumbFileId: draft.thumbFileId || '',
       label: draft.label || `照片 ${index + 1}`,
       sortOrder: index,
       itemCount: (draft.items || []).filter((item) => item.confirmed !== false).length,
@@ -272,6 +286,7 @@ Page({
       draftId: previousDraft.draftId || createDraftId(),
       contentImages,
       contentImageFileId: contentImages[0] ? contentImages[0].fileId : '',
+      contentThumbFileId: contentImages[0] ? (contentImages[0].thumbFileId || '') : '',
       items: confirmedItems
     });
     wx.navigateTo({ url: '/pages/container/edit' });

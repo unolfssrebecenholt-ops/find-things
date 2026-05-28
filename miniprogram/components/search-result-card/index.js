@@ -50,7 +50,13 @@ Component({
   observers: {
     result(result) {
       const safeResult = result || {};
-      const photo = safeResult.matchedImageFileId || safeResult.contentImage || safeResult.containerPhoto || '';
+      const photo = safeResult.matchedImageThumbFileId
+        || safeResult.contentThumb
+        || safeResult.containerThumb
+        || safeResult.matchedImageFileId
+        || safeResult.contentImage
+        || safeResult.containerPhoto
+        || '';
       const hasPhoto = !!photo && !isMockAssetPath(photo);
       this.setData({
         viewModel: {

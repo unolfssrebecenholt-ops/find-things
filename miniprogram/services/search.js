@@ -1,6 +1,7 @@
 const { normalizeQuery } = require('../utils/normalize');
 const { scoreItem } = require('../utils/scoring');
 const { semanticMatch } = require('../utils/semantic');
+const { getContainerPreview, getImagePreview } = require('../utils/image-preview');
 const storage = require('./storage');
 
 const SEMANTIC_SCORE_THRESHOLD = 35;
@@ -54,6 +55,8 @@ function searchItems(query, data) {
     .map((item) => {
       const container = containerMap[item.containerId] || {};
       const contentImage = findContentImage(container, item);
+      const containerPreview = getContainerPreview(container);
+      const contentPreview = getImagePreview(contentImage);
       const scored = scoreItem(tokens, item, container);
       const semantic = semanticMatch(query, item);
       const validSemantic = isValidSemanticMatch(semantic);
@@ -66,10 +69,13 @@ function searchItems(query, data) {
         item,
         container,
         containerName: container.name || '未命名容器',
-        containerPhoto: container.coverImageFileId || (contentImage && contentImage.fileId) || container.contentImageFileId || '',
-        contentImage: (contentImage && contentImage.fileId) || container.contentImageFileId || '',
+        containerPhoto: containerPreview.original || '',
+        containerThumb: containerPreview.display || '',
+        contentImage: contentPreview.original || container.contentImageFileId || '',
+        contentThumb: contentPreview.display || contentPreview.original || container.contentThumbFileId || '',
         matchedImageId: (contentImage && contentImage.imageId) || item.sourceImageId || '',
         matchedImageFileId: (contentImage && contentImage.fileId) || item.sourceImageFileId || '',
+        matchedImageThumbFileId: (contentImage && contentImage.thumbFileId) || '',
         locationText: item.locationText || [contentImage && contentImage.label, item.relativePosition].filter(Boolean).join(' · '),
         matchType: getMatchType(keywordScore, semanticScore),
         semanticScore,

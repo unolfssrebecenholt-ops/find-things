@@ -5,12 +5,15 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const DEFAULT_ENDPOINT = '/v1/chat/completions';
 const localConfig = loadLocalConfig();
+const ANALYZE_TASK_COLLECTION = 'ft_analyze_tasks';
 const MAX_REMOTE_IMAGE_BYTES = 8 * 1024 * 1024;
 const DEFAULT_MAX_ITEMS = 12;
 const MAX_ITEMS_LIMIT = 16;
-const DEFAULT_FUNCTION_TIMEOUT_MS = 120000;
+const DEFAULT_FUNCTION_TIMEOUT_MS = 300000;
 const FUNCTION_TIMEOUT_HEADROOM_MS = 15000;
+const DEFAULT_AI_REQUEST_TIMEOUT_MS = 120000;
 const MIN_AI_REQUEST_TIMEOUT_MS = 5000;
+const STALE_TASK_GRACE_MS = 10000;
 const TLS_CERTIFICATE_ERROR_CODES = new Set([
   'DEPTH_ZERO_SELF_SIGNED_CERT',
   'SELF_SIGNED_CERT_IN_CHAIN',
@@ -34,6 +37,90 @@ function nowMs() {
   return Date.now();
 }
 
+function createTaskId() {
+  return `task_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function getWxContext() {
+  if (typeof cloud.getWXContext !== 'function') return {};
+  try {
+    return cloud.getWXContext() || {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function taskCollection() {
+  try {
+    return cloud.database().collection(ANALYZE_TASK_COLLECTION);
+  } catch (error) {
+    return null;
+  }
+}
+
+async function writeTask(taskId, data) {
+  if (!taskId) return;
+  const collection = taskCollection();
+  if (!collection) return;
+  const context = getWxContext();
+  const payload = Object.assign({
+    updatedAt: nowMs(),
+    openid: context.OPENID || ''
+  }, data || {});
+  try {
+    await collection.doc(taskId).set({ data: payload });
+    logInfo('识别任务状态已写入数据库', {
+      taskId,
+      status: payload.status,
+      hasResult: !!payload.result,
+      hasError: !!payload.errorCode
+    });
+  } catch (error) {
+    logWarn('识别任务状态写入失败', {
+      taskId,
+      status: payload.status,
+      errorMessage: error && error.message ? error.message : String(error)
+    });
+  }
+}
+
+async function readTask(taskId) {
+  const collection = taskCollection();
+  if (!taskId || !collection) {
+    return { status: 'missing' };
+  }
+  try {
+    const result = await collection.doc(taskId).get();
+    const data = result && result.data;
+    if (!data) return { status: 'pending', taskId };
+    return Object.assign({ taskId }, data);
+  } catch (error) {
+    return { status: 'pending', taskId };
+  }
+}
+
+async function resolveTaskForClient(taskId) {
+  const task = await readTask(taskId);
+  if (!task || task.status !== 'processing') return task;
+
+  const startedAt = Number(task.startedAt) || Number(task.updatedAt) || 0;
+  if (!startedAt || nowMs() - startedAt < staleTaskMs()) return task;
+
+  const timeoutPayload = publicError(new Error('AI request timeout'));
+  const failedTask = Object.assign({}, task, timeoutPayload, {
+    status: 'failed',
+    finishedAt: nowMs(),
+    stale: true
+  });
+  await writeTask(taskId, failedTask);
+  logWarn('识别任务已超过函数预算，轮询时自动标记失败', {
+    taskId,
+    ageMs: nowMs() - startedAt,
+    staleTaskMs: staleTaskMs()
+  });
+  return failedTask;
+}
+
 function dataUrlBytes(dataUrl) {
   const match = String(dataUrl || '').match(/^data:[^;]+;base64,(.*)$/);
   if (!match) return Buffer.byteLength(String(dataUrl || ''));
@@ -45,6 +132,14 @@ function logTiming(stage, startedAt, extra) {
     stage,
     durationMs: nowMs() - startedAt
   }, extra || {}));
+}
+
+function logInfo(message, extra) {
+  console.log('[ftAnalyzeImage:信息]', Object.assign({ message }, extra || {}));
+}
+
+function logWarn(message, extra) {
+  console.warn('[ftAnalyzeImage:警告]', Object.assign({ message }, extra || {}));
 }
 
 async function timed(stage, fn, extra) {
@@ -111,7 +206,8 @@ function aiRequestTimeoutMs() {
     FUNCTION_TIMEOUT_HEADROOM_MS + MIN_AI_REQUEST_TIMEOUT_MS,
     300000
   );
-  const defaultTimeoutMs = Math.max(MIN_AI_REQUEST_TIMEOUT_MS, functionTimeoutMs - FUNCTION_TIMEOUT_HEADROOM_MS);
+  const functionBudgetMs = Math.max(MIN_AI_REQUEST_TIMEOUT_MS, functionTimeoutMs - FUNCTION_TIMEOUT_HEADROOM_MS);
+  const defaultTimeoutMs = Math.min(DEFAULT_AI_REQUEST_TIMEOUT_MS, functionBudgetMs);
   return boundedInteger(
     env('OPENAI_COMPAT_TIMEOUT_MS', defaultTimeoutMs, 'timeoutMs'),
     defaultTimeoutMs,
@@ -120,10 +216,94 @@ function aiRequestTimeoutMs() {
   );
 }
 
+function configuredFunctionTimeoutMs() {
+  return boundedInteger(
+    env('FUNCTION_TIMEOUT_MS', DEFAULT_FUNCTION_TIMEOUT_MS, 'functionTimeoutMs'),
+    DEFAULT_FUNCTION_TIMEOUT_MS,
+    FUNCTION_TIMEOUT_HEADROOM_MS + MIN_AI_REQUEST_TIMEOUT_MS,
+    300000
+  );
+}
+
+function staleTaskMs() {
+  const fallback = configuredFunctionTimeoutMs() + STALE_TASK_GRACE_MS;
+  return boundedInteger(
+    env('ANALYZE_TASK_STALE_MS', fallback, 'analyzeTaskStaleMs'),
+    fallback,
+    MIN_AI_REQUEST_TIMEOUT_MS,
+    360000
+  );
+}
+
 function endpointUrl() {
   const baseUrl = env('OPENAI_COMPAT_BASE_URL', 'https://aipaiai.cn', 'baseUrl').replace(/\/+$/, '');
   const endpoint = env('OPENAI_COMPAT_ENDPOINT', DEFAULT_ENDPOINT, 'endpoint');
   return `${baseUrl}${endpoint.charAt(0) === '/' ? endpoint : `/${endpoint}`}`;
+}
+
+function normalizeRelay(relay, index) {
+  return {
+    id: relay.id || `relay_${index + 1}`,
+    name: relay.name || `通道 ${index + 1}`,
+    enabled: relay.enabled !== false,
+    baseUrl: relay.baseUrl || '',
+    endpoint: relay.endpoint || DEFAULT_ENDPOINT,
+    model: relay.model || env('OPENAI_COMPAT_MODEL', 'gpt-5.5', 'model'),
+    apiKey: relay.apiKey || '',
+    timeoutMs: boundedInteger(relay.timeoutMs || relay.timeout, aiRequestTimeoutMs(), MIN_AI_REQUEST_TIMEOUT_MS, aiRequestTimeoutMs())
+  };
+}
+
+function parseEnvRelays() {
+  const raw = process.env.OPENAI_COMPAT_RELAYS || '';
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn('[ftAnalyzeImage:relay_config]', { message: 'OPENAI_COMPAT_RELAYS is not valid JSON' });
+    return [];
+  }
+}
+
+function getRelays() {
+  const configured = parseEnvRelays().concat(Array.isArray(localConfig.relays) ? localConfig.relays : []);
+  const fallback = [{
+    id: 'primary',
+    name: '主通道',
+    baseUrl: env('OPENAI_COMPAT_BASE_URL', 'https://aipaiai.cn', 'baseUrl'),
+    endpoint: env('OPENAI_COMPAT_ENDPOINT', DEFAULT_ENDPOINT, 'endpoint'),
+    model: env('OPENAI_COMPAT_MODEL', 'gpt-5.5', 'model'),
+    apiKey: env('OPENAI_COMPAT_API_KEY', '', 'apiKey'),
+    timeoutMs: aiRequestTimeoutMs()
+  }];
+  return (configured.length ? configured : fallback)
+    .map(normalizeRelay)
+    .filter((relay) => relay.enabled && relay.baseUrl);
+}
+
+function relayEndpointUrl(relay) {
+  const baseUrl = String(relay.baseUrl || '').replace(/\/+$/, '');
+  const endpoint = relay.endpoint || DEFAULT_ENDPOINT;
+  return `${baseUrl}${endpoint.charAt(0) === '/' ? endpoint : `/${endpoint}`}`;
+}
+
+function relayLogSummary(relay) {
+  let host = '';
+  try {
+    host = new URL(relayEndpointUrl(relay)).host;
+  } catch (error) {
+    host = 'invalid-url';
+  }
+  return {
+    relayId: relay.id,
+    relayName: relay.name,
+    host,
+    endpoint: relay.endpoint,
+    model: relay.model,
+    timeoutMs: relay.timeoutMs,
+    hasApiKey: !!relay.apiKey
+  };
 }
 
 function buildPrompt(maxItems) {
@@ -227,40 +407,67 @@ function remoteImageToDataUrl(url) {
 }
 
 async function callAi(imageDataUrl, maxItems) {
-  const apiKey = env('OPENAI_COMPAT_API_KEY', '', 'apiKey');
-  if (!apiKey) {
+  const relays = getRelays();
+  logInfo('准备请求识别中转站', {
+    relayCount: relays.length,
+    relays: relays.map(relayLogSummary),
+    maxItems,
+    imageBytes: dataUrlBytes(imageDataUrl)
+  });
+  if (!relays.some((relay) => relay.apiKey)) {
     const error = new Error('OPENAI_COMPAT_API_KEY is not configured');
     error.code = 'AI_KEY_MISSING';
     throw error;
   }
 
-  const model = env('OPENAI_COMPAT_MODEL', 'gpt-5.5', 'model');
-  const url = endpointUrl();
-  const payload = {
-    model,
-    temperature: 0.1,
-    response_format: { type: 'json_object' },
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: buildPrompt(maxItems) },
-          { type: 'image_url', image_url: { url: imageDataUrl } }
-        ]
-      }
-    ]
-  };
-  const timeoutMs = aiRequestTimeoutMs();
-  const response = await timed('ai_request', () => postJson(url, payload, apiKey, timeoutMs), {
-    host: new URL(url).host,
-    model,
-    requestBytes: Buffer.byteLength(JSON.stringify(payload)),
-    imageBytes: dataUrlBytes(imageDataUrl),
-    maxItems,
-    timeoutMs
-  });
+  const errors = [];
+  for (const relay of relays) {
+    if (!relay.apiKey) continue;
+    const url = relayEndpointUrl(relay);
+    const payload = {
+      model: relay.model,
+      temperature: 0.1,
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: buildPrompt(maxItems) },
+            { type: 'image_url', image_url: { url: imageDataUrl } }
+          ]
+        }
+      ]
+    };
+    try {
+      logInfo('即将请求中转站', Object.assign(relayLogSummary(relay), {
+        requestBytes: Buffer.byteLength(JSON.stringify(payload))
+      }));
+      const response = await timed('ai_request', () => postJson(url, payload, relay.apiKey, relay.timeoutMs), {
+        host: new URL(url).host,
+        relayId: relay.id,
+        model: relay.model,
+        requestBytes: Buffer.byteLength(JSON.stringify(payload)),
+        imageBytes: dataUrlBytes(imageDataUrl),
+        maxItems,
+        timeoutMs: relay.timeoutMs
+      });
+      logInfo('中转站请求成功，准备解析模型返回', relayLogSummary(relay));
+      return parseJsonPayload(extractMessageContent(response));
+    } catch (error) {
+      errors.push(error);
+      logWarn('中转站请求失败，准备尝试下一个可用通道', Object.assign(relayLogSummary(relay), {
+        code: error && error.code,
+        errorMessage: error && error.message ? error.message : String(error)
+      }));
+      console.warn('[ftAnalyzeImage:relay_failed]', {
+        relayId: relay.id,
+        code: error && error.code,
+        message: error && error.message ? error.message : String(error)
+      });
+    }
+  }
 
-  return parseJsonPayload(extractMessageContent(response));
+  throw errors[errors.length - 1] || new Error('AI request failed');
 }
 
 function postJson(url, payload, apiKey, timeoutMs) {
@@ -280,8 +487,19 @@ function postJson(url, payload, apiKey, timeoutMs) {
       error.code = 'AI_REQUEST_TIMEOUT';
       return error;
     };
+    const target = new URL(url);
+    logInfo('HTTP 请求已创建，准备发送到中转站', {
+      host: target.host,
+      path: `${target.pathname}${target.search}`,
+      timeoutMs: effectiveTimeoutMs,
+      bodyBytes: Buffer.byteLength(body)
+    });
     const deadlineTimer = setTimeout(() => {
       const error = createTimeoutError();
+      logWarn('中转站请求达到本通道超时时间，主动结束请求', {
+        host: target.host,
+        timeoutMs: effectiveTimeoutMs
+      });
       if (request) {
         request.destroy(error);
       }
@@ -289,10 +507,19 @@ function postJson(url, payload, apiKey, timeoutMs) {
     }, effectiveTimeoutMs);
 
     request = https.request(createPostOptions(url, apiKey, body), (response) => {
+      logInfo('中转站已返回 HTTP 响应头', {
+        host: target.host,
+        statusCode: response.statusCode
+      });
       const chunks = [];
       response.on('data', (chunk) => chunks.push(chunk));
       response.on('end', () => {
         const responseText = Buffer.concat(chunks).toString('utf8');
+        logInfo('中转站响应体接收完成', {
+          host: target.host,
+          statusCode: response.statusCode,
+          responseBytes: Buffer.byteLength(responseText)
+        });
         if (response.statusCode < 200 || response.statusCode >= 300) {
           const error = new Error(`AI request failed with ${response.statusCode}: ${sanitizeErrorBody(responseText)}`);
           error.code = 'AI_REQUEST_FAILED';
@@ -306,12 +533,27 @@ function postJson(url, payload, apiKey, timeoutMs) {
         }
       });
     });
-    request.on('error', (error) => finish(() => reject(error)));
+    request.on('error', (error) => {
+      logWarn('中转站 HTTP 请求发生错误', {
+        host: target.host,
+        code: error && error.code,
+        errorMessage: error && error.message ? error.message : String(error)
+      });
+      finish(() => reject(error));
+    });
     request.setTimeout(effectiveTimeoutMs, () => {
+      logWarn('底层 socket 达到本通道超时时间', {
+        host: target.host,
+        timeoutMs: effectiveTimeoutMs
+      });
       request.destroy(createTimeoutError());
     });
     request.write(body);
     request.end();
+    logInfo('HTTP 请求体已发送到中转站', {
+      host: target.host,
+      bodyBytes: Buffer.byteLength(body)
+    });
   });
 }
 
@@ -362,39 +604,78 @@ function publicError(error) {
 }
 
 exports.main = async (event) => {
+  if (event && event.action === 'getTask') {
+    const task = await resolveTaskForClient(event.taskId);
+    logInfo('客户端轮询识别任务', {
+      taskId: event.taskId,
+      status: task.status,
+      hasResult: !!task.result,
+      hasError: !!task.errorCode
+    });
+    return task;
+  }
+
   const startedAt = nowMs();
+  const taskId = (event && event.taskId) || createTaskId();
   const maxItems = normalizeMaxItems(event && event.maxItems);
   const source = event && event.imageDataUrl
     ? 'imageDataUrl'
     : (event && event.imageFileId ? 'imageFileId' : (event && event.imageUrl ? 'imageUrl' : 'empty'));
-  console.log('[ftAnalyzeImage:timing]', { stage: 'start', source, maxItems });
+  console.log('[ftAnalyzeImage:timing]', { stage: 'start', source, maxItems, taskId });
 
   try {
+    await writeTask(taskId, {
+      status: 'processing',
+      source,
+      maxItems,
+      startedAt
+    });
     const imageDataUrl = event.imageDataUrl
       || (event.imageFileId ? await timed('load_image', () => imageFileIdToDataUrl(event.imageFileId), { source }) : '')
       || (event.imageUrl ? await timed('load_image', () => remoteImageToDataUrl(event.imageUrl), { source }) : '');
     if (!imageDataUrl) {
-      return { items: [], warnings: ['没有收到可识别图片。'] };
+      const emptyResult = { items: [], warnings: ['没有收到可识别图片。'] };
+      await writeTask(taskId, {
+        status: 'success',
+        finishedAt: nowMs(),
+        result: emptyResult
+      });
+      return Object.assign({ taskId }, emptyResult);
     }
     const result = await callAi(imageDataUrl, maxItems);
+    await writeTask(taskId, {
+      status: 'success',
+      finishedAt: nowMs(),
+      result
+    });
     logTiming('total', startedAt, {
       source,
+      taskId,
       itemCount: result && Array.isArray(result.items) ? result.items.length : 0
     });
-    return result;
+    return Object.assign({ taskId }, result);
   } catch (error) {
     console.error('[ftAnalyzeImage:error]', {
+      taskId,
       code: error && error.code,
       message: error && error.message ? error.message : String(error)
     });
-    return publicError(error);
+    const payload = publicError(error);
+    await writeTask(taskId, Object.assign({
+      status: 'failed',
+      finishedAt: nowMs()
+    }, payload));
+    return Object.assign({ taskId }, payload);
   }
 };
 
 exports._test = {
   aiRequestTimeoutMs,
+  staleTaskMs,
   normalizeMaxItems,
   buildPrompt,
   createPostOptions,
+  getRelays,
+  relayEndpointUrl,
   publicError
 };

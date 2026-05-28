@@ -147,23 +147,43 @@
   height: 128rpx;
   flex: none;
   place-items: center;
-  background: conic-gradient(from 28deg, #1f6048 0 72%, rgba(31, 96, 72, 0.12) 72% 100%);
   border-radius: 50%;
 }
 
 .recognizing-orbit::before {
   position: absolute;
   inset: 10rpx;
+  z-index: 0;
   content: "";
   background: #fff2c8;
   border-radius: 50%;
 }
 
-.recognizing-orbit image {
-  position: relative;
+.recognizing-spinner {
+  position: absolute;
+  inset: 0;
   z-index: 1;
+  width: 128rpx;
+  height: 128rpx;
+  animation: recognizing-orbit-spin 1.05s linear infinite;
+  transform-origin: center;
+}
+
+.recognizing-mascot {
+  position: relative;
+  z-index: 2;
   width: 88rpx;
   height: 88rpx;
+}
+
+@keyframes recognizing-orbit-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .recognizing-copy {

@@ -222,6 +222,35 @@ test('search result includes matched source image ids and file ids', () => {
   assert.equal(result.matchedImageFileId, result.item.sourceImageFileId);
 });
 
+test('search prefers thumbnail image fields when present', () => {
+  const result = search.searchItems('蓝色封面的书', {
+    containers: [{
+      _id: 'container_1',
+      name: '玄关抽屉',
+      coverImageFileId: '/tmp/cover.jpg',
+      coverThumbFileId: '/tmp/cover-thumb.jpg',
+      contentImages: [{
+        imageId: 'image_1',
+        fileId: '/tmp/content.jpg',
+        thumbFileId: '/tmp/content-thumb.jpg'
+      }]
+    }],
+    items: [{
+      _id: 'book_1',
+      containerId: 'container_1',
+      displayName: '蓝色封面的书',
+      sourceImageId: 'image_1',
+      sourceImageFileId: '/tmp/content.jpg',
+      confidence: 0.9
+    }]
+  })[0];
+
+  assert.equal(result.containerPhoto, '/tmp/cover.jpg');
+  assert.equal(result.containerThumb, '/tmp/cover-thumb.jpg');
+  assert.equal(result.contentThumb, '/tmp/content-thumb.jpg');
+  assert.equal(result.matchedImageThumbFileId, '/tmp/content-thumb.jpg');
+});
+
 test('container search matches names locations and contained items', () => {
   const service = storage.createStorageService(createMemoryAdapter());
   service.seedDemoData();

@@ -18,6 +18,81 @@ function createMemoryAdapter(initial = {}) {
   };
 }
 
+function createMockWxWithDatabase(initial = {}) {
+  const local = {};
+  const rows = {
+    ft_containers: (initial.ft_containers || []).slice(),
+    ft_items: (initial.ft_items || []).slice()
+  };
+  const writes = [];
+  function collection(name, options = {}) {
+    const skip = options.skip || 0;
+    const limit = options.limit || 100;
+    return {
+      skip(nextSkip) {
+        return collection(name, Object.assign({}, options, { skip: nextSkip }));
+      },
+      limit(nextLimit) {
+        return collection(name, Object.assign({}, options, { limit: nextLimit }));
+      },
+      get() {
+        return Promise.resolve({
+          data: (rows[name] || []).slice(skip, skip + limit)
+        });
+      },
+      doc(id) {
+        return {
+          set({ data }) {
+            const next = Object.assign({ _id: id }, data);
+            const index = rows[name].findIndex((record) => record._id === id);
+            if (index >= 0) {
+              rows[name][index] = next;
+            } else {
+              rows[name].push(next);
+            }
+            writes.push({ collection: name, id, data: next });
+            return Promise.resolve({});
+          }
+        };
+      }
+    };
+  }
+  return {
+    rows,
+    writes,
+    wx: {
+      getStorageSync(key) {
+        return local[key];
+      },
+      setStorageSync(key, value) {
+        local[key] = value;
+      },
+      removeStorageSync(key) {
+        delete local[key];
+      },
+      cloud: {
+        database() {
+          return { collection };
+        }
+      }
+    }
+  };
+}
+
+async function withWx(wxMock, fn) {
+  const previousWx = global.wx;
+  global.wx = wxMock;
+  try {
+    await fn();
+  } finally {
+    if (previousWx === undefined) {
+      delete global.wx;
+    } else {
+      global.wx = previousWx;
+    }
+  }
+}
+
 test('saves a container and confirmed items with shared ids', () => {
   const service = storage.createStorageService(createMemoryAdapter());
   const saved = service.saveContainer({
@@ -94,28 +169,139 @@ test('stores prototype-ready image metadata and item location text', () => {
   assert.equal(saved.items[0].locationText, '照片 1 · 右上');
 });
 
-test('adds content images up to the free limit and reports upgrade prompt after that', () => {
+test('keeps thumbnail file ids alongside durable container image paths', () => {
+  const service = storage.createStorageService(createMemoryAdapter());
+  const saved = service.saveContainer({
+    name: '封面箱子',
+    coverImageFileId: '/tmp/cover.jpg',
+    coverThumbFileId: '/tmp/cover-thumb.jpg',
+    contentImages: [
+      {
+        imageId: 'thumb_image',
+        fileId: '/tmp/content.jpg',
+        thumbFileId: '/tmp/content-thumb.jpg'
+      }
+    ]
+  });
+
+  assert.equal(saved.container.coverThumbFileId, '/tmp/cover-thumb.jpg');
+  assert.equal(saved.container.contentImages[0].thumbFileId, '/tmp/content-thumb.jpg');
+  assert.equal(saved.container.contentThumbFileId, '/tmp/content-thumb.jpg');
+});
+
+test('adds content images up to the configured limit and reports a neutral prompt after that', () => {
   const service = storage.createStorageService(createMemoryAdapter());
   const saved = service.saveContainer({
     name: 'V1 多图箱子',
     contentImageFileId: '/tmp/one.jpg'
   });
 
-  const second = service.addContentImage(saved.container._id, {
-    fileId: '/tmp/two.jpg',
-    label: '右侧',
-    analyzeStatus: 'ready',
-    analyzedAt: 200
+  let updated = saved.container;
+  for (const fileId of ['/tmp/two.jpg', '/tmp/three.jpg', '/tmp/four.jpg', '/tmp/five.jpg']) {
+    updated = service.addContentImage(saved.container._id, {
+      fileId,
+      label: '补充照片',
+      analyzeStatus: 'ready',
+      analyzedAt: 200
+    });
+  }
+
+  assert.equal(storage.CONTENT_IMAGE_LIMIT, 5);
+  assert.equal(updated.contentImages.length, 5);
+  assert.equal(updated.contentImages[1].analyzeStatus, 'ready');
+  assert.equal(updated.contentImages[1].analyzedAt, 200);
+  assert.throws(
+    () => service.addContentImage(saved.container._id, {
+      fileId: '/tmp/six.jpg',
+      label: '右侧',
+      analyzeStatus: 'ready',
+      analyzedAt: 200
+    }),
+    /最多可保存 5 张箱内照片/
+  );
+});
+
+test('limits user containers to three while allowing existing updates', () => {
+  const service = storage.createStorageService(createMemoryAdapter());
+  const first = service.saveContainer({ name: '箱子 1' });
+  service.saveContainer({ name: '箱子 2' });
+  service.saveContainer({ name: '箱子 3' });
+
+  assert.equal(storage.CONTAINER_LIMIT, 3);
+  assert.throws(
+    () => service.saveContainer({ name: '箱子 4' }),
+    /最多可保存 3 个箱子/
+  );
+
+  service.saveContainer(Object.assign({}, first.container, { name: '箱子 1 更新' }));
+  assert.equal(service.getContainer(first.container._id).name, '箱子 1 更新');
+});
+
+test('async storage loads from and writes to cloud database collections', async () => {
+  const mock = createMockWxWithDatabase({
+    ft_containers: [
+      {
+        _id: 'existing_box',
+        name: '已有箱子',
+        itemCount: 0,
+        createdAt: 1,
+        updatedAt: 1,
+        deletedAt: null
+      }
+    ],
+    ft_items: []
   });
 
-  assert.equal(storage.FREE_CONTENT_IMAGE_LIMIT, 2);
-  assert.equal(second.contentImages.length, 2);
-  assert.equal(second.contentImages[1].analyzeStatus, 'ready');
-  assert.equal(second.contentImages[1].analyzedAt, 200);
-  assert.throws(
-    () => service.addContentImage(saved.container._id, { fileId: '/tmp/three.jpg' }),
-    /免费版最多支持 2 张箱内照片/
-  );
+  await withWx(mock.wx, async () => {
+    const service = storage.createStorageService();
+    const loaded = await service.listUserContainersAsync();
+    assert.deepEqual(loaded.map((container) => container.name), ['已有箱子']);
+
+    const saved = await service.saveContainerAsync({
+      name: '数据库箱子',
+      contentImageFileId: '/tmp/db.jpg',
+      items: [{ displayName: '钥匙', confirmed: true }]
+    });
+
+    assert.ok(mock.rows.ft_containers.some((container) => container._id === saved.container._id));
+    assert.ok(mock.rows.ft_items.some((item) => item.containerId === saved.container._id));
+    assert.ok(mock.writes.some((write) => write.collection === 'ft_containers'));
+    assert.ok(mock.writes.some((write) => write.collection === 'ft_items'));
+  });
+});
+
+test('async storage migrates existing local cache when database is empty', async () => {
+  const mock = createMockWxWithDatabase();
+  mock.wx.setStorageSync('findThings.containers', [
+    {
+      _id: 'local_box',
+      name: '本地旧箱子',
+      itemCount: 1,
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null
+    }
+  ]);
+  mock.wx.setStorageSync('findThings.items', [
+    {
+      _id: 'local_item',
+      containerId: 'local_box',
+      displayName: '旧物品',
+      confirmed: true,
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null
+    }
+  ]);
+
+  await withWx(mock.wx, async () => {
+    const service = storage.createStorageService();
+    const loaded = await service.listUserContainersAsync();
+
+    assert.deepEqual(loaded.map((container) => container.name), ['本地旧箱子']);
+    assert.ok(mock.rows.ft_containers.some((container) => container._id === 'local_box'));
+    assert.ok(mock.rows.ft_items.some((item) => item._id === 'local_item'));
+  });
 });
 
 test('replaces only items from one source image and updates image and container counts', () => {

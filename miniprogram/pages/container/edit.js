@@ -25,6 +25,7 @@ function legacyContentImages(draft) {
     return [{
       imageId: 'legacy_content_1',
       fileId: draft.contentImageFileId,
+      thumbFileId: draft.contentThumbFileId || '',
       label: '箱内视角',
       orientation: 'landscape',
       sortOrder: 0,
@@ -66,12 +67,14 @@ function normalizeContentImages(images, items) {
       ? image.itemCount
       : (items || []).filter((item) => item.sourceImageId === image.imageId || item.sourceImageFileId === image.fileId).length;
     const ratioClass = inferRatioClass(image);
+    const displayFileId = image.thumbFileId || image.thumbnailFileId || image.previewFileId || image.fileId || '';
     return Object.assign({}, image, {
       label: image.label || summaryTitle(index),
       sortOrder: Number.isFinite(image.sortOrder) ? image.sortOrder : index,
       itemCount,
       ratioClass,
       ratioText: ratioText(ratioClass),
+      displayFileId,
       summaryTitle: summaryTitle(index),
       summaryMeta: itemCount > 0 ? `${itemCount} 件物品` : '待补充状态'
     });
@@ -80,21 +83,27 @@ function normalizeContentImages(images, items) {
 
 function viewState(data) {
   const coverImageFileId = data.coverImageFileId || '';
+  const coverThumbFileId = data.coverThumbFileId || '';
   const coverImageMetadata = data.coverImageMetadata || {};
   const contentImages = data.contentImages || [];
   const items = data.items || [];
+  const showAllItems = !!data.showAllItems;
+  const hiddenItemCount = Math.max(0, items.length - 8);
   const coverRatioClass = coverImageFileId ? inferRatioClass(coverImageMetadata) : 'ratio-landscape';
   return {
     showCoverPlaceholder: !coverImageFileId,
     hasCoverImage: !!coverImageFileId,
+    coverDisplayFileId: coverThumbFileId || coverImageFileId,
     coverRatioClass,
     coverRatioText: coverImageFileId ? ratioText(coverRatioClass) : '横拍更清楚',
     hasContentImages: contentImages.length > 0,
-    itemPreviewItems: items.slice(0, 8),
-    hiddenItemCount: Math.max(0, items.length - 8),
+    itemPreviewItems: showAllItems ? items : items.slice(0, 8),
+    hiddenItemCount,
     contentImageCountText: `${contentImages.length} 张`,
     itemCountText: `${items.length} 件物品`,
-    hasHiddenItems: items.length > 8
+    hasHiddenItems: hiddenItemCount > 0,
+    showAllItems,
+    itemPreviewToggleText: showAllItems ? '收起物品清单' : `还有 ${hiddenItemCount} 件一起保存`
   };
 }
 
@@ -104,12 +113,15 @@ Page({
     name: '',
     locationPath: '',
     coverImageFileId: '',
+    coverThumbFileId: '',
     coverImageMetadata: {},
+    coverDisplayFileId: '',
     coverRatioClass: 'ratio-landscape',
     coverRatioText: '横拍更清楚',
     showCoverPlaceholder: true,
     hasCoverImage: false,
     contentImageFileId: '',
+    contentThumbFileId: '',
     contentImages: [],
     hasContentImages: false,
     items: [],
@@ -117,7 +129,9 @@ Page({
     hiddenItemCount: 0,
     contentImageCountText: '0 张',
     itemCountText: '0 件物品',
-    hasHiddenItems: false
+    hasHiddenItems: false,
+    showAllItems: false,
+    itemPreviewToggleText: ''
   },
 
   onLoad() {
@@ -143,14 +157,20 @@ Page({
       || editDraft.contentImageFileId
       || (contentImages[0] && contentImages[0].fileId)
       || '';
+    const contentThumbFileId = reviewDraft.contentThumbFileId
+      || editDraft.contentThumbFileId
+      || (contentImages[0] && contentImages[0].thumbFileId)
+      || '';
     const nextData = {
       draftId,
       name: canReuseEditDraft ? (editDraft.name || '') : '',
       locationPath: canReuseEditDraft ? (editDraft.locationPath || '') : '',
       coverImageFileId: canReuseEditDraft ? (editDraft.coverImageFileId || '') : '',
+      coverThumbFileId: canReuseEditDraft ? (editDraft.coverThumbFileId || '') : '',
       coverImageMetadata: canReuseEditDraft ? (editDraft.coverImageMetadata || {}) : {},
       contentImages,
       contentImageFileId,
+      contentThumbFileId,
       items
     };
 
@@ -165,8 +185,10 @@ Page({
       name: data.name || '',
       locationPath: data.locationPath || '',
       coverImageFileId: data.coverImageFileId || '',
+      coverThumbFileId: data.coverThumbFileId || '',
       coverImageMetadata: data.coverImageMetadata || {},
       contentImageFileId: data.contentImageFileId || '',
+      contentThumbFileId: (data.contentImages || [])[0] && (data.contentImages || [])[0].thumbFileId || '',
       contentImages: data.contentImages || [],
       items: data.items || []
     });
@@ -191,10 +213,14 @@ Page({
       const chosenPath = getChosenPath(result);
       if (!chosenPath) return;
       wx.showLoading({ title: '保存照片' });
-      imageStore.persistImage(chosenPath, 'find-things/covers')
-        .then((coverImageFileId) => {
+      Promise.all([
+        imageStore.persistImage(chosenPath, 'find-things/covers'),
+        imageStore.persistThumbnail(chosenPath, 'find-things/thumbs')
+      ])
+        .then(([coverImageFileId, coverThumbFileId]) => {
           this.setAndPersist({
             coverImageFileId,
+            coverThumbFileId: coverThumbFileId || '',
             coverImageMetadata: createImageMetadata({ chooseResult: result })
           });
         })
@@ -224,12 +250,18 @@ Page({
       || {};
     this.setAndPersist({
       coverImageFileId: this.data.contentImageFileId,
+      coverThumbFileId: contentImage.thumbFileId || '',
       coverImageMetadata: {
         orientation: contentImage.orientation || '',
         width: contentImage.width || 0,
         height: contentImage.height || 0
       }
     });
+    wx.showToast({ title: '已用箱内图做封面', icon: 'success' });
+  },
+
+  toggleItemPreview() {
+    this.setAndPersist({ showAllItems: !this.data.showAllItems });
   },
 
   goBack() {
@@ -246,19 +278,37 @@ Page({
       wx.showToast({ title: '请填写容器名称', icon: 'none' });
       return;
     }
-    storage.saveContainer({
+    wx.showLoading({ title: '保存中' });
+    const saveData = {
       name,
       locationPath: this.data.locationPath,
       coverImageFileId: this.data.coverImageFileId,
+      coverThumbFileId: this.data.coverThumbFileId,
       contentImageFileId: this.data.contentImageFileId,
+      contentThumbFileId: (this.data.contentImages || [])[0] && (this.data.contentImages || [])[0].thumbFileId || '',
       contentImages: this.data.contentImages,
       items: this.data.items
-    });
-    this.saved = true;
-    wx.removeStorageSync('reviewDraft');
-    wx.removeStorageSync('captureDraft');
-    wx.removeStorageSync('containerEditDraft');
-    wx.showToast({ title: '已保存', icon: 'success' });
-    navigateHome();
+    };
+    const runSave = typeof storage.saveContainerAsync === 'function'
+      ? storage.saveContainerAsync(saveData)
+      : Promise.resolve(storage.saveContainer(saveData));
+    runSave
+      .then(() => {
+        this.saved = true;
+        wx.removeStorageSync('reviewDraft');
+        wx.removeStorageSync('captureDraft');
+        wx.removeStorageSync('containerEditDraft');
+        wx.showToast({ title: '已保存', icon: 'success' });
+        navigateHome();
+      })
+      .catch((error) => {
+        wx.showToast({
+          title: error && error.message ? error.message : '保存失败',
+          icon: 'none'
+        });
+      })
+      .finally(() => {
+        wx.hideLoading();
+      });
   }
 });

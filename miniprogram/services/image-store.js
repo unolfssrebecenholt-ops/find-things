@@ -51,6 +51,58 @@ function saveLocalFile(filePath) {
   });
 }
 
+function downloadCloudFile(filePath) {
+  if (!hasWx() || !wx.cloud || !wx.cloud.downloadFile) {
+    return Promise.resolve('');
+  }
+  return new Promise((resolve) => {
+    wx.cloud.downloadFile({
+      fileID: filePath,
+      success: (result) => resolve(result.tempFilePath || ''),
+      fail: () => resolve('')
+    });
+  });
+}
+
+function downloadRemoteFile(filePath) {
+  if (!hasWx() || !wx.downloadFile) {
+    return Promise.resolve('');
+  }
+  return new Promise((resolve) => {
+    wx.downloadFile({
+      url: filePath,
+      success: (result) => {
+        const statusCode = Number(result && result.statusCode);
+        const ok = !statusCode || (statusCode >= 200 && statusCode < 300);
+        resolve(ok ? (result.tempFilePath || '') : '');
+      },
+      fail: () => resolve('')
+    });
+  });
+}
+
+function getProcessableImagePath(filePath) {
+  const value = String(filePath || '');
+  if (!value) return Promise.resolve('');
+  if (/^cloud:\/\//.test(value)) return downloadCloudFile(value);
+  if (/^https?:\/\//.test(value)) return downloadRemoteFile(value);
+  return Promise.resolve(value);
+}
+
+function compressImage(filePath, quality) {
+  if (!filePath || !hasWx() || !wx.compressImage) {
+    return Promise.resolve('');
+  }
+  return new Promise((resolve) => {
+    wx.compressImage({
+      src: filePath,
+      quality,
+      success: (result) => resolve(result.tempFilePath || ''),
+      fail: () => resolve('')
+    });
+  });
+}
+
 function prepareImageForAnalyze(filePath, options) {
   if (!filePath || isPersistentPath(filePath) || !hasWx() || !wx.compressImage) {
     return Promise.resolve(filePath || '');
@@ -68,6 +120,14 @@ function prepareImageForAnalyze(filePath, options) {
   });
 }
 
+function prepareThumbnail(filePath, options) {
+  const quality = Number.isFinite(options && Number(options.quality))
+    ? Math.max(10, Math.min(70, Number(options.quality)))
+    : 28;
+  return getProcessableImagePath(filePath)
+    .then((processablePath) => compressImage(processablePath, quality));
+}
+
 function persistImage(filePath, folder) {
   if (!filePath || isPersistentPath(filePath)) {
     return Promise.resolve(filePath || '');
@@ -78,8 +138,20 @@ function persistImage(filePath, folder) {
   return saveLocalFile(filePath);
 }
 
+function persistThumbnail(filePath, folder, options) {
+  if (!filePath) return Promise.resolve('');
+  return prepareThumbnail(filePath, options)
+    .then((thumbnailPath) => {
+      if (!thumbnailPath || thumbnailPath === filePath) return '';
+      return persistImage(thumbnailPath, folder || 'find-things/thumbs').catch(() => '');
+    })
+    .catch(() => '');
+}
+
 module.exports = {
   persistImage,
+  persistThumbnail,
+  prepareThumbnail,
   prepareImageForAnalyze,
   isPersistentPath
 };

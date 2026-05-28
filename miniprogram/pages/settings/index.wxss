@@ -44,13 +44,21 @@
 }
 
 .input {
+  box-sizing: border-box;
   height: 76rpx;
   padding: 0 18rpx;
   color: #2f352c;
   font-size: 27rpx;
+  line-height: 76rpx;
   background: #fff9ee;
   border: 2rpx solid #eadfc8;
   border-radius: 22rpx;
+}
+
+.input.readonly {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .segmented-inline {
@@ -76,7 +84,5 @@
 }
 
 .settings-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14rpx;
+  display: none;
 }

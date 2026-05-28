@@ -9,7 +9,7 @@
 
   <view class="detail-hero">
     <view class="detail-cover cover-photo">
-      <image wx:if="{{hasCoverImage}}" mode="aspectFit" src="{{container.coverImageFileId}}"></image>
+      <image wx:if="{{hasCoverImage}}" mode="aspectFit" lazy-load="{{true}}" src="{{container.coverDisplayFileId}}"></image>
       <view wx:if="{{hasCoverImage}}" class="cover-label">
         <text>外观照片</text>
       </view>
@@ -25,8 +25,8 @@
         <text class="subtle">件物品</text>
       </view>
       <view class="stat">
-        <text class="stat-value">{{contentImages.length}}/{{freeLimit}}</text>
-        <text class="subtle">免费照片</text>
+        <text class="stat-value">{{contentImages.length}}/{{photoLimit}}</text>
+        <text class="subtle">箱内照片</text>
       </view>
       <view class="stat">
         <text class="stat-value">今天</text>
@@ -91,7 +91,7 @@
     </view>
   </view>
 
-  <view class="note-card quiet-note">默认可保存 {{freeLimit}} 张箱内照片；更多照片可升级。搜索会同时看名称、可见文字和关键特征。</view>
+  <view class="note-card quiet-note">当前最多可保存 {{photoLimit}} 张箱内照片。搜索会同时看名称、可见文字和关键特征。</view>
 
   <view class="bottom-nav">
     <view class="nav-item" bindtap="goHome">

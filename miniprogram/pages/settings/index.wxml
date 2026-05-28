@@ -6,36 +6,25 @@
       <image class="xiaolan-avatar" mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
       <view class="xiaolan-copy">
         <text class="card-title">小懒识别服务</text>
-        <text class="subtle">小懒会把照片分析成可搜索的物品清单。服务配置只保存在当前设备；正式版建议使用云函数环境变量。</text>
+        <text class="subtle">小懒会把照片分析成可搜索的物品清单。识别请求统一通过云函数和中转站配置处理。</text>
       </view>
-    </view>
-
-    <view class="field">
-      <text class="label">接口地址</text>
-      <input class="input" value="{{baseUrl}}" bindinput="inputBaseUrl" />
-    </view>
-
-    <view class="field">
-      <text class="label">模型</text>
-      <input class="input" value="{{model}}" bindinput="inputModel" />
     </view>
 
     <view class="field">
       <text class="label">调用方式</text>
-      <view class="segmented-inline">
-        <button class="segment {{transport == 'direct' ? 'active' : ''}}" bindtap="useDirect">本地直连</button>
-        <button class="segment {{transport == 'cloud' ? 'active' : ''}}" bindtap="useCloud">云函数</button>
-      </view>
+      <view class="input readonly">{{transport == 'cloud' ? '云函数' : '本地直连'}}</view>
     </view>
 
     <view class="field">
-      <text class="label">服务密钥</text>
-      <input class="input" password="{{true}}" placeholder="{{hasApiKey ? maskedApiKey : '粘贴服务密钥'}}" value="{{apiKey}}" bindinput="inputApiKey" />
+      <text class="label">模型</text>
+      <view class="input readonly">{{model}}</view>
     </view>
 
-    <view class="settings-actions">
-      <button class="primary-button" bindtap="saveAiSettings">保存配置</button>
-      <button class="soft-button" bindtap="clearApiKey">清除密钥</button>
+    <view class="field">
+      <text class="label">中转站</text>
+      <view class="input readonly">{{relayCount}} 个可用：{{relayNames}}</view>
     </view>
+
+    <view class="settings-actions"></view>
   </view>
 </view>

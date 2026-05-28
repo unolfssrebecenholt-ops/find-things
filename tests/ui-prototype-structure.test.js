@@ -121,7 +121,7 @@ test('review confirmation page exposes the new normal-state chip, ratio guide, a
   assert.match(wxml, /sloth-chip/);
   assert.match(wxml, /ratio-guide/);
   assert.match(wxml, /ratio-landscape|ratio-portrait/);
-  assert.match(wxml, /补拍一张/);
+  assert.match(wxml, /拍下一张/);
   assert.match(wxml, /保存容器/);
   assert.doesNotMatch(wxml, /下一步：拍容器/);
 
@@ -137,7 +137,11 @@ test('review page presents annotated photo and inventory list before editing', (
   assert.match(wxml, /segmented/);
   assert.match(wxml, />标注</);
   assert.match(wxml, />清单</);
-  assert.match(wxml, /补拍一张/);
+  assert.match(wxml, /annotatedSegmentClass/);
+  assert.match(wxml, /summarySegmentClass/);
+  assert.match(wxml, /isPhotoMode/);
+  assert.match(wxml, /listModeClass/);
+  assert.match(wxml, /拍下一张/);
   assert.match(wxml, /保存容器/);
   assert.doesNotMatch(wxml, /下一步：拍容器/);
   assert.match(wxml, /summary-panel/);
@@ -146,9 +150,10 @@ test('review page presents annotated photo and inventory list before editing', (
   assert.match(wxml, /annotation-box/);
   assert.match(wxml, /wx:if="\{\{item\.hasAnnotation\}\}"/);
   assert.match(wxml, /quick-list/);
+  assert.match(wxml, /item-editor/);
+  assert.match(wxml, /handleItemsChange/);
   assert.doesNotMatch(wxml, /scan-overlay/);
   assert.doesNotMatch(wxml, />识别中</);
-  assert.doesNotMatch(wxml, /item-editor/);
   assert.doesNotMatch(wxml, /isEditMode/);
   assert.doesNotMatch(wxml, /list-expanded/);
   assert.doesNotMatch(wxml, /fake-input/);
@@ -240,7 +245,8 @@ test('container tab opens a real container list page', () => {
   assert.ok(appJson.pages.includes('pages/container/list'));
   assert.match(homeJs, /\/pages\/container\/list/);
   assert.match(searchJs, /\/pages\/container\/list/);
-  assert.match(listWxml, /家里的东西，都在这里/);
+  assert.match(listWxml, /家里的东西，/);
+  assert.match(listWxml, /都在这里/);
   assert.match(listWxml, /compact-search/);
   assert.match(listWxml, /library-summary/);
   assert.match(listWxml, /rowModeClass/);
@@ -333,6 +339,12 @@ test('photo display modes separate thumbnails from full-photo review surfaces', 
   assert.match(homeWxml, /mode="aspectFill"/);
   assert.match(listWxml, /mode="aspectFill"/);
   assert.match(resultCardWxml, /mode="aspectFill"/);
+  assert.match(homeWxml, /lazy-load="\{\{true\}\}"/);
+  assert.match(listWxml, /lazy-load="\{\{true\}\}"/);
+  assert.match(resultCardWxml, /lazy-load="\{\{true\}\}"/);
+  assert.match(editWxml, /lazy-load="\{\{true\}\}"/);
+  assert.match(detailWxml, /lazy-load="\{\{true\}\}"/);
+  assert.match(annotatedWxml, /lazy-load="\{\{true\}\}"/);
   assert.match(editWxml, /mode="aspectFit"/);
   assert.match(detailWxml, /mode="aspectFit"/);
   assert.match(annotatedWxml, /mode="aspectFit"/);

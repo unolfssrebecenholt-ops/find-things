@@ -26,15 +26,48 @@ function withEnv(values, fn) {
   }
 }
 
+async function withNow(value, fn) {
+  const originalNow = Date.now;
+  Date.now = () => value;
+  try {
+    return await fn();
+  } finally {
+    Date.now = originalNow;
+  }
+}
+
 function loadAnalyzeFunction(options = {}) {
   const modulePath = path.join(__dirname, '..', 'cloudfunctions', 'ftAnalyzeImage', 'index.js');
   const originalLoad = Module._load;
+  const taskRows = Object.assign({}, options.taskRows || {});
   delete require.cache[require.resolve(modulePath)];
   Module._load = function patchedLoad(request, parent, isMain) {
     if (request === 'wx-server-sdk') {
       return {
         DYNAMIC_CURRENT_ENV: 'dynamic',
         init() {},
+        getWXContext() {
+          return { OPENID: 'test-openid' };
+        },
+        database() {
+          return {
+            collection(name) {
+              return {
+                doc(id) {
+                  return {
+                    get() {
+                      return Promise.resolve({ data: taskRows[id] || null });
+                    },
+                    set({ data }) {
+                      taskRows[id] = Object.assign({ _id: id }, data);
+                      return Promise.resolve({});
+                    }
+                  };
+                }
+              };
+            }
+          };
+        },
         downloadFile() {
           return Promise.resolve({ fileContent: Buffer.from('image') });
         }
@@ -53,11 +86,11 @@ function loadAnalyzeFunction(options = {}) {
   }
 }
 
-test('cloud function AI request timeout uses the 120s function budget with headroom', () => {
+test('cloud function AI request timeout defaults to 120s for relay failover', () => {
   const analyzeFunction = loadAnalyzeFunction();
 
   assert.ok(analyzeFunction._test);
-  assert.equal(analyzeFunction._test.aiRequestTimeoutMs(), 105000);
+  assert.equal(analyzeFunction._test.aiRequestTimeoutMs(), 120000);
 });
 
 test('cloud function AI request timeout can be bounded for 60s deployments', () => {
@@ -65,6 +98,14 @@ test('cloud function AI request timeout can be bounded for 60s deployments', () 
 
   withEnv({ FUNCTION_TIMEOUT_MS: '60000' }, () => {
     assert.equal(analyzeFunction._test.aiRequestTimeoutMs(), 45000);
+  });
+});
+
+test('cloud function AI request timeout respects the function budget headroom', () => {
+  const analyzeFunction = loadAnalyzeFunction();
+
+  withEnv({ FUNCTION_TIMEOUT_MS: '120000' }, () => {
+    assert.equal(analyzeFunction._test.aiRequestTimeoutMs(), 105000);
   });
 });
 
@@ -99,6 +140,90 @@ test('cloud function prompt asks for region-by-region inventory, not only obviou
   assert.match(prompt, /不要把多个物品合成一个条目/);
   assert.doesNotMatch(prompt, /bbox|boundingBox|归一化坐标|标框/);
   assert.doesNotMatch(prompt, /插线板|袋子|抽屉外上方/);
+});
+
+test('cloud function supports multiple relay entries for failover', () => {
+  const analyzeFunction = loadAnalyzeFunction({
+    localConfig: {
+      relays: [
+        {
+          id: 'primary',
+          baseUrl: 'https://primary.example.com',
+          endpoint: '/v1/chat/completions',
+          model: 'gpt-5.5',
+          apiKey: 'test-primary'
+        },
+        {
+          id: 'backup',
+          baseUrl: 'https://backup.example.com',
+          endpoint: '/v1/chat/completions',
+          model: 'gpt-5.5',
+          apiKey: 'test-backup'
+        }
+      ]
+    }
+  });
+
+  const relays = analyzeFunction._test.getRelays();
+
+  assert.equal(relays.length, 2);
+  assert.equal(relays[0].id, 'primary');
+  assert.equal(analyzeFunction._test.relayEndpointUrl(relays[1]), 'https://backup.example.com/v1/chat/completions');
+});
+
+test('cloud function can read relay entries from environment JSON', () => {
+  const analyzeFunction = loadAnalyzeFunction({ localConfig: {} });
+  withEnv({
+    OPENAI_COMPAT_RELAYS: JSON.stringify([
+      {
+        id: 'env-primary',
+        baseUrl: 'https://env.example.com',
+        endpoint: '/v1/chat/completions',
+        model: 'gpt-5.5',
+        apiKey: 'test-env'
+      }
+    ])
+  }, () => {
+    const relays = analyzeFunction._test.getRelays();
+
+    assert.equal(relays.length, 1);
+    assert.equal(relays[0].id, 'env-primary');
+  });
+});
+
+test('cloud function exposes analyze task polling results', async () => {
+  const analyzeFunction = loadAnalyzeFunction({
+    taskRows: {
+      task_done: {
+        status: 'success',
+        result: { items: [{ displayName: '钥匙' }] }
+      }
+    }
+  });
+
+  const result = await analyzeFunction.main({ action: 'getTask', taskId: 'task_done' });
+
+  assert.equal(result.status, 'success');
+  assert.equal(result.result.items[0].displayName, '钥匙');
+});
+
+test('cloud function marks stale processing analyze tasks as timed out during polling', async () => {
+  const analyzeFunction = loadAnalyzeFunction({
+    taskRows: {
+      stale_task: {
+        status: 'processing',
+        startedAt: 1000,
+        updatedAt: 1000
+      }
+    }
+  });
+
+  const result = await withNow(312000, () => analyzeFunction.main({ action: 'getTask', taskId: 'stale_task' }));
+
+  assert.equal(result.status, 'failed');
+  assert.equal(result.errorCode, 'AI_REQUEST_TIMEOUT');
+  assert.equal(result.stale, true);
+  assert.match(result.errorMessage, /小懒看得有点久/);
 });
 
 test('cloud function maps AI timeout to a user-readable payload', () => {

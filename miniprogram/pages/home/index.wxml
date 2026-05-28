@@ -37,7 +37,7 @@
       data-id="{{item._id}}"
     >
       <view class="container-thumb tone-{{index}}">
-        <image wx:if="{{item.coverPhoto}}" mode="aspectFill" src="{{item.coverPhoto}}"></image>
+        <image wx:if="{{item.coverPhoto}}" mode="aspectFill" lazy-load="{{true}}" src="{{item.coverPhoto}}"></image>
         <view wx:if="{{item.showPlaceholder}}" class="photo-illustration">
           <view class="illu-line wide"></view>
           <view class="illu-line"></view>

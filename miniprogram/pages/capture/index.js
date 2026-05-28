@@ -49,17 +49,19 @@ Page({
     if (!imagePath) return;
     this.setData({ recognizing: true });
     const persistOriginal = imageStore.persistImage(imagePath, 'find-things/content');
+    const persistThumbnail = imageStore.persistThumbnail(imagePath, 'find-things/thumbs');
     const analyzePrepared = imageStore.prepareImageForAnalyze(imagePath)
       .then((analyzePath) => ai.analyzeImage(Object.assign({
         imagePath: analyzePath,
         allowMockFallback: false
       }, options || {})));
 
-    Promise.all([persistOriginal, analyzePrepared])
-      .then(([storedPath, result]) => {
+    Promise.all([persistOriginal, persistThumbnail, analyzePrepared])
+      .then(([storedPath, thumbPath, result]) => {
         return Object.assign({}, result, {
           imagePath: storedPath,
           fileId: storedPath,
+          thumbFileId: thumbPath || '',
           imageMetadata: createImageMetadata(Object.assign({
             chooseResult: options && options.chooseResult
           }, result && result.imageMetadata || {}))

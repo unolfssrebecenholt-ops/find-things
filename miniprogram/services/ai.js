@@ -1,4 +1,5 @@
 const aiConfig = require('../config/ai');
+const relayConfig = require('../config/relays');
 const mockAi = require('./mock-ai');
 const { normalizeBbox, withDisplayIndexes } = require('../utils/geometry');
 
@@ -16,6 +17,14 @@ const NETWORK_UNREACHABLE_ERROR_CODES = [
 
 function hasWx() {
   return typeof wx !== 'undefined';
+}
+
+function createTaskId() {
+  return `task_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function mergeConfig(overrides) {
@@ -39,10 +48,21 @@ function getRuntimeConfig() {
   const config = mergeConfig();
   const apiKey = getStorageValue(config.apiKeyStorageKey, config.apiKey);
   const transport = config.lockTransport ? config.transport : getStorageValue(config.transportStorageKey, config.transport);
+  const baseUrl = getStorageValue(config.baseUrlStorageKey, config.baseUrl);
+  const model = getStorageValue(config.modelStorageKey, config.model);
+  const relays = (relayConfig.relays || []).map((relay, index) => {
+    const isPrimary = index === 0 || relay.id === 'primary';
+    return Object.assign({}, relay, {
+      baseUrl: isPrimary ? baseUrl : relay.baseUrl,
+      model: isPrimary ? model : relay.model,
+      apiKey: isPrimary ? (apiKey || relay.apiKey) : relay.apiKey
+    });
+  }).filter((relay) => relay.enabled !== false && relay.baseUrl);
   return mergeConfig({
     apiKey,
-    baseUrl: getStorageValue(config.baseUrlStorageKey, config.baseUrl),
-    model: getStorageValue(config.modelStorageKey, config.model),
+    baseUrl,
+    model,
+    relays,
     transport: resolveTransport(config, apiKey, transport)
   });
 }
@@ -78,7 +98,9 @@ function getSettingsViewModel() {
     model: config.model,
     transport: config.transport,
     hasApiKey: !!config.apiKey,
-    maskedApiKey: maskApiKey(config.apiKey)
+    maskedApiKey: maskApiKey(config.apiKey),
+    relayCount: (config.relays || []).length,
+    relayNames: (config.relays || []).map((relay) => relay.name || relay.id).join(' / ')
   };
 }
 
@@ -142,15 +164,15 @@ function getCloudImageSource(filePath) {
 }
 
 function uploadImageForCloudAnalyze(filePath) {
-  if (!hasWx() || !wx.cloud || !wx.cloud.uploadFile) {
-    return Promise.reject(new Error('当前环境不可上传图片到云存储'));
-  }
   const source = getCloudImageSource(filePath);
   if (source.kind === 'cloud') {
     return Promise.resolve({ imageFileId: source.imageFileId });
   }
   if (source.kind === 'remote') {
     return Promise.resolve({ imageUrl: source.imageUrl });
+  }
+  if (!hasWx() || !wx.cloud || !wx.cloud.uploadFile) {
+    return Promise.reject(new Error('当前环境不可上传图片到云存储'));
   }
   const cloudPath = `find-things/analyze/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${extensionFromPath(filePath)}`;
   return new Promise((resolve, reject) => {
@@ -358,28 +380,28 @@ function normalizeAiPayload(payload, imagePath) {
   };
 }
 
-function requestOpenAiCompatible(config, imageDataUrl) {
-  if (!config.apiKey) {
+function requestRelay(relay, imageDataUrl, maxItems) {
+  if (!relay.apiKey) {
     return Promise.reject(new Error('未配置识别服务密钥'));
   }
   return new Promise((resolve, reject) => {
     wx.request({
-      url: endpointUrl(config),
+      url: endpointUrl(relay),
       method: 'POST',
-      timeout: config.timeout || 60000,
+      timeout: relay.timeout || 60000,
       header: {
-        Authorization: `Bearer ${config.apiKey}`,
+        Authorization: `Bearer ${relay.apiKey}`,
         'Content-Type': 'application/json'
       },
       data: {
-        model: config.model,
+        model: relay.model,
         temperature: 0.1,
         response_format: { type: 'json_object' },
         messages: [
           {
             role: 'user',
             content: [
-              { type: 'text', text: buildVisionPrompt(config.maxItems) },
+              { type: 'text', text: buildVisionPrompt(maxItems) },
               { type: 'image_url', image_url: { url: imageDataUrl } }
             ]
           }
@@ -401,24 +423,49 @@ function requestOpenAiCompatible(config, imageDataUrl) {
   });
 }
 
+function requestOpenAiCompatible(config, imageDataUrl) {
+  const relays = config.relays && config.relays.length ? config.relays : [config];
+  const errors = [];
+  const tryNext = (index) => {
+    const relay = relays[index];
+    if (!relay) {
+      const lastError = errors[errors.length - 1];
+      return Promise.reject(lastError || new Error('识别服务不可用'));
+    }
+    return requestRelay(relay, imageDataUrl, config.maxItems).catch((error) => {
+      errors.push(error);
+      return tryNext(index + 1);
+    });
+  };
+  return tryNext(0);
+}
+
 function callCloudAnalyze(config, imagePath) {
   if (!hasWx() || !wx.cloud || !wx.cloud.callFunction) {
     return Promise.reject(new Error('当前环境不可调用云函数'));
   }
   return uploadImageForCloudAnalyze(imagePath).then((imageInput) => {
-    const data = Object.assign({ maxItems: config.maxItems }, imageInput);
+    const taskId = createTaskId();
+    const data = Object.assign({ maxItems: config.maxItems, taskId }, imageInput);
     return wx.cloud.callFunction({
       name: config.cloudFunctionName,
       data
-    }).then((result) => {
-      const payload = result && result.result;
-      unwrapCloudAnalyzePayload(payload);
-      if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
-        return Object.assign({}, payload, { __sourceImage: imageInput });
-      }
-      return { items: Array.isArray(payload) ? payload : [], __sourceImage: imageInput };
-    });
+    })
+      .catch((error) => {
+        if (!isCloudCallTimeout(error)) throw error;
+        return pollAnalyzeTask(config, taskId);
+      })
+      .then((result) => normalizeCloudAnalyzeResult(result && result.result ? result.result : result, imageInput));
   });
+}
+
+function normalizeCloudAnalyzeResult(payload, imageInput) {
+  const resultPayload = payload && payload.status === 'success' && payload.result ? payload.result : payload;
+  unwrapCloudAnalyzePayload(resultPayload);
+  if (resultPayload && typeof resultPayload === 'object' && !Array.isArray(resultPayload)) {
+    return Object.assign({}, resultPayload, { __sourceImage: imageInput });
+  }
+  return { items: Array.isArray(resultPayload) ? resultPayload : [], __sourceImage: imageInput };
 }
 
 function normalizeCloudErrorCode(code) {
@@ -442,6 +489,48 @@ function friendlyAnalyzeErrorMessage(code, message) {
     return messages.AI_ANALYZE_FAILED;
   }
   return message || messages.AI_ANALYZE_FAILED;
+}
+
+function friendlyCloudCallError(error) {
+  const message = error && error.message ? error.message : String(error || '');
+  const code = normalizeCloudErrorCode(error && error.code);
+  const timedOut = /timeout|ESOCKETTIMEDOUT|-501002/i.test(message);
+  if (!timedOut && !code) return error;
+  const friendly = new Error(timedOut
+    ? friendlyAnalyzeErrorMessage('AI_REQUEST_TIMEOUT', message)
+    : friendlyAnalyzeErrorMessage(code, message));
+  friendly.code = timedOut ? 'AI_REQUEST_TIMEOUT' : code;
+  return friendly;
+}
+
+function isCloudCallTimeout(error) {
+  const message = error && error.message ? error.message : String(error || '');
+  return /timeout|ESOCKETTIMEDOUT|-501002/i.test(message);
+}
+
+function pollAnalyzeTask(config, taskId, options) {
+  const intervalMs = (options && options.intervalMs) || 3000;
+  const maxWaitMs = (options && options.maxWaitMs) || 270000;
+  const startedAt = Date.now();
+  const poll = () => wx.cloud.callFunction({
+    name: config.cloudFunctionName,
+    data: { action: 'getTask', taskId }
+  }).then((result) => {
+    const payload = result && result.result;
+    if (payload && payload.status === 'success' && payload.result) {
+      return payload.result;
+    }
+    if (payload && payload.status === 'failed') {
+      unwrapCloudAnalyzePayload(payload);
+    }
+    if (Date.now() - startedAt >= maxWaitMs) {
+      const error = new Error(friendlyAnalyzeErrorMessage('AI_REQUEST_TIMEOUT'));
+      error.code = 'AI_REQUEST_TIMEOUT';
+      throw error;
+    }
+    return delay(intervalMs).then(poll);
+  });
+  return delay(intervalMs).then(poll);
 }
 
 function unwrapCloudAnalyzePayload(payload) {
@@ -480,8 +569,9 @@ function analyzeImage(options) {
   return run
     .then((payload) => normalizeAiPayload(payload, imagePath))
     .catch((error) => {
-      if (!allowMockFallback) throw error;
-      return fallbackAnalyze(imagePath, error.message || '识别服务暂不可用');
+      const friendlyError = friendlyCloudCallError(error);
+      if (!allowMockFallback) throw friendlyError;
+      return fallbackAnalyze(imagePath, friendlyError.message || '识别服务暂不可用');
     });
 }
 
@@ -493,6 +583,7 @@ module.exports = {
   getSettingsViewModel,
   unwrapCloudAnalyzePayload,
   friendlyAnalyzeErrorMessage,
+  friendlyCloudCallError,
   normalizeAiPayload,
   normalizeAiItem,
   parseJsonPayload,

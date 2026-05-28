@@ -1,18 +1,28 @@
 const storage = require('../../services/storage');
 const search = require('../../services/search');
+const imageThumbs = require('../../services/image-thumbs');
 const { isMockAssetPath } = require('../../utils/mock-assets');
+const { getContainerPreview } = require('../../utils/image-preview');
 const { navigateHome } = require('../../utils/navigation');
 
-function createContainerViewModel(container) {
-  const coverPhoto = container.coverImageFileId || container.contentImageFileId || '';
+function getToneClass(index) {
+  return ['pine', 'warm', 'cool'][index % 3];
+}
+
+function createContainerViewModel(container, index) {
+  const preview = getContainerPreview(container);
+  const coverPhoto = preview.display || preview.original || '';
   const hasCoverPhoto = !!coverPhoto && !isMockAssetPath(coverPhoto);
   const itemCount = Number(container.itemCount) || 0;
   const imageCount = (container.contentImages || []).length;
   return Object.assign({}, container, {
     coverPhoto: hasCoverPhoto ? coverPhoto : '',
     showPlaceholder: !hasCoverPhoto,
+    toneClass: getToneClass(index || 0),
     displayLocation: container.locationPath || '未填写位置',
-    displaySubtitle: `${container.locationPath || '未填写位置'}，${itemCount} 件物品`,
+    displaySubtitle: container.locationPath || '未填写位置',
+    itemCountLabel: `${itemCount} 件物品`,
+    imageCountLabel: `${imageCount} 张照片`,
     imageCount,
     statusPill: container.displayStatus || (itemCount > 0 ? '最近更新' : '待整理')
   });
@@ -50,6 +60,28 @@ function getUserData() {
   return { containers, items };
 }
 
+function getUserDataAsync() {
+  const useDatabase = typeof storage.isDatabaseAvailable === 'function' && storage.isDatabaseAvailable();
+  if (!useDatabase || typeof storage.removeDemoDataAsync !== 'function') {
+    return Promise.resolve(getUserData());
+  }
+  return storage.removeDemoDataAsync().then(() => Promise.all([
+    typeof storage.listUserContainersAsync === 'function' ? storage.listUserContainersAsync() : storage.listUserContainers(),
+    typeof storage.listUserItemsAsync === 'function' ? storage.listUserItemsAsync() : storage.listUserItems()
+  ])).then(([containers, items]) => ({ containers, items }));
+}
+
+function useDatabaseStorage() {
+  return typeof storage.isDatabaseAvailable === 'function' && storage.isDatabaseAvailable();
+}
+
+function showDataError(error) {
+  wx.showToast({
+    title: error && error.message ? error.message : '数据同步失败',
+    icon: 'none'
+  });
+}
+
 function buildSummary(containers) {
   const totalItems = (containers || []).reduce((total, container) => total + (Number(container.itemCount) || 0), 0);
   const totalImages = (containers || []).reduce((total, container) => total + ((container.contentImages || []).length), 0);
@@ -84,45 +116,79 @@ Page({
   },
 
   load() {
-    const data = getUserData();
-    const containers = applySelection(data.containers.map(createContainerViewModel), []);
-    this.setData({
-      query: '',
-      allContainers: containers,
-      containers,
-      hasContainers: containers.length > 0,
-      showEmpty: containers.length === 0,
-      summary: buildSummary(data.containers),
-      isManaging: false,
-      manageLabel: '管理',
-      manageButtonClass: '',
-      selectedIds: [],
-      selectedCount: 0,
-      hasSelection: false,
-      showBatchBar: false,
-      rowModeClass: '',
-      showRowMoreActions: true
-    });
+    const render = (data) => {
+      const containers = applySelection(data.containers.map(createContainerViewModel), []);
+      this.setData({
+        query: '',
+        allContainers: containers,
+        containers,
+        hasContainers: containers.length > 0,
+        showEmpty: containers.length === 0,
+        summary: buildSummary(data.containers),
+        isManaging: false,
+        manageLabel: '管理',
+        manageButtonClass: '',
+        selectedIds: [],
+        selectedCount: 0,
+        hasSelection: false,
+        showBatchBar: false,
+        rowModeClass: '',
+        showRowMoreActions: true
+      });
+      this.ensureVisibleThumbnails(data.containers);
+    };
+    if (!useDatabaseStorage()) {
+      render(getUserData());
+      return;
+    }
+    getUserDataAsync().then(render).catch(showDataError);
   },
 
   inputQuery(event) {
     const query = event.detail.value;
-    const data = getUserData();
-    const containers = query
-      ? search.searchContainers(query, data).map((result) => result.container)
-      : data.containers;
-    const viewModels = applySelection(containers.map(createContainerViewModel), []);
-    this.setData({
-      query,
-      containers: viewModels,
-      allContainers: query ? applySelection(this.data.allContainers, []) : viewModels,
-      hasContainers: viewModels.length > 0,
-      showEmpty: viewModels.length === 0,
-      selectedIds: [],
-      selectedCount: 0,
-      hasSelection: false,
-      showBatchBar: false
-    });
+    this.setData({ query });
+    const render = (data) => {
+      if (query !== this.data.query) return;
+      const containers = query
+        ? search.searchContainers(query, data).map((result) => result.container)
+        : data.containers;
+      const viewModels = applySelection(containers.map(createContainerViewModel), []);
+      this.setData({
+        query,
+        containers: viewModels,
+        allContainers: query ? applySelection(this.data.allContainers, []) : viewModels,
+        hasContainers: viewModels.length > 0,
+        showEmpty: viewModels.length === 0,
+        selectedIds: [],
+        selectedCount: 0,
+        hasSelection: false,
+        showBatchBar: false
+      });
+      this.ensureVisibleThumbnails(containers);
+    };
+    if (!useDatabaseStorage()) {
+      render(getUserData());
+      return;
+    }
+    getUserDataAsync().then(render).catch(showDataError);
+  },
+
+  ensureVisibleThumbnails(containers) {
+    if (this.thumbnailRefreshPending) return;
+    this.thumbnailRefreshPending = true;
+    imageThumbs.ensureContainerThumbnails(containers, { limit: 8 })
+      .then((changed) => {
+        if (!changed) return;
+        const query = this.data.query;
+        if (query) {
+          this.inputQuery({ detail: { value: query } });
+          return;
+        }
+        this.load();
+      })
+      .finally(() => {
+        this.thumbnailRefreshPending = false;
+      });
   },
 
   toggleManageMode() {
@@ -203,9 +269,16 @@ Page({
       confirmColor: '#a33b2f',
       success: (result) => {
         if (!result.confirm) return;
-        storage.deleteContainer(id);
-        wx.showToast({ title: '已删除', icon: 'success' });
-        this.load();
+        const afterDelete = () => {
+          wx.showToast({ title: '已删除', icon: 'success' });
+          this.load();
+        };
+        if (!useDatabaseStorage() || typeof storage.deleteContainerAsync !== 'function') {
+          storage.deleteContainer(id);
+          afterDelete();
+          return;
+        }
+        storage.deleteContainerAsync(id).then(afterDelete).catch(showDataError);
       }
     });
   },
@@ -230,21 +303,24 @@ Page({
       confirmColor: '#a33b2f',
       success: (result) => {
         if (!result.confirm) return;
-        if (typeof storage.deleteContainers === 'function') {
-          storage.deleteContainers(ids);
-        } else {
+        const afterDelete = () => {
+          wx.showToast({ title: '已删除', icon: 'success' });
+          this.load();
+          this.setData({
+            isManaging: false,
+            manageLabel: '管理',
+            manageButtonClass: '',
+            rowModeClass: '',
+            showRowMoreActions: true,
+            showBatchBar: false
+          });
+        };
+        if (!useDatabaseStorage() || typeof storage.deleteContainersAsync !== 'function') {
           ids.forEach((id) => storage.deleteContainer(id));
+          afterDelete();
+          return;
         }
-        wx.showToast({ title: '已删除', icon: 'success' });
-        this.load();
-        this.setData({
-          isManaging: false,
-          manageLabel: '管理',
-          manageButtonClass: '',
-          rowModeClass: '',
-          showRowMoreActions: true,
-          showBatchBar: false
-        });
+        storage.deleteContainersAsync(ids).then(afterDelete).catch(showDataError);
       }
     });
   },

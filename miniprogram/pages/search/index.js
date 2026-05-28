@@ -1,5 +1,6 @@
 const storage = require('../../services/storage');
 const search = require('../../services/search');
+const imageThumbs = require('../../services/image-thumbs');
 const { navigateHome } = require('../../utils/navigation');
 
 function getUserData() {
@@ -10,6 +11,24 @@ function getUserData() {
     containers: typeof storage.listUserContainers === 'function' ? storage.listUserContainers() : storage.listContainers(),
     items: typeof storage.listUserItems === 'function' ? storage.listUserItems() : storage.listItems()
   };
+}
+
+function getUserDataAsync() {
+  const useDatabase = typeof storage.isDatabaseAvailable === 'function' && storage.isDatabaseAvailable();
+  if (!useDatabase || typeof storage.removeDemoDataAsync !== 'function') {
+    return Promise.resolve(getUserData());
+  }
+  return storage.removeDemoDataAsync().then(() => Promise.all([
+    typeof storage.listUserContainersAsync === 'function' ? storage.listUserContainersAsync() : storage.listUserContainers(),
+    typeof storage.listUserItemsAsync === 'function' ? storage.listUserItemsAsync() : storage.listUserItems()
+  ])).then(([containers, items]) => ({ containers, items }));
+}
+
+function showDataError(error) {
+  wx.showToast({
+    title: error && error.message ? error.message : '数据同步失败',
+    icon: 'none'
+  });
 }
 
 function unique(values) {
@@ -53,10 +72,13 @@ Page({
   },
 
   refreshExamples() {
-    const data = getUserData();
-    this.setData({
-      examples: buildExamples(data.items)
-    });
+    getUserDataAsync()
+      .then((data) => {
+        this.setData({
+          examples: buildExamples(data.items)
+        });
+      })
+      .catch(showDataError);
   },
 
   inputQuery(event) {
@@ -87,20 +109,40 @@ Page({
       });
       return;
     }
-    const data = getUserData();
-    const results = search.searchItems(keyword, {
-      containers: data.containers,
-      items: data.items
-    });
-    this.setData({
-      query: keyword,
-      results,
-      hasResults: results.length > 0,
-      showEmptyResults: results.length === 0,
-      showSearchHint: false,
-      searched: true,
-      resultHeading: results.length ? `找到 ${results.length} 个可能结果` : '搜索结果'
-    });
+    getUserDataAsync()
+      .then((data) => {
+        const results = search.searchItems(keyword, {
+          containers: data.containers,
+          items: data.items
+        });
+        this.setData({
+          query: keyword,
+          results,
+          hasResults: results.length > 0,
+          showEmptyResults: results.length === 0,
+          showSearchHint: false,
+          searched: true,
+          resultHeading: results.length ? `找到 ${results.length} 个可能结果` : '搜索结果'
+        });
+        this.ensureResultThumbnails(results, keyword);
+      })
+      .catch(showDataError);
+  },
+
+  ensureResultThumbnails(results, keyword) {
+    if (this.thumbnailRefreshPending) return;
+    const containers = (results || []).map((result) => result.container).filter(Boolean);
+    if (!containers.length) return;
+    this.thumbnailRefreshPending = true;
+    imageThumbs.ensureContainerThumbnails(containers, { limit: 8 })
+      .then((changed) => {
+        if (changed && this.data.query === keyword) {
+          this.runSearch(keyword);
+        }
+      })
+      .finally(() => {
+        this.thumbnailRefreshPending = false;
+      });
   },
 
   openResult(event) {

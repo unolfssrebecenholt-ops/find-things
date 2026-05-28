@@ -5,6 +5,7 @@ const collectionPrefix = 'ft_';
 const collections = {
   containers: `${collectionPrefix}containers`,
   items: `${collectionPrefix}items`,
+  analyzeTasks: `${collectionPrefix}analyze_tasks`,
   queryLogs: `${collectionPrefix}query_logs`
 };
 

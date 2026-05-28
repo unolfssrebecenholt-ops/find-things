@@ -1,6 +1,6 @@
 <view class="result-card" bindtap="open">
   <view class="photo-wrap">
-    <image wx:if="{{viewModel.hasPhoto}}" class="photo" mode="aspectFill" src="{{viewModel.photo}}"></image>
+    <image wx:if="{{viewModel.hasPhoto}}" class="photo" mode="aspectFill" lazy-load="{{true}}" src="{{viewModel.photo}}"></image>
     <view wx:if="{{viewModel.showPlaceholder}}" class="photo placeholder-photo">
       <view class="placeholder-line wide"></view>
       <view class="placeholder-line"></view>

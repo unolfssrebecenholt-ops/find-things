@@ -27,31 +27,32 @@
     <view class="recognizing-card">
       <view class="recognizing-top">
         <view class="recognizing-orbit">
-          <image mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
+          <image class="recognizing-spinner" mode="aspectFit" src="/assets/loading-orbit-arc.svg"></image>
+          <image class="recognizing-mascot" mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
         </view>
         <view class="recognizing-copy">
           <text class="recognizing-title">小懒正在分析中</text>
-          <text class="recognizing-desc">正在压缩照片、识别物品，再保存原图。</text>
+          <text class="recognizing-desc">小懒正在认真扒拉照片，稍等一下下。</text>
         </view>
       </view>
       <view class="recognizing-steps">
         <view class="recognizing-step active">
           <text class="recognizing-dot"></text>
-          <text>整理照片光线</text>
-          <text class="recognizing-state">完成</text>
+          <text>先把耐心放进口袋</text>
+          <text class="recognizing-state">稳住</text>
         </view>
         <view class="recognizing-step active">
           <text class="recognizing-dot"></text>
-          <text>圈出可见物品</text>
-          <text class="recognizing-state">进行中</text>
+          <text>小懒正在探头探脑</text>
+          <text class="recognizing-state">看着呢</text>
         </view>
         <view class="recognizing-step">
           <text class="recognizing-dot"></text>
-          <text>生成容器清单</text>
-          <text class="recognizing-state">马上</text>
+          <text>马上带着线索回来</text>
+          <text class="recognizing-state">快啦</text>
         </view>
       </view>
-      <view class="recognizing-hint">小懒会先看清大件，再慢慢扒拉细节。</view>
+      <view class="recognizing-hint">这会儿适合眨眨眼，别和小懒一起紧张。</view>
     </view>
   </view>
 </view>

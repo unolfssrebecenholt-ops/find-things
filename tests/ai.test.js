@@ -30,12 +30,27 @@ function withWxStorage(values, fn) {
   }
 }
 
+async function withImmediateTimers(fn) {
+  const previousSetTimeout = global.setTimeout;
+  global.setTimeout = (callback) => {
+    callback();
+    return 0;
+  };
+  try {
+    await fn();
+  } finally {
+    global.setTimeout = previousSetTimeout;
+  }
+}
+
 test('defaults to cloud transport so deployed function environment variables are used', () => {
   const config = ai.getRuntimeConfig();
 
   assert.equal(config.transport, 'cloud');
   assert.equal(config.cloudFunctionName, 'ftAnalyzeImage');
   assert.equal(config.maxItems, 12);
+  assert.ok(config.relays.length >= 1);
+  assert.equal(config.relays[0].baseUrl, 'https://aipaiai.cn');
 });
 
 test('uses cloud transport when stale direct setting has no local API key', () => {
@@ -58,6 +73,7 @@ test('keeps direct transport when a local API key is explicitly configured', () 
 
     assert.equal(config.transport, 'direct');
     assert.equal(config.apiKey, 'sk-local-test');
+    assert.equal(config.relays[0].apiKey, 'sk-local-test');
   });
 });
 
@@ -84,6 +100,59 @@ test('rewrites stale cloud network failures into Xiaolan copy', () => {
       return true;
     }
   );
+});
+
+test('rewrites cloud call socket timeouts into Xiaolan copy', () => {
+  const error = ai.friendlyCloudCallError(new Error('cloud.callFunction:fail Error: errCode: -501002 resource server timeout | errMsg: ESOCKETTIMEDOUT'));
+
+  assert.equal(error.code, 'AI_REQUEST_TIMEOUT');
+  assert.match(error.message, /小懒看得有点久/);
+  assert.doesNotMatch(error.message, /ESOCKETTIMEDOUT|-501002/);
+});
+
+test('polls analyze task when the initial cloud call times out', async () => {
+  const previousWx = global.wx;
+  let callCount = 0;
+  global.wx = {
+    getStorageSync() {},
+    cloud: {
+      callFunction(options) {
+        callCount += 1;
+        if (!options.data.action) {
+          return Promise.reject(new Error('cloud.callFunction:fail errCode: -501002 ESOCKETTIMEDOUT'));
+        }
+        if (callCount === 2) {
+          return Promise.resolve({ result: { status: 'processing' } });
+        }
+        return Promise.resolve({
+          result: {
+            status: 'success',
+            result: {
+              items: [{ displayName: '黑色鼠标', inContainer: true }]
+            }
+          }
+        });
+      }
+    }
+  };
+
+  try {
+    await withImmediateTimers(async () => {
+      const result = await ai.analyzeImage({
+        imagePath: 'cloud://env/path/photo.jpg',
+        allowMockFallback: false
+      });
+
+      assert.equal(result.items[0].displayName, '黑色鼠标');
+      assert.ok(callCount >= 3);
+    });
+  } finally {
+    if (previousWx === undefined) {
+      delete global.wx;
+    } else {
+      global.wx = previousWx;
+    }
+  }
 });
 
 test('normalizes AI payload into editable recognized items', () => {

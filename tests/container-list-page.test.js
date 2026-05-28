@@ -112,8 +112,12 @@ test('container list manage mode exposes prototype active and row action states'
   assert.equal(context.data.manageButtonClass, 'active');
   assert.equal(context.data.rowModeClass, 'manage-row');
   assert.equal(context.data.showRowMoreActions, false);
+  assert.equal(context.data.containers[0].toneClass, 'pine');
+  assert.equal(context.data.containers[0].displaySubtitle, 'bedroom / desk');
+  assert.equal(context.data.containers[0].itemCountLabel, '8 件物品');
+  assert.equal(context.data.containers[0].imageCountLabel, '1 张照片');
+  assert.equal(Object.hasOwn(context.data.containers[0], 'progressClass'), false);
   assert.equal(Object.hasOwn(context.data.containers[0], 'progressCopy'), false);
-  assert.equal(Object.hasOwn(context.data.containers[0], 'progressStyle'), false);
   assert.equal(context.data.showBatchBar, false);
 
   page.toggleSelect.call(context, { currentTarget: { dataset: { id: 'a' } } });

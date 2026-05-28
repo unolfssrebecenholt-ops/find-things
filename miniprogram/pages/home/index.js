@@ -1,5 +1,7 @@
 let storageService = null;
 const { isMockAssetPath } = require('../../utils/mock-assets');
+const { getContainerPreview } = require('../../utils/image-preview');
+const imageThumbs = require('../../services/image-thumbs');
 const { navigateHome } = require('../../utils/navigation');
 
 function getStorageService() {
@@ -13,6 +15,13 @@ function getStorageService() {
   return storageService;
 }
 
+function showDataError(error) {
+  wx.showToast({
+    title: error && error.message ? error.message : '数据同步失败',
+    icon: 'none'
+  });
+}
+
 function getContainerStatus(container, index) {
   const updatedAt = Number(container.updatedAt) || 0;
   if (!updatedAt) return index === 0 ? '已保存' : '已整理';
@@ -23,7 +32,8 @@ function getContainerStatus(container, index) {
 }
 
 function createContainerViewModel(container, index) {
-  const coverPhoto = container.coverImageFileId || container.contentImageFileId || '';
+  const preview = getContainerPreview(container);
+  const coverPhoto = preview.display || preview.original || '';
   const hasCoverPhoto = !!coverPhoto && !isMockAssetPath(coverPhoto);
   return Object.assign({}, container, {
     coverPhoto: hasCoverPhoto ? coverPhoto : '',
@@ -41,20 +51,41 @@ Page({
   },
 
   onShow() {
-    const service = getStorageService();
-    if (service && typeof service.removeDemoData === 'function') {
-      service.removeDemoData();
-    }
-    const containers = service
-      ? (typeof service.listUserContainers === 'function' ? service.listUserContainers() : service.listContainers())
-      : [];
-    const recentContainers = containers.slice(0, 4).map(createContainerViewModel);
+    this.load();
+  },
 
-    this.setData({
-      recentContainers,
-      hasRecentContainers: recentContainers.length > 0,
-      showEmptyRecentContainers: recentContainers.length === 0
-    });
+  load() {
+    const service = getStorageService();
+    const useDatabase = service && typeof service.isDatabaseAvailable === 'function' && service.isDatabaseAvailable();
+    const loadData = useDatabase && typeof service.removeDemoDataAsync === 'function'
+      ? service.removeDemoDataAsync().then(() => service.listUserContainersAsync())
+      : Promise.resolve(service
+        ? (typeof service.listUserContainers === 'function' ? service.listUserContainers() : service.listContainers())
+        : []);
+
+    loadData
+      .then((containers) => {
+        const recentContainers = containers.slice(0, 4).map(createContainerViewModel);
+        this.setData({
+          recentContainers,
+          hasRecentContainers: recentContainers.length > 0,
+          showEmptyRecentContainers: recentContainers.length === 0
+        });
+        this.ensureRecentThumbnails(containers.slice(0, 4));
+      })
+      .catch(showDataError);
+  },
+
+  ensureRecentThumbnails(containers) {
+    if (this.thumbnailRefreshPending) return;
+    this.thumbnailRefreshPending = true;
+    imageThumbs.ensureContainerThumbnails(containers, { limit: 4 })
+      .then((changed) => {
+        if (changed) this.load();
+      })
+      .finally(() => {
+        this.thumbnailRefreshPending = false;
+      });
   },
 
   goCapture() {

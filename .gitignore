@@ -26,6 +26,7 @@ pnpm-debug.log*
 project.private.config.json
 cloudbaserc.json
 miniprogram/config/ai.local.js
+miniprogram/config/relay.local.js
 cloudfunctions/**/local.config.js
 output/
 

@@ -12,12 +12,12 @@
 
   <view class="segmented">
     <button
-      class="segment {{viewMode == 'annotated' ? 'active' : ''}}"
+      class="segment {{annotatedSegmentClass}}"
       data-mode="annotated"
       bindtap="switchViewMode"
     >标注</button>
     <button
-      class="segment {{viewMode == 'summary' ? 'active' : ''}}"
+      class="segment {{summarySegmentClass}}"
       data-mode="summary"
       bindtap="switchViewMode"
     >清单</button>
@@ -34,7 +34,7 @@
     <text>{{aiStatusText}}</text>
   </view>
 
-  <view wx:if="{{isSummaryMode}}" class="summary-panel">
+  <view wx:if="{{isPhotoMode}}" class="summary-panel">
     <view class="photo-map ratio-landscape {{ratioClass}}">
       <image class="plain-photo" mode="aspectFit" src="{{imagePath}}"></image>
       <view wx:if="{{isAnnotatedMode}}" class="annotation-layer">
@@ -56,25 +56,30 @@
       </view>
       <text class="pill">{{currentLabel}}</text>
     </view>
-    <view class="quick-list">
-      <view wx:for="{{items}}" wx:key="tempId" class="quick-item">
-        <text class="quick-index">{{item.displayIndex}}</text>
-        <view class="quick-copy">
-          <text class="quick-name">{{item.displayName}}</text>
-          <text class="subtle">{{item.displayDescription}}</text>
-          <view wx:if="{{item.hasTags}}" class="quick-tags">
-            <text wx:for="{{item.tagList}}" wx:for-item="tag" wx:key="*this" class="mini-tag">{{tag}}</text>
-          </view>
+  </view>
+
+  <view wx:if="{{isPhotoMode}}" class="quick-list {{listModeClass}}">
+    <view wx:for="{{items}}" wx:key="tempId" class="quick-item">
+      <text class="quick-index">{{item.displayIndex}}</text>
+      <view class="quick-copy">
+        <text class="quick-name">{{item.displayName}}</text>
+        <text class="subtle">{{item.displayDescription}}</text>
+        <view wx:if="{{item.hasTags}}" class="quick-tags">
+          <text wx:for="{{item.tagList}}" wx:for-item="tag" wx:key="*this" class="mini-tag">{{tag}}</text>
         </view>
-        <text class="pill">{{item.confidenceLabel}}</text>
       </view>
+      <text class="pill">{{item.confidenceLabel}}</text>
     </view>
+  </view>
+
+  <view wx:if="{{isListMode}}" class="edit-panel">
+    <item-editor items="{{items}}" bind:change="handleItemsChange"></item-editor>
   </view>
 
   <view wx:if="{{warnings.length}}" class="note-card">{{warnings[0]}}</view>
 
   <view class="review-actions">
-    <button class="soft-button" bindtap="addNextPhoto">补拍一张</button>
+    <button class="soft-button" bindtap="addNextPhoto">拍下一张</button>
     <button class="primary-button" bindtap="goNext">保存容器</button>
   </view>
 
@@ -82,31 +87,32 @@
     <view class="recognizing-card">
       <view class="recognizing-top">
         <view class="recognizing-orbit">
-          <image mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
+          <image class="recognizing-spinner" mode="aspectFit" src="/assets/loading-orbit-arc.svg"></image>
+          <image class="recognizing-mascot" mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
         </view>
         <view class="recognizing-copy">
           <text class="recognizing-title">小懒正在分析中</text>
-          <text class="recognizing-desc">补拍照片会加入同一个容器清单。</text>
+          <text class="recognizing-desc">下一张照片会加入同一个容器清单。</text>
         </view>
       </view>
       <view class="recognizing-steps">
         <view class="recognizing-step active">
           <text class="recognizing-dot"></text>
-          <text>合并补拍照片</text>
-          <text class="recognizing-state">完成</text>
+          <text>先把耐心放进口袋</text>
+          <text class="recognizing-state">稳住</text>
         </view>
         <view class="recognizing-step active">
           <text class="recognizing-dot"></text>
-          <text>校对已有清单</text>
-          <text class="recognizing-state">进行中</text>
+          <text>小懒正在探头探脑</text>
+          <text class="recognizing-state">看着呢</text>
         </view>
         <view class="recognizing-step">
           <text class="recognizing-dot"></text>
-          <text>更新物品位置</text>
-          <text class="recognizing-state">马上</text>
+          <text>马上带着线索回来</text>
+          <text class="recognizing-state">快啦</text>
         </view>
       </view>
-      <view class="recognizing-hint">小懒会把新照片和旧清单放在一起看。</view>
+      <view class="recognizing-hint">这会儿适合眨眨眼，别和小懒一起紧张。</view>
     </view>
   </view>
 </view>

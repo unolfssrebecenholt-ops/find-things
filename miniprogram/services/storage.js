@@ -1,6 +1,9 @@
 const CONTAINERS_KEY = 'findThings.containers';
 const ITEMS_KEY = 'findThings.items';
-const FREE_CONTENT_IMAGE_LIMIT = 2;
+const cloudConfig = require('../config/cloud');
+
+const CONTAINER_LIMIT = 3;
+const CONTENT_IMAGE_LIMIT = 5;
 
 function now() {
   return Date.now();
@@ -46,11 +49,73 @@ function writeArray(adapter, key, value) {
   adapter.setStorageSync(key, Array.isArray(value) ? value : []);
 }
 
+function hasCloudDatabase() {
+  return typeof wx !== 'undefined' && wx.cloud && typeof wx.cloud.database === 'function';
+}
+
+function stripDocId(record) {
+  const value = Object.assign({}, record);
+  delete value._id;
+  return value;
+}
+
+function collectionName(name) {
+  return cloudConfig.collections[name];
+}
+
+function getDatabase() {
+  if (!hasCloudDatabase()) return null;
+  return wx.cloud.database();
+}
+
+function getCollection(name) {
+  const db = getDatabase();
+  return db ? db.collection(collectionName(name)) : null;
+}
+
+function callMaybePromise(request, fallback) {
+  if (request && typeof request.then === 'function') return request;
+  if (request && typeof request === 'object') {
+    return Promise.resolve(request);
+  }
+  return Promise.resolve(fallback);
+}
+
+function getCollectionPage(collection, skip, limit) {
+  if (!collection) return Promise.resolve([]);
+  const query = typeof collection.skip === 'function' ? collection.skip(skip) : collection;
+  const limited = query && typeof query.limit === 'function' ? query.limit(limit) : query;
+  if (!limited || typeof limited.get !== 'function') return Promise.resolve([]);
+  return callMaybePromise(limited.get(), { data: [] }).then((result) => result.data || []);
+}
+
+function getAllFromCollection(collection) {
+  const limit = 100;
+  const read = (skip, rows) => getCollectionPage(collection, skip, limit).then((page) => {
+    const nextRows = rows.concat(page);
+    if (page.length < limit) return nextRows;
+    return read(skip + limit, nextRows);
+  });
+  return read(0, []);
+}
+
+function upsertDocument(collection, record) {
+  if (!collection || !record || !record._id || typeof collection.doc !== 'function') {
+    return Promise.resolve();
+  }
+  const doc = collection.doc(record._id);
+  if (doc && typeof doc.set === 'function') {
+    return callMaybePromise(doc.set({ data: stripDocId(record) }));
+  }
+  return Promise.resolve();
+}
+
 function createContentImage(input, index, timestamp) {
   const fileId = typeof input === 'string' ? input : (input && input.fileId) || '';
   return {
     imageId: (input && input.imageId) || stableImageId(fileId),
     fileId,
+    thumbFileId: (input && (input.thumbFileId || input.thumbnailFileId || input.previewFileId)) || '',
     label: (input && input.label) || `箱内照片 ${index + 1}`,
     sortOrder: Number.isFinite(input && input.sortOrder) ? input.sortOrder : index,
     createdAt: (input && input.createdAt) || timestamp,
@@ -70,7 +135,10 @@ function normalizeContentImages(input, timestamp) {
   } else if (Array.isArray(input.contentImageFileIds)) {
     candidates.push(...input.contentImageFileIds);
   } else if (input.contentImageFileId) {
-    candidates.push(input.contentImageFileId);
+    candidates.push({
+      fileId: input.contentImageFileId,
+      thumbFileId: input.contentThumbFileId || ''
+    });
   }
   return candidates
     .filter((image) => typeof image === 'string' ? image : image && image.fileId)
@@ -126,6 +194,7 @@ function refreshContentImageCounts(container, items) {
   return Object.assign({}, container, {
     contentImages,
     contentImageFileId: contentImages[0] ? contentImages[0].fileId : '',
+    contentThumbFileId: contentImages[0] ? (contentImages[0].thumbFileId || '') : '',
     itemCount: (items || []).length
   });
 }
@@ -162,6 +231,7 @@ function isItemFromImage(item, image) {
 
 function createStorageService(adapter) {
   const storage = adapter || getWxAdapter();
+  let databaseReady = false;
 
   function listContainers() {
     return readArray(storage, CONTAINERS_KEY)
@@ -170,7 +240,8 @@ function createStorageService(adapter) {
         const contentImages = normalizeContentImages(container, container.updatedAt || now());
         return Object.assign({}, container, {
           contentImages,
-          contentImageFileId: contentImages[0] ? contentImages[0].fileId : (container.contentImageFileId || '')
+          contentImageFileId: contentImages[0] ? contentImages[0].fileId : (container.contentImageFileId || ''),
+          contentThumbFileId: contentImages[0] ? (contentImages[0].thumbFileId || '') : (container.contentThumbFileId || '')
         });
       })
       .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
@@ -192,6 +263,56 @@ function createStorageService(adapter) {
     return listItems().filter((item) => userContainerIds[item.containerId] && !isDemoItem(item));
   }
 
+  function canUseDatabase() {
+    return !adapter && hasCloudDatabase();
+  }
+
+  function isDatabaseAvailable() {
+    return canUseDatabase();
+  }
+
+  function cacheDatabaseRows(containers, items) {
+    writeArray(storage, CONTAINERS_KEY, containers || []);
+    writeArray(storage, ITEMS_KEY, items || []);
+  }
+
+  function loadFromDatabase() {
+    if (!canUseDatabase()) {
+      databaseReady = true;
+      return Promise.resolve({ containers: listContainers(), items: listItems() });
+    }
+    const containersCollection = getCollection('containers');
+    const itemsCollection = getCollection('items');
+    return Promise.all([
+      getAllFromCollection(containersCollection),
+      getAllFromCollection(itemsCollection)
+    ]).then(([containers, items]) => {
+      const localContainers = readArray(storage, CONTAINERS_KEY)
+        .filter((container) => !container.deletedAt && !isDemoContainer(container));
+      const localContainerIds = localContainers.reduce((ids, container) => {
+        ids[container._id] = true;
+        return ids;
+      }, {});
+      const localItems = readArray(storage, ITEMS_KEY)
+        .filter((item) => !item.deletedAt && localContainerIds[item.containerId] && !isDemoItem(item));
+      if (!containers.length && !items.length && (localContainers.length || localItems.length)) {
+        return persistRecords(localContainers, localItems).then(() => {
+          cacheDatabaseRows(localContainers, localItems);
+          databaseReady = true;
+          return { containers: listContainers(), items: listItems() };
+        });
+      }
+      cacheDatabaseRows(containers, items);
+      databaseReady = true;
+      return { containers: listContainers(), items: listItems() };
+    });
+  }
+
+  function ensureDatabaseLoaded() {
+    if (databaseReady || !canUseDatabase()) return Promise.resolve();
+    return loadFromDatabase().then(() => {});
+  }
+
   function getContainer(id) {
     return listContainers().find((container) => container._id === id) || null;
   }
@@ -202,19 +323,35 @@ function createStorageService(adapter) {
 
   function saveContainer(input) {
     const timestamp = now();
+    const existingContainer = input._id ? getContainer(input._id) : null;
+    if (!existingContainer && listUserContainers().length >= CONTAINER_LIMIT) {
+      const error = new Error(`最多可保存 ${CONTAINER_LIMIT} 个箱子。`);
+      error.code = 'CONTAINER_LIMIT_REACHED';
+      error.limit = CONTAINER_LIMIT;
+      throw error;
+    }
     let container = {
       _id: input._id || createId('container'),
       name: (input.name || '未命名容器').trim() || '未命名容器',
       locationPath: (input.locationPath || '').trim(),
       coverImageFileId: input.coverImageFileId || '',
+      coverThumbFileId: input.coverThumbFileId || '',
       contentImages: normalizeContentImages(input, timestamp),
       contentImageFileId: '',
+      contentThumbFileId: '',
       itemCount: 0,
       createdAt: input.createdAt || timestamp,
       updatedAt: timestamp,
       deletedAt: null
     };
     container.contentImageFileId = container.contentImages[0] ? container.contentImages[0].fileId : '';
+    container.contentThumbFileId = container.contentImages[0] ? (container.contentImages[0].thumbFileId || '') : '';
+    if (container.contentImages.length > CONTENT_IMAGE_LIMIT) {
+      const error = new Error(`最多可保存 ${CONTENT_IMAGE_LIMIT} 张箱内照片。`);
+      error.code = 'CONTENT_IMAGE_LIMIT_REACHED';
+      error.limit = CONTENT_IMAGE_LIMIT;
+      throw error;
+    }
 
     const items = (input.items || [])
       .filter((item) => item.confirmed !== false)
@@ -240,10 +377,10 @@ function createStorageService(adapter) {
     if (!target) throw new Error('容器不存在');
 
     const existing = normalizeContentImages(target, timestamp);
-    if (existing.length >= FREE_CONTENT_IMAGE_LIMIT) {
-      const error = new Error(`免费版最多支持 ${FREE_CONTENT_IMAGE_LIMIT} 张箱内照片，请升级后继续添加。`);
+    if (existing.length >= CONTENT_IMAGE_LIMIT) {
+      const error = new Error(`最多可保存 ${CONTENT_IMAGE_LIMIT} 张箱内照片。`);
       error.code = 'CONTENT_IMAGE_LIMIT_REACHED';
-      error.limit = FREE_CONTENT_IMAGE_LIMIT;
+      error.limit = CONTENT_IMAGE_LIMIT;
       throw error;
     }
 
@@ -252,6 +389,34 @@ function createStorageService(adapter) {
       updatedAt: timestamp
     });
     updatedContainer.contentImageFileId = updatedContainer.contentImages[0] ? updatedContainer.contentImages[0].fileId : '';
+    updatedContainer.contentThumbFileId = updatedContainer.contentImages[0] ? (updatedContainer.contentImages[0].thumbFileId || '') : '';
+
+    writeArray(storage, CONTAINERS_KEY, containers.map((container) => (
+      container._id === containerId ? updatedContainer : container
+    )));
+    return updatedContainer;
+  }
+
+  function updateContainerImageThumbs(containerId, thumbPatch) {
+    const containers = readArray(storage, CONTAINERS_KEY);
+    const target = containers.find((container) => container._id === containerId && !container.deletedAt);
+    if (!target) throw new Error('容器不存在');
+
+    const requestedImages = (thumbPatch && thumbPatch.contentImages) || [];
+    const contentImages = normalizeContentImages(target, target.updatedAt || now()).map((image) => {
+      const match = requestedImages.find((candidate) => {
+        return (candidate.imageId && image.imageId === candidate.imageId)
+          || (candidate.fileId && image.fileId === candidate.fileId);
+      });
+      if (!match || !match.thumbFileId) return image;
+      return Object.assign({}, image, { thumbFileId: match.thumbFileId });
+    });
+    const updatedContainer = Object.assign({}, target, {
+      coverThumbFileId: (thumbPatch && thumbPatch.coverThumbFileId) || target.coverThumbFileId || '',
+      contentImages,
+      contentImageFileId: contentImages[0] ? contentImages[0].fileId : (target.contentImageFileId || ''),
+      contentThumbFileId: contentImages[0] ? (contentImages[0].thumbFileId || '') : (target.contentThumbFileId || '')
+    });
 
     writeArray(storage, CONTAINERS_KEY, containers.map((container) => (
       container._id === containerId ? updatedContainer : container
@@ -267,7 +432,8 @@ function createStorageService(adapter) {
 
     const container = Object.assign({}, target, {
       contentImages: normalizeContentImages(target, timestamp),
-      contentImageFileId: target.contentImageFileId || ''
+      contentImageFileId: target.contentImageFileId || '',
+      contentThumbFileId: target.contentThumbFileId || ''
     });
     const image = container.contentImages.find((contentImage) => contentImage.imageId === imageId);
     if (!image) throw new Error('箱内照片不存在');
@@ -301,6 +467,10 @@ function createStorageService(adapter) {
     });
     writeArray(storage, CONTAINERS_KEY, containers);
     writeArray(storage, ITEMS_KEY, items);
+    return {
+      container: containers.find((container) => container._id === id) || null,
+      items: items.filter((item) => item.containerId === id)
+    };
   }
 
   function deleteContainers(ids) {
@@ -321,7 +491,118 @@ function createStorageService(adapter) {
     });
     writeArray(storage, CONTAINERS_KEY, containers);
     writeArray(storage, ITEMS_KEY, items);
-    return { deletedCount };
+    return {
+      deletedCount,
+      containers: containers.filter((container) => selected[container._id]),
+      items: items.filter((item) => selected[item.containerId])
+    };
+  }
+
+  function persistRecords(containers, items) {
+    if (!canUseDatabase()) return Promise.resolve();
+    const containerCollection = getCollection('containers');
+    const itemCollection = getCollection('items');
+    return Promise.all(
+      (containers || []).map((container) => upsertDocument(containerCollection, container))
+        .concat((items || []).map((item) => upsertDocument(itemCollection, item)))
+    ).then(() => {});
+  }
+
+  function saveContainerAsync(input) {
+    return ensureDatabaseLoaded().then(() => {
+      const previousItems = input && input._id
+        ? listItems().filter((item) => item.containerId === input._id)
+        : [];
+      const saved = saveContainer(input);
+      const activeIds = saved.items.reduce((ids, item) => {
+        ids[item._id] = true;
+        return ids;
+      }, {});
+      const removedItems = previousItems
+        .filter((item) => !activeIds[item._id])
+        .map((item) => Object.assign({}, item, { deletedAt: saved.container.updatedAt, updatedAt: saved.container.updatedAt }));
+      return persistRecords([saved.container], saved.items.concat(removedItems)).then(() => saved);
+    });
+  }
+
+  function addContentImageAsync(containerId, imageInput) {
+    return ensureDatabaseLoaded().then(() => {
+      const updated = addContentImage(containerId, imageInput);
+      return persistRecords([updated], []).then(() => updated);
+    });
+  }
+
+  function updateContainerImageThumbsAsync(containerId, thumbPatch) {
+    return ensureDatabaseLoaded().then(() => {
+      const updated = updateContainerImageThumbs(containerId, thumbPatch);
+      return persistRecords([updated], []).then(() => updated);
+    });
+  }
+
+  function replaceItemsForImageAsync(containerId, imageId, items) {
+    return ensureDatabaseLoaded().then(() => {
+      const beforeItems = listItems().filter((item) => item.containerId === containerId);
+      const updated = replaceItemsForImage(containerId, imageId, items);
+      const activeIds = updated.items.reduce((ids, item) => {
+        ids[item._id] = true;
+        return ids;
+      }, {});
+      const removedItems = beforeItems
+        .filter((item) => !activeIds[item._id])
+        .map((item) => Object.assign({}, item, {
+          deletedAt: updated.container.updatedAt,
+          updatedAt: updated.container.updatedAt
+        }));
+      return persistRecords([updated.container], updated.items.concat(removedItems)).then(() => updated);
+    });
+  }
+
+  function deleteContainerAsync(id) {
+    return ensureDatabaseLoaded().then(() => {
+      const deleted = deleteContainer(id);
+      const records = [];
+      if (deleted.container) records.push(deleted.container);
+      return persistRecords(records, deleted.items).then(() => deleted);
+    });
+  }
+
+  function deleteContainersAsync(ids) {
+    return ensureDatabaseLoaded().then(() => {
+      const deleted = deleteContainers(ids);
+      return persistRecords(deleted.containers, deleted.items).then(() => deleted);
+    });
+  }
+
+  function removeDemoDataAsync() {
+    return ensureDatabaseLoaded().then(() => removeDemoData());
+  }
+
+  function listContainersAsync() {
+    return ensureDatabaseLoaded().then(() => listContainers());
+  }
+
+  function listUserContainersAsync() {
+    return ensureDatabaseLoaded().then(() => listUserContainers());
+  }
+
+  function listItemsAsync() {
+    return ensureDatabaseLoaded().then(() => listItems());
+  }
+
+  function listUserItemsAsync() {
+    return ensureDatabaseLoaded().then(() => listUserItems());
+  }
+
+  function getContainerAsync(id) {
+    return ensureDatabaseLoaded().then(() => getContainer(id));
+  }
+
+  function getItemsByContainerAsync(id) {
+    return ensureDatabaseLoaded().then(() => getItemsByContainer(id));
+  }
+
+  function getContentImagesAsync(containerId) {
+    return ensureDatabaseLoaded().then(() => getContentImages(containerId));
   }
 
   function removeDemoData() {
@@ -550,22 +831,43 @@ function createStorageService(adapter) {
 
   return {
     listContainers,
+    listContainersAsync,
     listUserContainers,
+    listUserContainersAsync,
     listItems,
+    listItemsAsync,
     listUserItems,
+    listUserItemsAsync,
     getContainer,
+    getContainerAsync,
     getItemsByContainer,
+    getItemsByContainerAsync,
     saveContainer,
+    saveContainerAsync,
     addContentImage,
+    addContentImageAsync,
+    updateContainerImageThumbs,
+    updateContainerImageThumbsAsync,
     replaceItemsForImage,
+    replaceItemsForImageAsync,
     getContentImages,
+    getContentImagesAsync,
     deleteContainer,
+    deleteContainerAsync,
     deleteContainers,
+    deleteContainersAsync,
     removeDemoData,
+    removeDemoDataAsync,
+    loadFromDatabase,
+    isDatabaseAvailable,
     seedDemoData
   };
 }
 
 const defaultService = createStorageService();
 
-module.exports = Object.assign({ createStorageService, FREE_CONTENT_IMAGE_LIMIT }, defaultService);
+module.exports = Object.assign({
+  createStorageService,
+  CONTAINER_LIMIT,
+  CONTENT_IMAGE_LIMIT
+}, defaultService);

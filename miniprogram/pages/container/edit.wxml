@@ -34,7 +34,7 @@
       <text class="text-link">横过来拍，小懒看得更清楚</text>
     </view>
     <view class="adaptive-frame outside-frame {{coverRatioClass}}" data-ratio="{{coverRatioText}}">
-      <image wx:if="{{hasCoverImage}}" class="cover" mode="aspectFit" src="{{coverImageFileId}}"></image>
+      <image wx:if="{{hasCoverImage}}" class="cover" mode="aspectFit" lazy-load="{{true}}" src="{{coverDisplayFileId}}"></image>
       <view wx:if="{{showCoverPlaceholder}}" class="cover-placeholder">
         <text class="photo-caption">容器外观</text>
         <text class="subtle">横过来拍，小懒看得更清楚，首页列表也更稳。</text>
@@ -53,7 +53,7 @@
     </view>
     <view wx:if="{{hasContentImages}}" class="inside-photo-grid">
       <view wx:for="{{contentImages}}" wx:key="imageId" class="adaptive-frame inside-frame {{item.ratioClass}}" data-ratio="{{item.ratioText}}">
-        <image wx:if="{{item.fileId}}" class="inside-photo" mode="aspectFit" src="{{item.fileId}}"></image>
+        <image wx:if="{{item.displayFileId}}" class="inside-photo" mode="aspectFit" lazy-load="{{true}}" src="{{item.displayFileId}}"></image>
         <view class="photo-copy">
           <text class="photo-caption">{{item.summaryTitle}}</text>
           <text class="photo-summary-meta">{{item.summaryMeta}}</text>
@@ -71,7 +71,7 @@
       <text class="item-index">{{index + 1}}</text>
       <text class="item-name">{{item.displayName}}</text>
     </view>
-    <view wx:if="{{hasHiddenItems}}" class="more-row">还有 {{hiddenItemCount}} 件会一起保存</view>
+    <view wx:if="{{hasHiddenItems}}" class="more-row" bindtap="toggleItemPreview">{{itemPreviewToggleText}}</view>
   </view>
 
   <view class="save-actions">
