@@ -1,6 +1,4 @@
 const cloudConfig = require('./config/cloud');
-const ai = require('./services/ai');
-
 App({
   globalData: {
     appName: '拍箱找物',
@@ -13,8 +11,7 @@ App({
     const launchedAt = Date.now();
     this.globalData.launchedAt = launchedAt;
 
-    const needsCloud = ai.getRuntimeConfig().transport === 'cloud';
-    if (needsCloud && typeof wx !== 'undefined' && wx.cloud) {
+    if (typeof wx !== 'undefined' && wx.cloud) {
       try {
         wx.cloud.init({
           env: cloudConfig.envId,

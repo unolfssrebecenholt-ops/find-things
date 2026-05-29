@@ -12,12 +12,38 @@ Component({
     items: {
       type: Array,
       value: []
+    },
+    hideHead: {
+      type: Boolean,
+      value: false,
+      observer(value) {
+        this.setData({
+          showHead: !value,
+          showToolbar: !value,
+          showKeepAction: !value,
+          editorClass: value ? 'embedded' : ''
+        });
+      }
+    },
+    contextKey: {
+      type: String,
+      value: ''
     }
+  },
+
+  data: {
+    showHead: true,
+    showToolbar: true,
+    showKeepAction: true,
+    editorClass: ''
   },
 
   methods: {
     emit(items) {
-      this.triggerEvent('change', { items });
+      this.triggerEvent('change', {
+        items,
+        contextKey: this.data.contextKey
+      });
     },
 
     patchItem(index, patch) {

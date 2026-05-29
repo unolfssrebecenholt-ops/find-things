@@ -53,7 +53,13 @@
       bindchange="onSwiperChange"
     >
       <swiper-item wx:for="{{contentImages}}" wx:key="imageId">
-        <annotated-image image-src="{{item.fileId}}" items="{{item.items}}" compact="{{true}}"></annotated-image>
+        <annotated-image
+          image-src="{{item.displaySrc}}"
+          items="{{item.items}}"
+          compact="{{true}}"
+          data-index="{{index}}"
+          bind:imageerror="handleContentImageError"
+        ></annotated-image>
       </swiper-item>
     </swiper>
 
@@ -83,15 +89,78 @@
 
   <view class="section-row">
     <text class="section-heading">物品</text>
-    <text class="text-link">添加</text>
+    <text class="text-link" bindtap="addManualItem">添加</text>
   </view>
-  <view class="item-tags">
-    <view wx:for="{{items}}" wx:key="_id" class="tag">
-      <text>{{item.displayName}}</text>
+  <view wx:if="{{hasItems}}" class="inventory-list">
+    <view wx:for="{{items}}" wx:key="itemKey" class="inventory-item {{item.stateClass}}">
+      <view class="inventory-toolbar">
+        <view class="inventory-identity">
+          <text class="inventory-index">{{item.displayIndex}}</text>
+          <view class="inventory-copy">
+            <text class="inventory-name">{{item.displayName}}</text>
+            <text class="inventory-source">{{item.sourceLabel}}</text>
+          </view>
+        </view>
+        <view class="inventory-actions">
+          <button
+            wx:if="{{item.showExpandAction}}"
+            class="inventory-action expand"
+            data-key="{{item.itemKey}}"
+            bindtap="toggleItemExpanded"
+          >展开</button>
+          <button
+            wx:if="{{item.showRemoveAction}}"
+            class="inventory-action remove"
+            data-key="{{item.itemKey}}"
+            bindtap="removeExpandedItem"
+          >移除</button>
+          <button
+            wx:if="{{item.showCollapseAction}}"
+            class="inventory-action collapse"
+            data-key="{{item.itemKey}}"
+            bindtap="toggleItemExpanded"
+          >收起</button>
+        </view>
+      </view>
+
+      <view wx:if="{{item.isCollapsed}}" class="inventory-summary">
+        <text class="subtle">{{item.displayDescription}}</text>
+        <view wx:if="{{item.hasTags}}" class="inventory-tags">
+          <text wx:for="{{item.tagList}}" wx:for-item="tag" wx:key="*this" class="mini-tag">{{tag}}</text>
+        </view>
+      </view>
+
+      <view wx:if="{{item.isExpanded}}" class="inventory-editor">
+        <item-editor
+          items="{{item.editorItems}}"
+          hide-head="{{true}}"
+          context-key="{{item.itemKey}}"
+          bind:change="handleExpandedItemChange"
+        ></item-editor>
+      </view>
     </view>
   </view>
+  <view wx:if="{{showItemsEmpty}}" class="empty-state with-xiaolan">
+    <view class="xiaolan-row">
+      <image class="xiaolan-avatar" mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
+      <view class="xiaolan-copy">
+        <text class="xiaolan-name">清单还空着</text>
+        <text>可以手动添加，也可以先拍一张箱内照片。</text>
+      </view>
+    </view>
+  </view>
+  <view wx:if="{{showRecoverInventory}}" class="empty-state with-xiaolan inventory-recover">
+    <view class="xiaolan-row">
+      <image class="xiaolan-avatar" mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
+      <view class="xiaolan-copy">
+        <text class="xiaolan-name">清单明细没同步回来</text>
+        <text>{{missingInventoryText}}</text>
+      </view>
+    </view>
+    <button wx:if="{{canRecoverInventory}}" class="empty-action recover-action" bindtap="recoverInventoryFromPhoto">从当前照片恢复清单</button>
+  </view>
 
-  <view class="note-card quiet-note">当前最多可保存 {{photoLimit}} 张箱内照片。搜索会同时看名称、可见文字和关键特征。</view>
+  <view class="note-card quiet-note">{{inventoryStatusText}}。搜索会同时看名称、可见文字和关键特征。</view>
 
   <view class="bottom-nav">
     <view class="nav-item" bindtap="goHome">

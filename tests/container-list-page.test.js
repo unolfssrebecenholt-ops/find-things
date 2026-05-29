@@ -4,7 +4,9 @@ const path = require('node:path');
 
 function createWxMock(initialStorage) {
   const storage = Object.assign({}, initialStorage);
+  const tempFileURLCalls = [];
   return {
+    tempFileURLCalls,
     getStorageSync(key) {
       return storage[key];
     },
@@ -18,6 +20,16 @@ function createWxMock(initialStorage) {
     showToast() {},
     showModal(options) {
       options.success({ confirm: true });
+    },
+    cloud: {
+      getTempFileURL(options) {
+        tempFileURLCalls.push(options.fileList);
+        const fileList = (options.fileList || []).map((file) => ({
+          fileID: file.fileID,
+          tempFileURL: `https://display.example.com/${encodeURIComponent(file.fileID)}`
+        }));
+        options.success({ fileList });
+      }
     }
   };
 }
@@ -57,11 +69,11 @@ function createPageContext(pageDefinition, initialData) {
 function withWx(wxMock, callback) {
   const previousWx = global.wx;
   global.wx = wxMock;
-  try {
-    return callback();
-  } finally {
-    global.wx = previousWx;
-  }
+  return Promise.resolve()
+    .then(callback)
+    .finally(() => {
+      global.wx = previousWx;
+    });
 }
 
 test('container list search clears stale batch selections', () => {
@@ -128,7 +140,29 @@ test('container list manage mode exposes prototype active and row action states'
   assert.equal(context.data.containers[0].selectClass, 'selected');
 });
 
-test('batch delete only deletes selected containers that remain visible', () => {
+test('container list resolves cloud cover photos for display', async () => {
+  const wxMock = createWxMock({
+    'findThings.containers': [
+      {
+        _id: 'cloud_box',
+        name: 'cloud box',
+        coverImageFileId: 'cloud://env/find-things/covers/front.jpg',
+        contentImages: [{ imageId: 'image_a', fileId: 'cloud://env/find-things/content/a.jpg' }],
+        updatedAt: 2
+      }
+    ],
+    'findThings.items': []
+  });
+  const page = loadContainerListPage(wxMock);
+  const context = createPageContext(page, page.data);
+
+  await withWx(wxMock, () => page.load.call(context));
+
+  assert.match(context.data.containers[0].coverPhoto, /^https:\/\/display\.example\.com\//);
+  assert.equal(context.data.containers[0].coverImageFileId, 'cloud://env/find-things/covers/front.jpg');
+});
+
+test('batch delete only deletes selected containers that remain visible', async () => {
   const wxMock = createWxMock({
     'findThings.containers': [
       { _id: 'a', name: 'hidden selected box', locationPath: 'balcony', updatedAt: 2 },
@@ -147,9 +181,7 @@ test('batch delete only deletes selected containers that remain visible', () => 
     hasSelection: true
   }));
 
-  withWx(wxMock, () => {
-    page.confirmBatchDelete.call(context);
-  });
+  await withWx(wxMock, () => page.confirmBatchDelete.call(context));
 
   const containers = wxMock.getStorageSync('findThings.containers');
   const items = wxMock.getStorageSync('findThings.items');

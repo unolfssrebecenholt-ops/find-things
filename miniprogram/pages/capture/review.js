@@ -1,4 +1,5 @@
 const ai = require('../../services/ai');
+const imageDisplay = require('../../services/image-display');
 const imageStore = require('../../services/image-store');
 const storage = require('../../services/storage');
 const { withDisplayIndexes } = require('../../utils/geometry');
@@ -36,28 +37,54 @@ function unique(values) {
   return values.filter((value, index) => value && values.indexOf(value) === index);
 }
 
-function createItemViewModel(item) {
+function getItemKey(item, imageId, index) {
+  return String((item && (item.itemKey || item.tempId || item._id)) || `${imageId || 'image'}_item_${index + 1}`);
+}
+
+function createDraftItem(item, imageId, fileId, index) {
+  return Object.assign({}, item, {
+    itemKey: getItemKey(item, imageId, index),
+    sourceImageId: imageId,
+    sourceImageFileId: fileId
+  });
+}
+
+function createItemViewModel(item, index, expandedItemKeys) {
   const confidence = Number(item.confidence);
   const featureSummary = (item.features || []).slice(0, 3).join(' / ') || '描述可搜索';
   const fullTagList = unique((item.colors || []).concat(item.features || [], item.aliases || []));
   const tagList = fullTagList.slice(0, 6);
   const bbox = item.bbox || {};
+  const itemKey = getItemKey(item, item.sourceImageId, index);
+  const isExpanded = (expandedItemKeys || []).indexOf(itemKey) >= 0;
   const hasAnnotation = Number.isFinite(bbox.x)
     && Number.isFinite(bbox.y)
     && Number.isFinite(bbox.width)
     && Number.isFinite(bbox.height);
-  return Object.assign({}, item, {
+  const viewModel = Object.assign({}, item, {
+    itemKey,
     hasTags: tagList.length > 0,
     tagList,
     tagText: fullTagList.join(' '),
     featureSummary,
     displayDescription: item.description || featureSummary || '确认后会保存进这个容器',
     confidenceLabel: confidence ? `${Math.round(confidence * 100)}%` : '待确认',
+    isExpanded,
+    isCollapsed: !isExpanded,
+    expandText: isExpanded ? '收起' : '展开',
     hasAnnotation,
     annotationStyle: hasAnnotation
       ? `left:${Math.round(bbox.x * 100)}%;top:${Math.round(bbox.y * 100)}%;width:${Math.round(bbox.width * 100)}%;height:${Math.round(bbox.height * 100)}%;`
       : ''
   });
+  viewModel.editorItems = [Object.assign({}, viewModel)];
+  return viewModel;
+}
+
+function stripDraftViewFields(draft) {
+  const value = Object.assign({}, draft);
+  delete value.displayImagePath;
+  return value;
 }
 
 Page({
@@ -67,13 +94,7 @@ Page({
     warnings: [],
     imageDrafts: [],
     currentIndex: 0,
-    viewMode: 'annotated',
-    isAnnotatedMode: true,
-    isPhotoMode: true,
-    isListMode: false,
-    annotatedSegmentClass: 'active',
-    summarySegmentClass: '',
-    listModeClass: '',
+    expandedItemKeys: [],
     showAddPhotoHint: true,
     currentLabel: '照片 1/1',
     showAiWarning: false,
@@ -94,9 +115,9 @@ Page({
       items: [],
       warnings: ['请先选择一张照片进行识别。']
     };
-    const imageDrafts = draft.imageDrafts || [
+    const imageDrafts = (draft.imageDrafts || [
       this.createImageDraft(draft, 0)
-    ];
+    ]).map((imageDraft, index) => this.createImageDraft(imageDraft, index));
     this.setData({ imageDrafts });
     this.setCurrentImage(0);
   },
@@ -106,15 +127,14 @@ Page({
     const fileId = draft.fileId || draft.imagePath || draft.contentImageFileId || '';
     const thumbFileId = draft.thumbFileId || draft.thumbnailFileId || draft.previewFileId || '';
     const imageMetadata = draft.imageMetadata || {};
-    const items = withDisplayIndexes(draft.items || []).map((item) => Object.assign({}, item, {
-      sourceImageId: imageId,
-      sourceImageFileId: fileId
-    }));
+    const items = withDisplayIndexes(draft.items || [])
+      .map((item, itemIndex) => createDraftItem(item, imageId, fileId, itemIndex));
     return {
       imageId,
       fileId,
       thumbFileId,
       imagePath: fileId,
+      displayImagePath: draft.displayImagePath || '',
       label: `照片 ${index + 1}`,
       sortOrder: index,
       itemCount: items.filter((item) => item.confirmed !== false).length,
@@ -130,16 +150,21 @@ Page({
     };
   },
 
-  setCurrentImage(index) {
+  setCurrentImage(index, expandedItemKeys) {
     const imageDrafts = this.data.imageDrafts || [];
     const safeIndex = Math.max(0, Math.min(Number(index) || 0, imageDrafts.length - 1));
     const draft = imageDrafts[safeIndex] || {};
-    const items = withDisplayIndexes(draft.items || []).map(createItemViewModel);
-    this.setData({
+    const activeExpandedKeys = Array.isArray(expandedItemKeys)
+      ? expandedItemKeys
+      : (this.data.expandedItemKeys || []);
+    const items = withDisplayIndexes(draft.items || [])
+      .map((item, itemIndex) => createItemViewModel(item, itemIndex, activeExpandedKeys));
+    const currentData = {
       currentIndex: safeIndex,
+      expandedItemKeys: activeExpandedKeys,
       showAddPhotoHint: imageDrafts.length < CONTENT_IMAGE_LIMIT,
       currentLabel: `照片 ${safeIndex + 1}/${Math.max(imageDrafts.length, 1)}`,
-      imagePath: draft.imagePath || draft.fileId || '',
+      imagePath: draft.displayImagePath || draft.imagePath || draft.fileId || '',
       ratioClass: getRatioClass(draft),
       items,
       showAiWarning: !!draft.usedMock,
@@ -147,45 +172,95 @@ Page({
         ? `小懒这次没能完成识别：${draft.aiErrorMessage || '已使用本地示例结果'}`
         : '',
       warnings: draft.warnings || []
-    });
+    };
+    this.setData(currentData);
+    imageDisplay.resolveImagePath(draft.thumbFileId || draft.fileId || draft.imagePath || '')
+      .then((displayImagePath) => {
+        if (safeIndex !== this.data.currentIndex) return;
+        if (!displayImagePath || imageDisplay.shouldResolveDisplayPath(displayImagePath)) return;
+        const nextDrafts = (this.data.imageDrafts || []).map((imageDraft, draftIndex) => {
+          if (draftIndex !== safeIndex) return imageDraft;
+          return Object.assign({}, imageDraft, { displayImagePath });
+        });
+        this.setData({
+          imageDrafts: nextDrafts,
+          imagePath: displayImagePath
+        });
+      });
   },
 
   switchImage(event) {
     this.setCurrentImage(event.currentTarget.dataset.index);
   },
 
-  switchViewMode(event) {
-    const viewMode = event.currentTarget.dataset.mode || 'annotated';
-    const isListMode = viewMode === 'summary';
-    this.setData({
-      viewMode,
-      isAnnotatedMode: viewMode === 'annotated',
-      isPhotoMode: !isListMode,
-      isListMode,
-      annotatedSegmentClass: viewMode === 'annotated' ? 'active' : '',
-      summarySegmentClass: isListMode ? 'active' : '',
-      listModeClass: isListMode ? 'list-only' : ''
+  toggleItemExpanded(event) {
+    const itemKey = String(event.currentTarget.dataset.key || '');
+    this.toggleExpandedKey(itemKey);
+  },
+
+  removeExpandedItem(event) {
+    const contextKey = String(event.currentTarget.dataset.key || '');
+    if (!contextKey) return;
+    wx.showModal({
+      title: '移除这件物品？',
+      content: '移除后保存容器时不会记录它。',
+      cancelText: '取消',
+      confirmText: '移除',
+      confirmColor: '#c83a32',
+      success: (result) => {
+        if (result.confirm) {
+          this.updateExpandedItem(contextKey, []);
+        }
+      }
     });
   },
 
-  handleItemsChange(event) {
+  toggleExpandedKey(itemKey) {
+    if (!itemKey) return;
+    const expandedItemKeys = this.data.expandedItemKeys || [];
+    const nextKeys = expandedItemKeys.indexOf(itemKey) >= 0
+      ? expandedItemKeys.filter((key) => key !== itemKey)
+      : expandedItemKeys.concat(itemKey);
+    this.setCurrentImage(this.data.currentIndex, nextKeys);
+  },
+
+  handleExpandedItemChange(event) {
+    const contextKey = String(event.detail.contextKey || '');
+    this.updateExpandedItem(contextKey, event.detail.items || []);
+  },
+
+  updateExpandedItem(contextKey, editedItems) {
+    if (!contextKey) return;
+    const shouldRemove = editedItems.length === 0;
     const imageDrafts = (this.data.imageDrafts || []).map((draft, index) => {
       if (index !== this.data.currentIndex) return draft;
-      const items = withDisplayIndexes(event.detail.items || []).map((item) => Object.assign({}, item, {
-        sourceImageId: draft.imageId,
-        sourceImageFileId: draft.fileId
-      }));
+      const nextItems = (draft.items || []).reduce((items, item, itemIndex) => {
+        const itemKey = getItemKey(item, draft.imageId, itemIndex);
+        if (itemKey !== contextKey) return items.concat(item);
+        if (shouldRemove) return items;
+        return items.concat(Object.assign({}, item, editedItems[0], {
+          itemKey: contextKey,
+          sourceImageId: draft.imageId,
+          sourceImageFileId: draft.fileId
+        }));
+      }, []);
+      const items = withDisplayIndexes(nextItems)
+        .map((item, itemIndex) => createDraftItem(item, draft.imageId, draft.fileId, itemIndex));
       return Object.assign({}, draft, {
         items,
         itemCount: items.filter((item) => item.confirmed !== false).length
       });
     });
+    const expandedItemKeys = shouldRemove
+      ? (this.data.expandedItemKeys || []).filter((key) => key !== contextKey)
+      : (this.data.expandedItemKeys || []);
     this.setData({
       imageDrafts,
+      expandedItemKeys,
       showAddPhotoHint: imageDrafts.length < CONTENT_IMAGE_LIMIT
     });
-    this.setCurrentImage(this.data.currentIndex);
-    wx.setStorageSync('captureDraft', { imageDrafts });
+    this.setCurrentImage(this.data.currentIndex, expandedItemKeys);
+    wx.setStorageSync('captureDraft', { imageDrafts: imageDrafts.map(stripDraftViewFields) });
   },
 
   addNextPhoto() {
@@ -254,7 +329,7 @@ Page({
             imageDrafts,
             showAddPhotoHint: imageDrafts.length < CONTENT_IMAGE_LIMIT
           });
-          wx.setStorageSync('captureDraft', { imageDrafts });
+          wx.setStorageSync('captureDraft', { imageDrafts: imageDrafts.map(stripDraftViewFields) });
           this.setCurrentImage(imageDrafts.length - 1);
         })
         .catch((error) => {

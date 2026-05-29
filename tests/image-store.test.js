@@ -20,6 +20,7 @@ function withWx(wxMock, fn) {
 test('recognizes only durable image paths as persistent', () => {
   assert.equal(imageStore.isPersistentPath('cloud://env/path/photo.jpg'), true);
   assert.equal(imageStore.isPersistentPath('https://example.com/photo.jpg'), true);
+  assert.equal(imageStore.isPersistentPath('https://636c-cloud1-d2g79srh64b6eb263-1436902568.tcb.qcloud.la/find-things/content/photo.jpg?sign=abc&t=1780042287'), false);
   assert.equal(imageStore.isPersistentPath('wxfile://usr/saved-photo.jpg'), true);
   assert.equal(imageStore.isPersistentPath('http://tmp/abc.jpg'), false);
   assert.equal(imageStore.isPersistentPath('https://localhost/photo.jpg'), false);

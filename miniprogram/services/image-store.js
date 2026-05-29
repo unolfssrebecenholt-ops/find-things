@@ -1,3 +1,5 @@
+const imageDisplay = require('./image-display');
+
 function hasWx() {
   return typeof wx !== 'undefined';
 }
@@ -12,6 +14,7 @@ function extensionFromPath(filePath) {
 
 function isPersistentPath(filePath) {
   const value = String(filePath || '');
+  if (imageDisplay.isTcbTempUrl(value)) return false;
   return /^cloud:\/\//.test(value)
     || (/^https?:\/\//.test(value) && !/^https?:\/\/(tmp|usr|localhost|127\.0\.0\.1)(\/|:|$)/.test(value))
     || /^wxfile:\/\/usr/.test(value);

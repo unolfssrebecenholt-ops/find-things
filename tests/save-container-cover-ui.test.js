@@ -37,6 +37,26 @@ test('save container cover actions match the prototype pill action area without 
   assert.match(actionButton, /white-space:\s*normal/);
 });
 
+test('save container inside photos use a swipe carousel instead of a cramped grid', () => {
+  const wxml = readMiniProgramFile('pages', 'container', 'edit.wxml');
+  const wxss = readMiniProgramFile('pages', 'container', 'edit.wxss');
+  const js = readMiniProgramFile('pages', 'container', 'edit.js');
+
+  assert.match(wxml, /class="inside-carousel"/);
+  assert.match(wxml, /<swiper[\s\S]*class="inside-swiper"[\s\S]*bindchange="onContentSwiperChange"/);
+  assert.match(wxml, /carousel-dot \{\{index == currentContentImageIndex \? 'active' : ''\}\}/);
+  assert.match(wxml, /carousel-count/);
+  assert.doesNotMatch(wxml, /inside-photo-grid/);
+  assert.doesNotMatch(wxml, /photo-copy/);
+  assert.doesNotMatch(wxml, /photo-summary-meta/);
+  assert.match(wxss, /\.inside-swiper[\s\S]*height:\s*330rpx/);
+  assert.match(wxss, /\.carousel-dot\.active[\s\S]*width:\s*42rpx/);
+  assert.doesNotMatch(wxss, /\.photo-copy/);
+  assert.doesNotMatch(wxss, /\.photo-summary-meta/);
+  assert.match(js, /currentContentImageIndex/);
+  assert.match(js, /onContentSwiperChange/);
+});
+
 test('save container hidden item summary can expand and collapse', () => {
   const wxml = readMiniProgramFile('pages', 'container', 'edit.wxml');
   const js = readMiniProgramFile('pages', 'container', 'edit.js');

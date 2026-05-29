@@ -1,6 +1,7 @@
 {
   "navigationBarTitleText": "容器详情",
   "usingComponents": {
-    "annotated-image": "/components/annotated-image/index"
+    "annotated-image": "/components/annotated-image/index",
+    "item-editor": "/components/item-editor/index"
   }
 }

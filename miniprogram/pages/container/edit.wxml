@@ -51,13 +51,28 @@
       <text class="section-heading">箱内照片</text>
       <text class="text-link">{{contentImageCountText}}</text>
     </view>
-    <view wx:if="{{hasContentImages}}" class="inside-photo-grid">
-      <view wx:for="{{contentImages}}" wx:key="imageId" class="adaptive-frame inside-frame {{item.ratioClass}}" data-ratio="{{item.ratioText}}">
-        <image wx:if="{{item.displayFileId}}" class="inside-photo" mode="aspectFit" lazy-load="{{true}}" src="{{item.displayFileId}}"></image>
-        <view class="photo-copy">
-          <text class="photo-caption">{{item.summaryTitle}}</text>
-          <text class="photo-summary-meta">{{item.summaryMeta}}</text>
+    <view wx:if="{{hasContentImages}}" class="inside-carousel">
+      <swiper
+        class="inside-swiper"
+        current="{{currentContentImageIndex}}"
+        duration="220"
+        bindchange="onContentSwiperChange"
+      >
+        <swiper-item wx:for="{{contentImages}}" wx:key="imageId">
+          <view class="adaptive-frame inside-frame {{item.ratioClass}}" data-ratio="{{item.ratioText}}">
+            <image wx:if="{{item.displayFileId}}" class="inside-photo" mode="aspectFit" lazy-load="{{true}}" src="{{item.displayFileId}}"></image>
+          </view>
+        </swiper-item>
+      </swiper>
+      <view class="inside-carousel-footer">
+        <view class="carousel-dots">
+          <view
+            wx:for="{{contentImages}}"
+            wx:key="imageId"
+            class="carousel-dot {{index == currentContentImageIndex ? 'active' : ''}}"
+          ></view>
         </view>
+        <text class="carousel-count">{{currentContentImageIndex + 1}} / {{contentImages.length}}</text>
       </view>
     </view>
   </view>

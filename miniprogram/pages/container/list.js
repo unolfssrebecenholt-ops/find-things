@@ -1,6 +1,7 @@
 const storage = require('../../services/storage');
 const search = require('../../services/search');
 const imageThumbs = require('../../services/image-thumbs');
+const imageDisplay = require('../../services/image-display');
 const { isMockAssetPath } = require('../../utils/mock-assets');
 const { getContainerPreview } = require('../../utils/image-preview');
 const { navigateHome } = require('../../utils/navigation');
@@ -11,7 +12,7 @@ function getToneClass(index) {
 
 function createContainerViewModel(container, index) {
   const preview = getContainerPreview(container);
-  const coverPhoto = preview.display || preview.original || '';
+  const coverPhoto = container.coverPhoto || preview.display || preview.original || '';
   const hasCoverPhoto = !!coverPhoto && !isMockAssetPath(coverPhoto);
   const itemCount = Number(container.itemCount) || 0;
   const imageCount = (container.contentImages || []).length;
@@ -26,6 +27,28 @@ function createContainerViewModel(container, index) {
     imageCount,
     statusPill: container.displayStatus || (itemCount > 0 ? '最近更新' : '待整理')
   });
+}
+
+function collectContainerPreviewPaths(containers) {
+  return (containers || []).reduce((paths, container) => {
+    const preview = getContainerPreview(container);
+    paths.push(preview.display);
+    paths.push(preview.original);
+    return paths;
+  }, []).filter(Boolean);
+}
+
+function createContainerViewModels(containers) {
+  const paths = collectContainerPreviewPaths(containers);
+  if (!imageDisplay.hasResolvablePath(paths)) {
+    return (containers || []).map(createContainerViewModel);
+  }
+  return imageDisplay.resolveImagePaths(paths)
+    .then((resolvedPaths) => (containers || []).map((container, index) => {
+      const preview = getContainerPreview(container);
+      const coverPhoto = imageDisplay.pickDisplayPath([preview.display, preview.original], resolvedPaths);
+      return createContainerViewModel(Object.assign({}, container, { coverPhoto }), index);
+    }));
 }
 
 function applySelection(containers, selectedIds) {
@@ -117,28 +140,37 @@ Page({
 
   load() {
     const render = (data) => {
-      const containers = applySelection(data.containers.map(createContainerViewModel), []);
-      this.setData({
-        query: '',
-        allContainers: containers,
-        containers,
-        hasContainers: containers.length > 0,
-        showEmpty: containers.length === 0,
-        summary: buildSummary(data.containers),
-        isManaging: false,
-        manageLabel: '管理',
-        manageButtonClass: '',
-        selectedIds: [],
-        selectedCount: 0,
-        hasSelection: false,
-        showBatchBar: false,
-        rowModeClass: '',
-        showRowMoreActions: true
-      });
-      this.ensureVisibleThumbnails(data.containers);
+      const applyViewModels = (viewModels) => {
+        const containers = applySelection(viewModels, []);
+        this.setData({
+          query: '',
+          allContainers: containers,
+          containers,
+          hasContainers: containers.length > 0,
+          showEmpty: containers.length === 0,
+          summary: buildSummary(data.containers),
+          isManaging: false,
+          manageLabel: '管理',
+          manageButtonClass: '',
+          selectedIds: [],
+          selectedCount: 0,
+          hasSelection: false,
+          showBatchBar: false,
+          rowModeClass: '',
+          showRowMoreActions: true
+        });
+        this.ensureVisibleThumbnails(data.containers);
+      };
+      const viewModels = createContainerViewModels(data.containers);
+      if (viewModels && typeof viewModels.then === 'function') {
+        return viewModels.then(applyViewModels);
+      }
+      applyViewModels(viewModels);
+      return null;
     };
     if (!useDatabaseStorage()) {
-      render(getUserData());
+      const result = render(getUserData());
+      if (result && typeof result.catch === 'function') result.catch(showDataError);
       return;
     }
     getUserDataAsync().then(render).catch(showDataError);
@@ -152,22 +184,31 @@ Page({
       const containers = query
         ? search.searchContainers(query, data).map((result) => result.container)
         : data.containers;
-      const viewModels = applySelection(containers.map(createContainerViewModel), []);
-      this.setData({
-        query,
-        containers: viewModels,
-        allContainers: query ? applySelection(this.data.allContainers, []) : viewModels,
-        hasContainers: viewModels.length > 0,
-        showEmpty: viewModels.length === 0,
-        selectedIds: [],
-        selectedCount: 0,
-        hasSelection: false,
-        showBatchBar: false
-      });
-      this.ensureVisibleThumbnails(containers);
+      const applyViewModels = (resolvedViewModels) => {
+        const viewModels = applySelection(resolvedViewModels, []);
+        this.setData({
+          query,
+          containers: viewModels,
+          allContainers: query ? applySelection(this.data.allContainers, []) : viewModels,
+          hasContainers: viewModels.length > 0,
+          showEmpty: viewModels.length === 0,
+          selectedIds: [],
+          selectedCount: 0,
+          hasSelection: false,
+          showBatchBar: false
+        });
+        this.ensureVisibleThumbnails(containers);
+      };
+      const resolvedViewModels = createContainerViewModels(containers);
+      if (resolvedViewModels && typeof resolvedViewModels.then === 'function') {
+        return resolvedViewModels.then(applyViewModels);
+      }
+      applyViewModels(resolvedViewModels);
+      return null;
     };
     if (!useDatabaseStorage()) {
-      render(getUserData());
+      const result = render(getUserData());
+      if (result && typeof result.catch === 'function') result.catch(showDataError);
       return;
     }
     getUserDataAsync().then(render).catch(showDataError);

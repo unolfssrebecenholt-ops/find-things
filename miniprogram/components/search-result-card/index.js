@@ -1,4 +1,5 @@
 const { isMockAssetPath } = require('../../utils/mock-assets');
+const imageDisplay = require('../../services/image-display');
 
 function createMatchSummary(result) {
   if (result.matchSummary) return result.matchSummary;
@@ -58,11 +59,12 @@ Component({
         || safeResult.containerPhoto
         || '';
       const hasPhoto = !!photo && !isMockAssetPath(photo);
+      const displayPhoto = hasPhoto && !imageDisplay.shouldResolveDisplayPath(photo) ? photo : '';
       this.setData({
         viewModel: {
-          photo: hasPhoto ? photo : '',
-          hasPhoto,
-          showPlaceholder: !hasPhoto,
+          photo: displayPhoto,
+          hasPhoto: !!displayPhoto,
+          showPlaceholder: !displayPhoto,
           photoLabel: createPhotoLabel(safeResult),
           semanticPercentText: createSemanticPercentText(safeResult),
           matchSummary: createMatchSummary(safeResult),
@@ -70,6 +72,21 @@ Component({
           reasons: (safeResult.reasons || []).slice(0, 2)
         }
       });
+      if (hasPhoto && imageDisplay.shouldResolveDisplayPath(photo)) {
+        imageDisplay.resolveImagePath(photo).then((displayPhotoPath) => {
+          if (this.data.result !== safeResult) return;
+          const resolvedPhoto = displayPhotoPath && !imageDisplay.shouldResolveDisplayPath(displayPhotoPath)
+            ? displayPhotoPath
+            : '';
+          this.setData({
+            viewModel: Object.assign({}, this.data.viewModel, {
+              photo: resolvedPhoto,
+              hasPhoto: !!resolvedPhoto,
+              showPlaceholder: !resolvedPhoto
+            })
+          });
+        });
+      }
     }
   },
 

@@ -1,4 +1,5 @@
 const imageStore = require('../../services/image-store');
+const imageDisplay = require('../../services/image-display');
 const storage = require('../../services/storage');
 const { navigateHome } = require('../../utils/navigation');
 const { createImageMetadata } = require('../../utils/image-metadata');
@@ -67,7 +68,7 @@ function normalizeContentImages(images, items) {
       ? image.itemCount
       : (items || []).filter((item) => item.sourceImageId === image.imageId || item.sourceImageFileId === image.fileId).length;
     const ratioClass = inferRatioClass(image);
-    const displayFileId = image.thumbFileId || image.thumbnailFileId || image.previewFileId || image.fileId || '';
+    const displayFileId = image.displayFileId || image.thumbFileId || image.thumbnailFileId || image.previewFileId || image.fileId || '';
     return Object.assign({}, image, {
       label: image.label || summaryTitle(index),
       sortOrder: Number.isFinite(image.sortOrder) ? image.sortOrder : index,
@@ -81,6 +82,45 @@ function normalizeContentImages(images, items) {
   });
 }
 
+function stripImageViewFields(image) {
+  const value = Object.assign({}, image);
+  delete value.displayFileId;
+  return value;
+}
+
+function collectDraftImagePaths(data) {
+  const paths = [
+    data && data.coverThumbFileId,
+    data && data.coverImageFileId
+  ];
+  ((data && data.contentImages) || []).forEach((image) => {
+    paths.push(image && image.thumbFileId);
+    paths.push(image && image.thumbnailFileId);
+    paths.push(image && image.previewFileId);
+    paths.push(image && image.fileId);
+  });
+  return paths.filter(Boolean);
+}
+
+function applyDisplayPaths(data, resolvedPaths) {
+  const resolved = resolvedPaths || {};
+  const contentImages = (data.contentImages || []).map((image) => Object.assign({}, image, {
+    displayFileId: imageDisplay.pickDisplayPath([
+      image.thumbFileId,
+      image.thumbnailFileId,
+      image.previewFileId,
+      image.fileId
+    ], resolved)
+  }));
+  return Object.assign({}, data, {
+    contentImages,
+    coverDisplayFileId: imageDisplay.pickDisplayPath([
+      data.coverThumbFileId,
+      data.coverImageFileId
+    ], resolved)
+  });
+}
+
 function viewState(data) {
   const coverImageFileId = data.coverImageFileId || '';
   const coverThumbFileId = data.coverThumbFileId || '';
@@ -88,15 +128,20 @@ function viewState(data) {
   const contentImages = data.contentImages || [];
   const items = data.items || [];
   const showAllItems = !!data.showAllItems;
+  const rawContentImageIndex = Number(data.currentContentImageIndex) || 0;
+  const currentContentImageIndex = contentImages.length
+    ? Math.min(Math.max(rawContentImageIndex, 0), contentImages.length - 1)
+    : 0;
   const hiddenItemCount = Math.max(0, items.length - 8);
   const coverRatioClass = coverImageFileId ? inferRatioClass(coverImageMetadata) : 'ratio-landscape';
   return {
     showCoverPlaceholder: !coverImageFileId,
     hasCoverImage: !!coverImageFileId,
-    coverDisplayFileId: coverThumbFileId || coverImageFileId,
+    coverDisplayFileId: data.coverDisplayFileId || coverThumbFileId || coverImageFileId,
     coverRatioClass,
     coverRatioText: coverImageFileId ? ratioText(coverRatioClass) : '横拍更清楚',
     hasContentImages: contentImages.length > 0,
+    currentContentImageIndex,
     itemPreviewItems: showAllItems ? items : items.slice(0, 8),
     hiddenItemCount,
     contentImageCountText: `${contentImages.length} 张`,
@@ -123,6 +168,7 @@ Page({
     contentImageFileId: '',
     contentThumbFileId: '',
     contentImages: [],
+    currentContentImageIndex: 0,
     hasContentImages: false,
     items: [],
     itemPreviewItems: [],
@@ -168,14 +214,23 @@ Page({
       coverImageFileId: canReuseEditDraft ? (editDraft.coverImageFileId || '') : '',
       coverThumbFileId: canReuseEditDraft ? (editDraft.coverThumbFileId || '') : '',
       coverImageMetadata: canReuseEditDraft ? (editDraft.coverImageMetadata || {}) : {},
+      currentContentImageIndex: canReuseEditDraft ? (Number(editDraft.currentContentImageIndex) || 0) : 0,
       contentImages,
       contentImageFileId,
       contentThumbFileId,
       items
     };
 
-    this.setData(Object.assign({}, nextData, viewState(nextData)));
-    this.persistDraft(nextData);
+    this.renderDraft(nextData, true);
+  },
+
+  renderDraft(nextData, shouldPersist) {
+    imageDisplay.resolveImagePaths(collectDraftImagePaths(nextData))
+      .then((resolvedPaths) => {
+        const displayData = applyDisplayPaths(nextData, resolvedPaths);
+        this.setData(Object.assign({}, displayData, viewState(displayData)));
+        if (shouldPersist) this.persistDraft(displayData);
+      });
   },
 
   persistDraft(data) {
@@ -189,15 +244,15 @@ Page({
       coverImageMetadata: data.coverImageMetadata || {},
       contentImageFileId: data.contentImageFileId || '',
       contentThumbFileId: (data.contentImages || [])[0] && (data.contentImages || [])[0].thumbFileId || '',
-      contentImages: data.contentImages || [],
+      contentImages: (data.contentImages || []).map(stripImageViewFields),
+      currentContentImageIndex: Number(data.currentContentImageIndex) || 0,
       items: data.items || []
     });
   },
 
   setAndPersist(patch) {
     const nextData = Object.assign({}, this.data, patch);
-    this.setData(Object.assign({}, patch, viewState(nextData)));
-    this.persistDraft(nextData);
+    this.renderDraft(nextData, true);
   },
 
   inputName(event) {
@@ -245,11 +300,13 @@ Page({
   },
 
   useContentAsCover() {
-    const contentImage = (this.data.contentImages || []).find((image) => image.fileId === this.data.contentImageFileId)
+    const currentImage = (this.data.contentImages || [])[this.data.currentContentImageIndex];
+    const contentImage = currentImage
+      || (this.data.contentImages || []).find((image) => image.fileId === this.data.contentImageFileId)
       || (this.data.contentImages || [])[0]
       || {};
     this.setAndPersist({
-      coverImageFileId: this.data.contentImageFileId,
+      coverImageFileId: contentImage.fileId || this.data.contentImageFileId,
       coverThumbFileId: contentImage.thumbFileId || '',
       coverImageMetadata: {
         orientation: contentImage.orientation || '',
@@ -258,6 +315,11 @@ Page({
       }
     });
     wx.showToast({ title: '已用箱内图做封面', icon: 'success' });
+  },
+
+  onContentSwiperChange(event) {
+    const current = Number(event.detail && event.detail.current) || 0;
+    this.setAndPersist({ currentContentImageIndex: current });
   },
 
   toggleItemPreview() {
@@ -286,7 +348,7 @@ Page({
       coverThumbFileId: this.data.coverThumbFileId,
       contentImageFileId: this.data.contentImageFileId,
       contentThumbFileId: (this.data.contentImages || [])[0] && (this.data.contentImages || [])[0].thumbFileId || '',
-      contentImages: this.data.contentImages,
+      contentImages: (this.data.contentImages || []).map(stripImageViewFields),
       items: this.data.items
     };
     const runSave = typeof storage.saveContainerAsync === 'function'

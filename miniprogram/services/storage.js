@@ -1,6 +1,7 @@
 const CONTAINERS_KEY = 'findThings.containers';
 const ITEMS_KEY = 'findThings.items';
 const cloudConfig = require('../config/cloud');
+const imageDisplay = require('./image-display');
 
 const CONTAINER_LIMIT = 3;
 const CONTENT_IMAGE_LIMIT = 5;
@@ -13,13 +14,116 @@ function createId(prefix) {
   return `${prefix}_${now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function stableImageId(fileId) {
-  const text = String(fileId || 'empty');
+function firstText(values) {
+  const list = Array.isArray(values) ? values : [values];
+  for (let index = 0; index < list.length; index += 1) {
+    const value = list[index];
+    if (value === undefined || value === null) continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function finiteNumber(value, fallback) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function stableHashId(prefix, value) {
+  const text = String(value || 'empty');
   let hash = 0;
   for (let index = 0; index < text.length; index += 1) {
     hash = ((hash * 31) + text.charCodeAt(index)) >>> 0;
   }
-  return `legacy_image_${hash.toString(36)}`;
+  return `${prefix}_${hash.toString(36)}`;
+}
+
+function stableImageId(fileId) {
+  return stableHashId('legacy_image', fileId);
+}
+
+function getItemDisplayName(rawItem) {
+  if (typeof rawItem === 'string') return rawItem.trim();
+  return firstText([
+    rawItem && rawItem.displayName,
+    rawItem && rawItem.display_name,
+    rawItem && rawItem.name,
+    rawItem && rawItem.itemName,
+    rawItem && rawItem.item_name,
+    rawItem && rawItem.objectName,
+    rawItem && rawItem.object_name,
+    rawItem && rawItem.title,
+    rawItem && rawItem.label,
+    rawItem && rawItem.text,
+    rawItem && rawItem.value,
+    rawItem && rawItem.productName,
+    rawItem && rawItem.product_name,
+    rawItem && rawItem.nameZh,
+    rawItem && rawItem.cnName
+  ]);
+}
+
+function getItemContainerId(item) {
+  return firstText([
+    item && item.containerId,
+    item && item.containerID,
+    item && item.container_id,
+    item && item.boxId,
+    item && item.boxID,
+    item && item.box_id,
+    item && item.parentId,
+    item && item.parent_id,
+    item && item.ownerContainerId,
+    item && item.owner_container_id,
+    item && item.targetContainerId,
+    item && item.container && item.container._id,
+    item && item.container && item.container.id,
+    item && item.box && item.box._id,
+    item && item.box && item.box.id
+  ]);
+}
+
+function itemBelongsToContainer(item, containerId) {
+  return getItemContainerId(item) === String(containerId || '');
+}
+
+function getItemSourceImageId(item) {
+  return firstText([
+    item && item.sourceImageId,
+    item && item.source_image_id,
+    item && item.imageId,
+    item && item.imageID,
+    item && item.image_id,
+    item && item.photoId,
+    item && item.photo_id
+  ]);
+}
+
+function getItemSourceImageFileId(item) {
+  return firstText([
+    item && item.sourceImageFileId,
+    item && item.source_image_file_id,
+    item && item.imageFileId,
+    item && item.imageFileID,
+    item && item.fileID,
+    item && item.fileId,
+    item && item.imageUrl,
+    item && item.imagePath,
+    item && item.path
+  ]);
+}
+
+function stableEmbeddedItemId(containerId, rawItem, index) {
+  return stableHashId('legacy_item', [
+    containerId,
+    rawItem && (rawItem._id || rawItem.tempId || rawItem.itemKey || ''),
+    getItemDisplayName(rawItem),
+    getItemSourceImageId(rawItem),
+    getItemSourceImageFileId(rawItem),
+    index + 1
+  ].join('|'));
 }
 
 function getWxAdapter() {
@@ -53,9 +157,10 @@ function hasCloudDatabase() {
   return typeof wx !== 'undefined' && wx.cloud && typeof wx.cloud.database === 'function';
 }
 
-function stripDocId(record) {
+function stripDatabaseSystemFields(record) {
   const value = Object.assign({}, record);
   delete value._id;
+  delete value._openid;
   return value;
 }
 
@@ -105,50 +210,102 @@ function upsertDocument(collection, record) {
   }
   const doc = collection.doc(record._id);
   if (doc && typeof doc.set === 'function') {
-    return callMaybePromise(doc.set({ data: stripDocId(record) }));
+    return callMaybePromise(doc.set({ data: stripDatabaseSystemFields(record) }));
   }
   return Promise.resolve();
 }
 
+function getContentImageFileId(input) {
+  if (typeof input === 'string') return input;
+  const fileId = firstText([
+    input && input.fileId,
+    input && input.fileID,
+    input && input.imageFileId,
+    input && input.imageFileID,
+    input && input.cloudFileId,
+    input && input.cloud_file_id,
+    input && input.url,
+    input && input.imageUrl,
+    input && input.imagePath,
+    input && input.path,
+    input && input.tempFilePath
+  ]);
+  return imageDisplay.cloudFileIdFromTempUrl(fileId) || fileId;
+}
+
+function getContentImageId(input, index) {
+  if (typeof input === 'string') return stableImageId(input);
+  return firstText([
+    input && input.imageId,
+    input && input.imageID,
+    input && input.image_id,
+    input && input.photoId,
+    input && input.photo_id,
+    input && input.id,
+    input && input._id
+  ]) || stableImageId(`${getContentImageFileId(input)}|${index + 1}`);
+}
+
+function getContentImageThumbFileId(input) {
+  if (typeof input === 'string') return '';
+  const fileId = firstText([
+    input && input.thumbFileId,
+    input && input.thumbnailFileId,
+    input && input.previewFileId,
+    input && input.thumb_file_id,
+    input && input.thumbnail_file_id,
+    input && input.preview_file_id
+  ]);
+  return imageDisplay.cloudFileIdFromTempUrl(fileId) || fileId;
+}
+
 function createContentImage(input, index, timestamp) {
-  const fileId = typeof input === 'string' ? input : (input && input.fileId) || '';
+  const fileId = getContentImageFileId(input);
   return {
-    imageId: (input && input.imageId) || stableImageId(fileId),
+    imageId: getContentImageId(input, index),
     fileId,
-    thumbFileId: (input && (input.thumbFileId || input.thumbnailFileId || input.previewFileId)) || '',
-    label: (input && input.label) || `箱内照片 ${index + 1}`,
-    sortOrder: Number.isFinite(input && input.sortOrder) ? input.sortOrder : index,
-    createdAt: (input && input.createdAt) || timestamp,
-    itemCount: Number.isFinite(input && input.itemCount) ? input.itemCount : 0,
-    orientation: (input && input.orientation) || '',
-    width: Number.isFinite(input && input.width) ? input.width : 0,
-    height: Number.isFinite(input && input.height) ? input.height : 0,
-    analyzeStatus: (input && input.analyzeStatus) || '',
-    analyzedAt: (input && input.analyzedAt) || 0
+    thumbFileId: getContentImageThumbFileId(input),
+    label: firstText([input && input.label, input && input.name, input && input.title]) || `箱内照片 ${index + 1}`,
+    sortOrder: finiteNumber(input && input.sortOrder, index),
+    createdAt: finiteNumber(input && input.createdAt, timestamp),
+    itemCount: finiteNumber(input && input.itemCount, finiteNumber(input && input.count, 0)),
+    orientation: firstText(input && input.orientation),
+    width: finiteNumber(input && input.width, 0),
+    height: finiteNumber(input && input.height, 0),
+    analyzeStatus: firstText([input && input.analyzeStatus, input && input.analysisStatus]),
+    analyzedAt: finiteNumber(input && input.analyzedAt, 0)
   };
 }
 
 function normalizeContentImages(input, timestamp) {
   const candidates = [];
-  if (Array.isArray(input.contentImages)) {
+  if (Array.isArray(input.contentImages) && input.contentImages.length) {
     candidates.push(...input.contentImages);
-  } else if (Array.isArray(input.contentImageFileIds)) {
+  } else if (Array.isArray(input.contentImageFileIds) && input.contentImageFileIds.length) {
     candidates.push(...input.contentImageFileIds);
-  } else if (input.contentImageFileId) {
+  } else if (Array.isArray(input.imageFileIds) && input.imageFileIds.length) {
+    candidates.push(...input.imageFileIds);
+  } else if (Array.isArray(input.images) && input.images.length) {
+    candidates.push(...input.images);
+  } else if (Array.isArray(input.photos) && input.photos.length) {
+    candidates.push(...input.photos);
+  } else if (input.contentImageFileId || input.contentImageFileID || input.imageFileId) {
     candidates.push({
-      fileId: input.contentImageFileId,
+      fileId: input.contentImageFileId || input.contentImageFileID || input.imageFileId,
       thumbFileId: input.contentThumbFileId || ''
     });
   }
   return candidates
-    .filter((image) => typeof image === 'string' ? image : image && image.fileId)
+    .filter((image) => typeof image === 'string' ? image : image && getContentImageFileId(image))
     .map((image, index) => createContentImage(image, index, timestamp));
 }
 
 function findSourceImage(rawItem, container) {
   const images = container.contentImages || [];
-  return images.find((image) => rawItem.sourceImageId && image.imageId === rawItem.sourceImageId)
-    || images.find((image) => rawItem.sourceImageFileId && image.fileId === rawItem.sourceImageFileId)
+  const sourceImageId = getItemSourceImageId(rawItem);
+  const sourceImageFileId = getItemSourceImageFileId(rawItem);
+  return images.find((image) => sourceImageId && image.imageId === sourceImageId)
+    || images.find((image) => sourceImageFileId && image.fileId === sourceImageFileId)
     || images[0]
     || null;
 }
@@ -162,13 +319,18 @@ function normalizeItem(rawItem, container, timestamp) {
   const sourceImageLabel = sourceImage
     ? (sourceImage.label || `照片 ${sourceImageIndex + 1}`)
     : '';
-  const relativePosition = (rawItem.relativePosition || rawItem.positionText || '').trim();
+  const relativePosition = firstText([
+    rawItem.relativePosition,
+    rawItem.positionText,
+    rawItem.position_text,
+    rawItem.position
+  ]);
   const locationText = (rawItem.locationText || [sourceImageLabel, relativePosition].filter(Boolean).join(' · ')).trim();
   return Object.assign({}, rawItem, {
     _id: itemId,
     containerId: container._id,
-    sourceImageId: sourceImage ? sourceImage.imageId : (rawItem.sourceImageId || ''),
-    sourceImageFileId: sourceImage ? sourceImage.fileId : (rawItem.sourceImageFileId || container.contentImageFileId || ''),
+    sourceImageId: sourceImage ? sourceImage.imageId : getItemSourceImageId(rawItem),
+    sourceImageFileId: sourceImage ? sourceImage.fileId : (getItemSourceImageFileId(rawItem) || container.contentImageFileId || ''),
     sourceImageIndex: sourceImageIndex >= 0 ? sourceImageIndex : 0,
     sourceImageLabel,
     relativePosition,
@@ -178,6 +340,89 @@ function normalizeItem(rawItem, container, timestamp) {
     updatedAt: timestamp,
     deletedAt: null
   });
+}
+
+function normalizeRawEmbeddedItem(rawItem) {
+  if (typeof rawItem === 'string') return { displayName: rawItem };
+  return rawItem || {};
+}
+
+function collectEmbeddedItemLists(source) {
+  if (!source) return [];
+  if (Array.isArray(source)) return [source];
+  const directFields = [
+    'items',
+    'inventoryItems',
+    'recognizedItems',
+    'detectedItems',
+    'itemList',
+    'inventory',
+    'objects',
+    'detections',
+    'labels',
+    'results'
+  ];
+  const nestedFields = [
+    'result',
+    'analysis',
+    'analyzed',
+    'aiResult',
+    'analyzeResult',
+    'analysisResult',
+    'recognitionResult',
+    'payload',
+    'data'
+  ];
+  const lists = [];
+  directFields.forEach((field) => {
+    if (Array.isArray(source[field]) && source[field].length) {
+      lists.push(source[field]);
+    }
+  });
+  nestedFields.forEach((field) => {
+    const nested = source[field];
+    if (nested && nested !== source) {
+      collectEmbeddedItemLists(nested).forEach((list) => lists.push(list));
+    }
+  });
+  return lists;
+}
+
+function getEmbeddedItems(container) {
+  if (!container) return [];
+  const containerItems = collectEmbeddedItemLists(container).reduce((items, list) => items.concat(list), []);
+  const contentImageItems = (container.contentImages || []).reduce((items, image, imageIndex) => {
+    const imageId = getContentImageId(image, imageIndex);
+    const fileId = getContentImageFileId(image);
+    const label = firstText([image && image.label, image && image.name]) || `照片 ${imageIndex + 1}`;
+    const imageItems = collectEmbeddedItemLists(image).reduce((result, list) => result.concat(list), []);
+    return items.concat(imageItems.map((rawItem) => {
+      const item = normalizeRawEmbeddedItem(rawItem);
+      return Object.assign({}, item, {
+        sourceImageId: getItemSourceImageId(item) || imageId,
+        sourceImageFileId: getItemSourceImageFileId(item) || fileId,
+        sourceImageIndex: Number.isFinite(item.sourceImageIndex) ? item.sourceImageIndex : imageIndex,
+        sourceImageLabel: item.sourceImageLabel || label
+      });
+    }));
+  }, []);
+  return containerItems.concat(contentImageItems);
+}
+
+function normalizeEmbeddedItems(container, timestamp) {
+  const readContainer = Object.assign({}, container, {
+    contentImages: normalizeContentImages(container, timestamp)
+  });
+  return getEmbeddedItems(container)
+    .map(normalizeRawEmbeddedItem)
+    .map((item) => Object.assign({}, item, {
+      displayName: getItemDisplayName(item),
+      category: item.category || item.type || ''
+    }))
+    .filter((item) => item && item.displayName && item.confirmed !== false && !item.deletedAt)
+    .map((item, index) => normalizeItem(Object.assign({}, item, {
+      _id: item._id || stableEmbeddedItemId(container._id, item, index)
+    }), readContainer, timestamp));
 }
 
 function refreshContentImageCounts(container, items) {
@@ -229,6 +474,40 @@ function isItemFromImage(item, image) {
     || (image.fileId && item.sourceImageFileId === image.fileId);
 }
 
+function mergeMissingRecords(primary, fallback) {
+  const seen = (primary || []).reduce((ids, record) => {
+    if (record && record._id) ids[record._id] = true;
+    return ids;
+  }, {});
+  return (primary || []).concat((fallback || []).filter((record) => {
+    return record && record._id && !seen[record._id];
+  }));
+}
+
+function dedupeRecords(records) {
+  const seen = {};
+  return (records || []).filter((record) => {
+    if (!record || !record._id) return false;
+    if (seen[record._id]) return false;
+    seen[record._id] = true;
+    return true;
+  });
+}
+
+function normalizeStoredItem(item) {
+  const normalized = Object.assign({}, normalizeRawEmbeddedItem(item));
+  const containerId = getItemContainerId(normalized);
+  const displayName = getItemDisplayName(normalized);
+  if (containerId) normalized.containerId = containerId;
+  if (displayName && !normalized.displayName) normalized.displayName = displayName;
+  if (!normalized.category && normalized.type) normalized.category = normalized.type;
+  return normalized;
+}
+
+function normalizeStoredItems(items) {
+  return (items || []).filter(Boolean).map(normalizeStoredItem);
+}
+
 function createStorageService(adapter) {
   const storage = adapter || getWxAdapter();
   let databaseReady = false;
@@ -248,7 +527,16 @@ function createStorageService(adapter) {
   }
 
   function listItems() {
-    return readArray(storage, ITEMS_KEY).filter((item) => !item.deletedAt);
+    const persistedItems = normalizeStoredItems(readArray(storage, ITEMS_KEY)).filter((item) => !item.deletedAt);
+    const containersWithPersistedItems = persistedItems.reduce((ids, item) => {
+      const containerId = getItemContainerId(item);
+      if (containerId) ids[containerId] = true;
+      return ids;
+    }, {});
+    const embeddedItems = readArray(storage, CONTAINERS_KEY)
+      .filter((container) => !container.deletedAt && !containersWithPersistedItems[container._id])
+      .reduce((items, container) => items.concat(normalizeEmbeddedItems(container, container.updatedAt || now())), []);
+    return dedupeRecords(persistedItems.concat(embeddedItems));
   }
 
   function listUserContainers() {
@@ -260,7 +548,7 @@ function createStorageService(adapter) {
       ids[container._id] = true;
       return ids;
     }, {});
-    return listItems().filter((item) => userContainerIds[item.containerId] && !isDemoItem(item));
+    return listItems().filter((item) => userContainerIds[getItemContainerId(item)] && !isDemoItem(item));
   }
 
   function canUseDatabase() {
@@ -273,7 +561,7 @@ function createStorageService(adapter) {
 
   function cacheDatabaseRows(containers, items) {
     writeArray(storage, CONTAINERS_KEY, containers || []);
-    writeArray(storage, ITEMS_KEY, items || []);
+    writeArray(storage, ITEMS_KEY, normalizeStoredItems(items || []));
   }
 
   function loadFromDatabase() {
@@ -287,22 +575,38 @@ function createStorageService(adapter) {
       getAllFromCollection(containersCollection),
       getAllFromCollection(itemsCollection)
     ]).then(([containers, items]) => {
+      const cloudContainers = (containers || []).filter((container) => !container.deletedAt && !isDemoContainer(container));
+      const cloudItems = normalizeStoredItems(items || []);
       const localContainers = readArray(storage, CONTAINERS_KEY)
         .filter((container) => !container.deletedAt && !isDemoContainer(container));
       const localContainerIds = localContainers.reduce((ids, container) => {
         ids[container._id] = true;
         return ids;
       }, {});
+      const cloudContainerIds = cloudContainers.reduce((ids, container) => {
+        ids[container._id] = true;
+        return ids;
+      }, {});
+      const availableContainerIds = Object.assign({}, localContainerIds, cloudContainerIds);
       const localItems = readArray(storage, ITEMS_KEY)
-        .filter((item) => !item.deletedAt && localContainerIds[item.containerId] && !isDemoItem(item));
-      if (!containers.length && !items.length && (localContainers.length || localItems.length)) {
-        return persistRecords(localContainers, localItems).then(() => {
-          cacheDatabaseRows(localContainers, localItems);
+        .map(normalizeStoredItem)
+        .filter((item) => !item.deletedAt && availableContainerIds[getItemContainerId(item)] && !isDemoItem(item));
+      const mergedContainers = mergeMissingRecords(cloudContainers, localContainers);
+      const mergedContainerIds = mergedContainers.reduce((ids, container) => {
+        if (container && container._id && !container.deletedAt) ids[container._id] = true;
+        return ids;
+      }, {});
+      const mergeableLocalItems = localItems.filter((item) => mergedContainerIds[getItemContainerId(item)]);
+      const mergedItems = mergeMissingRecords(cloudItems, mergeableLocalItems);
+      const hasLocalFallbackRows = mergedContainers.length > cloudContainers.length || mergedItems.length > cloudItems.length;
+      if (hasLocalFallbackRows) {
+        return persistRecords(mergedContainers, mergedItems).then(() => {
+          cacheDatabaseRows(mergedContainers, mergedItems);
           databaseReady = true;
           return { containers: listContainers(), items: listItems() };
         });
       }
-      cacheDatabaseRows(containers, items);
+      cacheDatabaseRows(mergedContainers, mergedItems);
       databaseReady = true;
       return { containers: listContainers(), items: listItems() };
     });
@@ -318,7 +622,7 @@ function createStorageService(adapter) {
   }
 
   function getItemsByContainer(id) {
-    return listItems().filter((item) => item.containerId === id);
+    return listItems().filter((item) => itemBelongsToContainer(item, id));
   }
 
   function saveContainer(input) {
@@ -334,8 +638,8 @@ function createStorageService(adapter) {
       _id: input._id || createId('container'),
       name: (input.name || '未命名容器').trim() || '未命名容器',
       locationPath: (input.locationPath || '').trim(),
-      coverImageFileId: input.coverImageFileId || '',
-      coverThumbFileId: input.coverThumbFileId || '',
+      coverImageFileId: imageDisplay.cloudFileIdFromTempUrl(input.coverImageFileId) || input.coverImageFileId || '',
+      coverThumbFileId: imageDisplay.cloudFileIdFromTempUrl(input.coverThumbFileId) || input.coverThumbFileId || '',
       contentImages: normalizeContentImages(input, timestamp),
       contentImageFileId: '',
       contentThumbFileId: '',
@@ -359,7 +663,7 @@ function createStorageService(adapter) {
     container = refreshContentImageCounts(container, items);
 
     const otherContainers = listContainers().filter((item) => item._id !== container._id);
-    const otherItems = listItems().filter((item) => item.containerId !== container._id);
+    const otherItems = listItems().filter((item) => !itemBelongsToContainer(item, container._id));
     writeArray(storage, CONTAINERS_KEY, [container].concat(otherContainers));
     writeArray(storage, ITEMS_KEY, items.concat(otherItems));
     return { container, items };
@@ -439,8 +743,8 @@ function createStorageService(adapter) {
     if (!image) throw new Error('箱内照片不存在');
 
     const activeItems = listItems();
-    const keptContainerItems = activeItems.filter((item) => item.containerId === containerId && !isItemFromImage(item, image));
-    const otherItems = activeItems.filter((item) => item.containerId !== containerId);
+    const keptContainerItems = activeItems.filter((item) => itemBelongsToContainer(item, containerId) && !isItemFromImage(item, image));
+    const otherItems = activeItems.filter((item) => !itemBelongsToContainer(item, containerId));
     const replacementItems = (items || [])
       .filter((item) => item.confirmed !== false)
       .map((item) => normalizeItem(Object.assign({}, item, {
@@ -462,14 +766,14 @@ function createStorageService(adapter) {
       return Object.assign({}, container, { deletedAt: timestamp, updatedAt: timestamp });
     });
     const items = readArray(storage, ITEMS_KEY).map((item) => {
-      if (item.containerId !== id) return item;
+      if (!itemBelongsToContainer(item, id)) return item;
       return Object.assign({}, item, { deletedAt: timestamp, updatedAt: timestamp });
     });
     writeArray(storage, CONTAINERS_KEY, containers);
     writeArray(storage, ITEMS_KEY, items);
     return {
       container: containers.find((container) => container._id === id) || null,
-      items: items.filter((item) => item.containerId === id)
+      items: items.filter((item) => itemBelongsToContainer(item, id))
     };
   }
 
@@ -486,7 +790,7 @@ function createStorageService(adapter) {
       return Object.assign({}, container, { deletedAt: timestamp, updatedAt: timestamp });
     });
     const items = readArray(storage, ITEMS_KEY).map((item) => {
-      if (!selected[item.containerId]) return item;
+      if (!selected[getItemContainerId(item)]) return item;
       return Object.assign({}, item, { deletedAt: timestamp, updatedAt: timestamp });
     });
     writeArray(storage, CONTAINERS_KEY, containers);
@@ -494,7 +798,7 @@ function createStorageService(adapter) {
     return {
       deletedCount,
       containers: containers.filter((container) => selected[container._id]),
-      items: items.filter((item) => selected[item.containerId])
+      items: items.filter((item) => selected[getItemContainerId(item)])
     };
   }
 
@@ -511,7 +815,7 @@ function createStorageService(adapter) {
   function saveContainerAsync(input) {
     return ensureDatabaseLoaded().then(() => {
       const previousItems = input && input._id
-        ? listItems().filter((item) => item.containerId === input._id)
+        ? listItems().filter((item) => itemBelongsToContainer(item, input._id))
         : [];
       const saved = saveContainer(input);
       const activeIds = saved.items.reduce((ids, item) => {
@@ -541,7 +845,7 @@ function createStorageService(adapter) {
 
   function replaceItemsForImageAsync(containerId, imageId, items) {
     return ensureDatabaseLoaded().then(() => {
-      const beforeItems = listItems().filter((item) => item.containerId === containerId);
+      const beforeItems = listItems().filter((item) => itemBelongsToContainer(item, containerId));
       const updated = replaceItemsForImage(containerId, imageId, items);
       const activeIds = updated.items.reduce((ids, item) => {
         ids[item._id] = true;
@@ -616,7 +920,7 @@ function createStorageService(adapter) {
       !demoContainerIds[container._id] && !isDemoContainer(container)
     ));
     const items = readArray(storage, ITEMS_KEY).filter((item) => (
-      !demoContainerIds[item.containerId] && !isDemoItem(item)
+      !demoContainerIds[getItemContainerId(item)] && !isDemoItem(item)
     ));
     writeArray(storage, CONTAINERS_KEY, containers);
     writeArray(storage, ITEMS_KEY, items);

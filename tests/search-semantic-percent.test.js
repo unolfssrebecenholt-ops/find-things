@@ -30,6 +30,38 @@ function buildViewModel(result) {
   return data.viewModel;
 }
 
+async function buildResolvedViewModel(result) {
+  const card = loadSearchResultCard();
+  const context = {
+    data: {
+      result,
+      viewModel: card.data.viewModel
+    },
+    setData(payload) {
+      this.data = Object.assign({}, this.data, payload);
+    }
+  };
+  const previousWx = global.wx;
+  global.wx = {
+    cloud: {
+      getTempFileURL(options) {
+        const fileList = (options.fileList || []).map((file) => ({
+          fileID: file.fileID,
+          tempFileURL: `https://display.example.com/${encodeURIComponent(file.fileID)}`
+        }));
+        options.success({ fileList });
+      }
+    }
+  };
+  try {
+    card.observers.result.call(context, result);
+    await new Promise((resolve) => setImmediate(resolve));
+    return context.data.viewModel;
+  } finally {
+    global.wx = previousWx;
+  }
+}
+
 test('search result card keeps match summary and shows semantic percent from score', () => {
   const viewModel = buildViewModel({
     semanticScore: 92,
@@ -86,4 +118,18 @@ test('search result card renders semantic percent as a separate compact badge', 
   assert.match(wxml, /semantic-percent/);
   assert.match(wxml, /viewModel\.semanticPercentText/);
   assert.match(wxml, /match-summary/);
+});
+
+test('search result card resolves cloud photo before display', async () => {
+  const viewModel = await buildResolvedViewModel({
+    semanticScore: 80,
+    matchSummary: '图片匹配',
+    matchedImageThumbFileId: 'cloud://env/find-things/thumbs/match.jpg',
+    item: { displayName: '白色袋子' },
+    container: { _id: 'container_1' }
+  });
+
+  assert.match(viewModel.photo, /^https:\/\/display\.example\.com\//);
+  assert.equal(viewModel.hasPhoto, true);
+  assert.equal(viewModel.showPlaceholder, false);
 });

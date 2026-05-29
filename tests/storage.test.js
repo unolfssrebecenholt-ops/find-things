@@ -134,6 +134,136 @@ test('normalizes multiple content image inputs and keeps legacy first image fiel
   assert.equal(saved.items[0].sourceImageFileId, '/tmp/b.jpg');
 });
 
+test('normalizes tcb temporary image urls into durable cloud file ids', () => {
+  const service = storage.createStorageService(createMemoryAdapter());
+  const tempUrl = 'https://636c-cloud1-d2g79srh64b6eb263-1436902568.tcb.qcloud.la/find-things/content/inside.jpg?sign=abc&t=1780042287';
+  const thumbTempUrl = 'https://636c-cloud1-d2g79srh64b6eb263-1436902568.tcb.qcloud.la/find-things/thumbs/inside.jpg?sign=def&t=1780042287';
+  const expectedFileId = 'cloud://cloud1-d2g79srh64b6eb263.636c-cloud1-d2g79srh64b6eb263-1436902568/find-things/content/inside.jpg';
+  const expectedThumbFileId = 'cloud://cloud1-d2g79srh64b6eb263.636c-cloud1-d2g79srh64b6eb263-1436902568/find-things/thumbs/inside.jpg';
+  const saved = service.saveContainer({
+    name: '临时链接箱',
+    coverImageFileId: tempUrl,
+    contentImages: [
+      {
+        imageId: 'temp_inside',
+        fileId: tempUrl,
+        thumbFileId: thumbTempUrl
+      }
+    ],
+    items: [
+      { displayName: '白色袋子', confirmed: true, sourceImageFileId: tempUrl }
+    ]
+  });
+
+  assert.equal(saved.container.coverImageFileId, expectedFileId);
+  assert.equal(saved.container.contentImages[0].fileId, expectedFileId);
+  assert.equal(saved.container.contentImages[0].thumbFileId, expectedThumbFileId);
+  assert.equal(saved.items[0].sourceImageFileId, expectedFileId);
+});
+
+test('reads legacy items embedded on container records', () => {
+  const service = storage.createStorageService(createMemoryAdapter({
+    'findThings.containers': [
+      {
+        _id: 'legacy_embedded_box',
+        name: '历史容器',
+        contentImageFileId: '/tmp/inside.jpg',
+        itemCount: 2,
+        updatedAt: 2,
+        deletedAt: null,
+        items: [
+          { displayName: '黄色标签贴', confirmed: true },
+          { displayName: '不保存条目', confirmed: false }
+        ]
+      }
+    ],
+    'findThings.items': []
+  }));
+
+  const items = service.getItemsByContainer('legacy_embedded_box');
+
+  assert.equal(items.length, 1);
+  assert.equal(items[0].displayName, '黄色标签贴');
+  assert.equal(items[0].containerId, 'legacy_embedded_box');
+  assert.equal(items[0].sourceImageFileId, '/tmp/inside.jpg');
+  assert.equal(items[0].sourceImageId, service.getContentImages('legacy_embedded_box')[0].imageId);
+});
+
+test('reads legacy items embedded on content images', () => {
+  const service = storage.createStorageService(createMemoryAdapter({
+    'findThings.containers': [
+      {
+        _id: 'legacy_image_items_box',
+        name: '按照片存的历史容器',
+        itemCount: 2,
+        updatedAt: 2,
+        deletedAt: null,
+        contentImages: [
+          {
+            imageId: 'inside_photo',
+            fileId: '/tmp/inside-photo.jpg',
+            label: '箱内照片',
+            itemCount: 2,
+            result: {
+              items: [
+                { itemName: '茶百道贴纸', confirmed: true },
+                { objectName: '黑色位置小物', confirmed: true }
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    'findThings.items': []
+  }));
+
+  const items = service.getItemsByContainer('legacy_image_items_box');
+
+  assert.deepEqual(items.map((item) => item.displayName), ['茶百道贴纸', '黑色位置小物']);
+  assert.equal(items[0].sourceImageId, 'inside_photo');
+  assert.equal(items[0].sourceImageFileId, '/tmp/inside-photo.jpg');
+  assert.equal(items[0].sourceImageLabel, '箱内照片');
+});
+
+test('reads legacy stored items with alternate container and name fields', () => {
+  const service = storage.createStorageService(createMemoryAdapter({
+    'findThings.containers': [
+      {
+        _id: 'alternate_fields_box',
+        name: '旧字段箱子',
+        contentImages: [
+          { image_id: 'old_inside', imageFileId: '/tmp/old-inside.jpg', label: '旧照片' }
+        ],
+        itemCount: 2,
+        updatedAt: 2,
+        deletedAt: null
+      }
+    ],
+    'findThings.items': [
+      {
+        _id: 'old_item_1',
+        boxId: 'alternate_fields_box',
+        itemName: '旧字段钥匙',
+        image_id: 'old_inside',
+        confirmed: true
+      },
+      {
+        _id: 'old_item_2',
+        container_id: 'alternate_fields_box',
+        object_name: '旧字段卡片',
+        imageFileId: '/tmp/old-inside.jpg',
+        confirmed: true
+      }
+    ]
+  }));
+
+  const items = service.getItemsByContainer('alternate_fields_box');
+
+  assert.deepEqual(items.map((item) => item.displayName), ['旧字段钥匙', '旧字段卡片']);
+  assert.equal(items[0].containerId, 'alternate_fields_box');
+  assert.equal(service.getContentImages('alternate_fields_box')[0].imageId, 'old_inside');
+});
+
 test('stores prototype-ready image metadata and item location text', () => {
   const service = storage.createStorageService(createMemoryAdapter());
   const saved = service.saveContainer({
@@ -270,6 +400,46 @@ test('async storage loads from and writes to cloud database collections', async 
   });
 });
 
+test('async delete does not write cloud database system fields back to documents', async () => {
+  const mock = createMockWxWithDatabase({
+    ft_containers: [
+      {
+        _id: 'existing_box',
+        _openid: 'owner_openid',
+        name: '已有箱子',
+        itemCount: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        deletedAt: null
+      }
+    ],
+    ft_items: [
+      {
+        _id: 'existing_item',
+        _openid: 'owner_openid',
+        containerId: 'existing_box',
+        displayName: '旧物品',
+        confirmed: true,
+        createdAt: 1,
+        updatedAt: 1,
+        deletedAt: null
+      }
+    ]
+  });
+
+  await withWx(mock.wx, async () => {
+    const service = storage.createStorageService();
+    await service.deleteContainerAsync('existing_box');
+
+    const writtenContainer = mock.writes.find((write) => write.collection === 'ft_containers');
+    const writtenItem = mock.writes.find((write) => write.collection === 'ft_items');
+    assert.ok(writtenContainer);
+    assert.ok(writtenItem);
+    assert.equal(writtenContainer.data._openid, undefined);
+    assert.equal(writtenItem.data._openid, undefined);
+  });
+});
+
 test('async storage migrates existing local cache when database is empty', async () => {
   const mock = createMockWxWithDatabase();
   mock.wx.setStorageSync('findThings.containers', [
@@ -301,6 +471,85 @@ test('async storage migrates existing local cache when database is empty', async
     assert.deepEqual(loaded.map((container) => container.name), ['本地旧箱子']);
     assert.ok(mock.rows.ft_containers.some((container) => container._id === 'local_box'));
     assert.ok(mock.rows.ft_items.some((item) => item._id === 'local_item'));
+  });
+});
+
+test('async storage keeps local items when cloud has only the container row', async () => {
+  const mock = createMockWxWithDatabase({
+    ft_containers: [
+      {
+        _id: 'cloud_box',
+        name: '云端箱子',
+        itemCount: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        deletedAt: null
+      }
+    ],
+    ft_items: []
+  });
+  mock.wx.setStorageSync('findThings.containers', [
+    {
+      _id: 'cloud_box',
+      name: '云端箱子',
+      itemCount: 1,
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null
+    }
+  ]);
+  mock.wx.setStorageSync('findThings.items', [
+    {
+      _id: 'local_item_for_cloud_box',
+      containerId: 'cloud_box',
+      displayName: '本地清单物品',
+      confirmed: true,
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null
+    }
+  ]);
+
+  await withWx(mock.wx, async () => {
+    const service = storage.createStorageService();
+    const items = await service.getItemsByContainerAsync('cloud_box');
+
+    assert.deepEqual(items.map((item) => item.displayName), ['本地清单物品']);
+    assert.ok(mock.rows.ft_items.some((item) => item._id === 'local_item_for_cloud_box'));
+  });
+});
+
+test('async storage reads cloud items with legacy foreign key fields', async () => {
+  const mock = createMockWxWithDatabase({
+    ft_containers: [
+      {
+        _id: 'cloud_legacy_box',
+        name: '云端旧字段箱',
+        itemCount: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        deletedAt: null
+      }
+    ],
+    ft_items: [
+      {
+        _id: 'cloud_legacy_item',
+        box_id: 'cloud_legacy_box',
+        label: '云端旧字段物品',
+        confirmed: true,
+        createdAt: 1,
+        updatedAt: 1,
+        deletedAt: null
+      }
+    ]
+  });
+
+  await withWx(mock.wx, async () => {
+    const service = storage.createStorageService();
+    const items = await service.getItemsByContainerAsync('cloud_legacy_box');
+
+    assert.deepEqual(items.map((item) => item.displayName), ['云端旧字段物品']);
+    assert.equal(items[0].containerId, 'cloud_legacy_box');
   });
 });
 

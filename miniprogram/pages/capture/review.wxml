@@ -10,19 +10,6 @@
     </view>
   </view>
 
-  <view class="segmented">
-    <button
-      class="segment {{annotatedSegmentClass}}"
-      data-mode="annotated"
-      bindtap="switchViewMode"
-    >标注</button>
-    <button
-      class="segment {{summarySegmentClass}}"
-      data-mode="summary"
-      bindtap="switchViewMode"
-    >清单</button>
-  </view>
-
   <view class="ratio-guide">
     <text>横过来拍更清楚</text>
     <text class="ratio-guide-strong">小懒好找</text>
@@ -34,13 +21,13 @@
     <text>{{aiStatusText}}</text>
   </view>
 
-  <view wx:if="{{isPhotoMode}}" class="summary-panel">
+  <view class="summary-panel">
     <view class="photo-map ratio-landscape {{ratioClass}}">
       <image class="plain-photo" mode="aspectFit" src="{{imagePath}}"></image>
-      <view wx:if="{{isAnnotatedMode}}" class="annotation-layer">
+      <view class="annotation-layer">
         <view
           wx:for="{{items}}"
-          wx:key="tempId"
+          wx:key="itemKey"
           wx:if="{{item.hasAnnotation}}"
           class="annotation-box"
           style="{{item.annotationStyle}}"
@@ -52,28 +39,60 @@
     <view class="summary-card">
       <view>
         <text class="summary-title">已识别 {{items.length}} 件</text>
-        <text class="subtle">按标注和清单核对名称、颜色和方位。</text>
+        <text class="subtle">按标注核对名称、颜色和方位。</text>
       </view>
       <text class="pill">{{currentLabel}}</text>
     </view>
   </view>
 
-  <view wx:if="{{isPhotoMode}}" class="quick-list {{listModeClass}}">
-    <view wx:for="{{items}}" wx:key="tempId" class="quick-item">
-      <text class="quick-index">{{item.displayIndex}}</text>
-      <view class="quick-copy">
-        <text class="quick-name">{{item.displayName}}</text>
-        <text class="subtle">{{item.displayDescription}}</text>
-        <view wx:if="{{item.hasTags}}" class="quick-tags">
-          <text wx:for="{{item.tagList}}" wx:for-item="tag" wx:key="*this" class="mini-tag">{{tag}}</text>
+  <view class="quick-list">
+    <view wx:for="{{items}}" wx:key="itemKey" class="quick-item {{item.isExpanded ? 'expanded' : ''}}">
+      <view class="quick-toolbar">
+        <view class="quick-identity">
+          <text class="quick-index">{{item.displayIndex}}</text>
+          <text class="quick-identity-copy">小懒识别</text>
+          <text class="quick-confidence">{{item.confidenceLabel}}</text>
+        </view>
+        <view class="quick-actions">
+          <view wx:if="{{item.isCollapsed}}" class="quick-action-spacer"></view>
+          <button
+            wx:if="{{item.isCollapsed}}"
+            class="quick-action expand-button"
+            data-key="{{item.itemKey}}"
+            bindtap="toggleItemExpanded"
+          >展开</button>
+          <button
+            wx:if="{{item.isExpanded}}"
+            class="quick-action delete"
+            data-key="{{item.itemKey}}"
+            bindtap="removeExpandedItem"
+          >移除</button>
+          <button
+            wx:if="{{item.isExpanded}}"
+            class="quick-action collapse-action"
+            data-key="{{item.itemKey}}"
+            bindtap="toggleItemExpanded"
+          >收起</button>
         </view>
       </view>
-      <text class="pill">{{item.confidenceLabel}}</text>
+      <view wx:if="{{item.isCollapsed}}" class="quick-summary">
+        <view class="quick-copy">
+          <text class="quick-name">{{item.displayName}}</text>
+          <text class="subtle">{{item.displayDescription}}</text>
+          <view wx:if="{{item.hasTags}}" class="quick-tags">
+            <text wx:for="{{item.tagList}}" wx:for-item="tag" wx:key="*this" class="mini-tag">{{tag}}</text>
+          </view>
+        </view>
+      </view>
+      <view wx:if="{{item.isExpanded}}" class="quick-editor">
+        <item-editor
+          items="{{item.editorItems}}"
+          hide-head="{{true}}"
+          context-key="{{item.itemKey}}"
+          bind:change="handleExpandedItemChange"
+        ></item-editor>
+      </view>
     </view>
-  </view>
-
-  <view wx:if="{{isListMode}}" class="edit-panel">
-    <item-editor items="{{items}}" bind:change="handleItemsChange"></item-editor>
   </view>
 
   <view wx:if="{{warnings.length}}" class="note-card">{{warnings[0]}}</view>

@@ -1,5 +1,5 @@
-<view class="editor">
-  <view class="editor-head">
+<view class="editor {{editorClass}}">
+  <view wx:if="{{showHead}}" class="editor-head">
     <view>
       <text class="editor-title">确认物品清单</text>
       <text class="editor-subtitle">取消勾选或删除的物品不会保存。</text>
@@ -7,7 +7,7 @@
     <text class="editor-count">{{items.length}} 件</text>
   </view>
   <view wx:for="{{items}}" wx:key="tempId" class="item-card {{item.confirmed ? '' : 'disabled'}}">
-    <view class="item-toolbar">
+    <view wx:if="{{showToolbar}}" class="item-toolbar">
       <view class="item-identity">
         <text class="number">{{item.displayIndex}}</text>
         <view class="identity-stack">
@@ -17,6 +17,7 @@
       </view>
       <view class="item-actions">
         <button
+          wx:if="{{showKeepAction}}"
           class="action-button keep-toggle {{item.confirmed ? 'checked' : ''}}"
           data-index="{{index}}"
           bindtap="toggleConfirmed"

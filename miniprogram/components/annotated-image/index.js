@@ -69,6 +69,19 @@ Component({
       this.measureLayout();
     },
 
+    handleImageError(event) {
+      this.setData({
+        hasImage: false,
+        showPlaceholder: true,
+        imageSize: null
+      });
+      this.triggerEvent('imageerror', {
+        src: this.data.imageSrc,
+        error: event && event.detail
+      });
+      this.updateBoxes();
+    },
+
     measureLayout() {
       if (typeof wx === 'undefined' || !wx.createSelectorQuery) {
         this.updateBoxes();

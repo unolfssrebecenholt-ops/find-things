@@ -134,13 +134,6 @@ test('review page presents annotated photo and inventory list before editing', (
   const wxml = readMiniProgramFile('pages', 'capture', 'review.wxml');
   const wxss = readMiniProgramFile('pages', 'capture', 'review.wxss');
 
-  assert.match(wxml, /segmented/);
-  assert.match(wxml, />标注</);
-  assert.match(wxml, />清单</);
-  assert.match(wxml, /annotatedSegmentClass/);
-  assert.match(wxml, /summarySegmentClass/);
-  assert.match(wxml, /isPhotoMode/);
-  assert.match(wxml, /listModeClass/);
   assert.match(wxml, /拍下一张/);
   assert.match(wxml, /保存容器/);
   assert.doesNotMatch(wxml, /下一步：拍容器/);
@@ -150,14 +143,38 @@ test('review page presents annotated photo and inventory list before editing', (
   assert.match(wxml, /annotation-box/);
   assert.match(wxml, /wx:if="\{\{item\.hasAnnotation\}\}"/);
   assert.match(wxml, /quick-list/);
+  assert.match(wxml, /quick-summary/);
+  assert.match(wxml, /quick-toolbar/);
+  assert.match(wxml, /quick-identity-copy/);
+  assert.match(wxml, /quick-confidence/);
+  assert.match(wxml, /quick-actions/);
+  assert.match(wxml, /expand-button/);
+  assert.match(wxml, /removeExpandedItem/);
+  assert.match(wxml, /data-key="\{\{item\.itemKey\}\}"/);
+  assert.match(wxml, /bindtap="toggleItemExpanded"/);
   assert.match(wxml, /item-editor/);
-  assert.match(wxml, /handleItemsChange/);
+  assert.match(wxml, /hide-head="\{\{true\}\}"/);
+  assert.match(wxml, /context-key="\{\{item\.itemKey\}\}"/);
+  assert.match(wxml, /handleExpandedItemChange/);
+  assert.doesNotMatch(wxml, /handleEditorCollapse/);
+  assert.doesNotMatch(wxml, /segmented/);
+  assert.doesNotMatch(wxml, />标注</);
+  assert.doesNotMatch(wxml, />清单</);
+  assert.doesNotMatch(wxml, /switchViewMode/);
+  assert.doesNotMatch(wxml, /handleItemsChange/);
   assert.doesNotMatch(wxml, /scan-overlay/);
   assert.doesNotMatch(wxml, />识别中</);
   assert.doesNotMatch(wxml, /isEditMode/);
   assert.doesNotMatch(wxml, /list-expanded/);
   assert.doesNotMatch(wxml, /fake-input/);
   assert.doesNotMatch(wxml, /photo-strip/);
+  assert.doesNotMatch(wxml, /quick-aside/);
+  assert.doesNotMatch(wxss, /\.segmented/);
+  assert.doesNotMatch(wxss, /\.segment/);
+  assert.match(wxss, /\.quick-item\.expanded/);
+  assert.match(wxss, /\.quick-toolbar/);
+  assert.match(wxss, /\.quick-actions/);
+  assert.match(wxss, /\.expand-button/);
   assert.match(wxss, /\.review-actions[\s\S]*right: 0[\s\S]*bottom: 0[\s\S]*left: 0/);
   assert.match(wxss, /\.review-actions[\s\S]*env\(safe-area-inset-bottom\)/);
   assert.doesNotMatch(cssBlock(wxss, '.photo-stage'), /background: #ffffff/);
@@ -321,8 +338,13 @@ test('container detail keeps carousel indicators instead of photo switch buttons
   assert.match(wxml, /重新识别这张/);
   assert.match(wxml, /添加照片/);
   assert.match(wxml, /quiet-note/);
-  assert.ok(wxml.indexOf('item-tags') < wxml.indexOf('note-card'));
-  assert.match(wxss, /\.item-tags[\s\S]*flex-wrap: wrap/);
+  assert.ok(wxml.indexOf('inventory-list') < wxml.indexOf('note-card'));
+  assert.match(wxml, /bindtap="toggleItemExpanded"/);
+  assert.match(wxml, /bindtap="addManualItem"/);
+  assert.match(wxml, /item-editor/);
+  assert.match(wxml, /handleExpandedItemChange/);
+  assert.match(wxss, /\.inventory-list/);
+  assert.match(wxss, /\.inventory-tags[\s\S]*flex-wrap: wrap/);
   assert.doesNotMatch(wxml, /照片 1<\/button>/);
   assert.doesNotMatch(wxml, /照片 2<\/button>/);
 });
@@ -380,6 +402,7 @@ test('sloth minimal prototype visual tokens replace the warm orange style', () =
 
 test('item editor uses a high-fidelity card layout instead of cramped inline controls', () => {
   const wxml = readMiniProgramFile('components', 'item-editor', 'index.wxml');
+  const js = readMiniProgramFile('components', 'item-editor', 'index.js');
   const wxss = readMiniProgramFile('components', 'item-editor', 'index.wxss');
 
   assert.match(wxml, /item-toolbar/);
@@ -388,11 +411,15 @@ test('item editor uses a high-fidelity card layout instead of cramped inline con
   assert.match(wxml, /field-grid/);
   assert.match(wxml, /description-field/);
   assert.match(wxml, /note-field/);
+  assert.match(js, /hideHead/);
   assert.match(wxml, /bindblur="editTags"/);
   assert.match(wxml, /bindblur="editDescription"/);
   assert.match(wxml, /bindtap="removeItem"/);
+  assert.match(js, /contextKey/);
+  assert.match(js, /this\.triggerEvent\('change', \{\s*items,[\s\S]*contextKey: this\.data\.contextKey/);
   assert.doesNotMatch(wxml, /class="item /);
   assert.match(wxss, /\.item-card/);
+  assert.match(wxss, /\.editor\.embedded/);
   assert.match(wxss, /\.editor button[\s\S]*margin: 0/);
   assert.match(wxss, /\.item-card[\s\S]*max-width: 100%/);
   assert.match(wxss, /\.item-actions[\s\S]*grid-template-columns: repeat\(2, 96rpx\)/);

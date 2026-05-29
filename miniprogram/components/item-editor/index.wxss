@@ -6,6 +6,10 @@
   max-width: 100%;
 }
 
+.editor.embedded {
+  gap: 0;
+}
+
 .editor view,
 .editor text,
 .editor button,
@@ -43,7 +47,7 @@
 .editor-subtitle {
   display: block;
   margin-top: 6rpx;
-  color: #7b7465;
+  color: #6f756d;
   font-size: 24rpx;
   line-height: 1.45;
 }
@@ -52,11 +56,12 @@
   flex: none;
   min-height: 44rpx;
   padding: 7rpx 14rpx;
-  color: #7b5e1e;
+  color: #1f6048;
   font-size: 22rpx;
   font-weight: 800;
   line-height: 30rpx;
-  background: #fff0b8;
+  background: #dbe9df;
+  border: 1rpx solid rgba(31, 96, 72, 0.12);
   border-radius: 999rpx;
 }
 
@@ -66,14 +71,29 @@
   min-width: 0;
   max-width: 100%;
   padding: 18rpx;
-  background: #fffdf8;
-  border: 2rpx solid #eadfc8;
+  background: #fbfbf7;
+  border: 2rpx solid rgba(21, 23, 19, 0.12);
   border-radius: 30rpx;
-  box-shadow: 0 8rpx 0 #f1e4c8;
+  box-shadow: 0 18rpx 46rpx rgba(22, 25, 18, 0.07);
+}
+
+.editor.embedded .item-card {
+  border-radius: 24rpx;
+  box-shadow: none;
+}
+
+.editor.embedded .item-actions {
+  background: transparent;
+  border: 0;
+}
+
+.editor.embedded .action-button {
+  border-radius: 18rpx;
 }
 
 .item-card.disabled {
   opacity: 0.58;
+  box-shadow: none;
 }
 
 .item-toolbar {
@@ -93,8 +113,8 @@
   justify-self: end;
   max-width: 100%;
   padding: 4rpx;
-  background: #fff0b8;
-  border: 2rpx solid #ecd79a;
+  background: #eef4ef;
+  border: 2rpx solid rgba(31, 96, 72, 0.12);
   border-radius: 22rpx;
 }
 
@@ -110,13 +130,14 @@
 }
 
 .keep-toggle {
-  color: #725f45;
+  color: #143e31;
   background: transparent;
 }
 
 .keep-toggle.checked {
   color: #ffffff;
-  background: #ff7a59;
+  background: #1f6048;
+  box-shadow: 0 8rpx 18rpx rgba(31, 96, 72, 0.16);
 }
 
 .item-identity {
@@ -137,19 +158,19 @@
   flex: none;
   width: 42rpx;
   height: 42rpx;
-  color: #ff7a59;
+  color: #1f6048;
   font-size: 23rpx;
   font-weight: 850;
   line-height: 42rpx;
   text-align: center;
-  background: #ffe8dc;
+  background: #dbe9df;
   border-radius: 50%;
 }
 
 .identity-copy {
   min-width: 0;
   overflow: hidden;
-  color: #7b7465;
+  color: #6f756d;
   font-size: 23rpx;
   font-weight: 750;
   text-overflow: ellipsis;
@@ -162,19 +183,26 @@
   min-height: 42rpx;
   padding: 6rpx 10rpx;
   overflow: hidden;
-  color: #7b5e1e;
+  color: #143e31;
   font-size: 21rpx;
   font-weight: 800;
   line-height: 30rpx;
   text-overflow: ellipsis;
   white-space: nowrap;
-  background: #fff0b8;
+  background: #eef4ef;
+  border: 1rpx solid rgba(31, 96, 72, 0.1);
   border-radius: 999rpx;
 }
 
 .delete {
-  color: #a33b2f;
-  background: #ffe8dc;
+  color: #8f4538;
+  background: #f4e5df;
+}
+
+.editor.embedded .delete {
+  color: #ffffff;
+  background: #1f6048;
+  box-shadow: 0 8rpx 18rpx rgba(31, 96, 72, 0.16);
 }
 
 .name-field,
@@ -186,7 +214,7 @@
 }
 
 .field-caption {
-  color: #7b7465;
+  color: #6f756d;
   font-size: 22rpx;
   font-weight: 800;
   line-height: 1.25;
@@ -197,12 +225,12 @@
   min-width: 0;
   height: 76rpx;
   padding: 0 16rpx;
-  color: #2f352c;
+  color: #151713;
   font-size: 30rpx;
   font-weight: 800;
   line-height: 76rpx;
-  background: #fff9ee;
-  border: 2rpx solid #eadfc8;
+  background: #ffffff;
+  border: 2rpx solid rgba(21, 23, 19, 0.1);
   border-radius: 22rpx;
 }
 
@@ -223,11 +251,11 @@
   min-width: 0;
   height: 64rpx;
   padding: 0 14rpx;
-  color: #2f352c;
+  color: #151713;
   font-size: 25rpx;
   line-height: 64rpx;
-  background: #fff9ee;
-  border: 2rpx solid #eadfc8;
+  background: #ffffff;
+  border: 2rpx solid rgba(21, 23, 19, 0.1);
   border-radius: 20rpx;
 }
 
@@ -251,9 +279,9 @@
 }
 
 .tag {
-  color: #725f45;
-  background: #fff0b8;
-  border: 1rpx solid #ecd79a;
+  color: #143e31;
+  background: #eef4ef;
+  border: 1rpx solid rgba(31, 96, 72, 0.1);
 }
 
 .description-input,
@@ -263,11 +291,11 @@
   height: 132rpx;
   min-height: 0;
   padding: 16rpx;
-  color: #2f352c;
+  color: #151713;
   font-size: 25rpx;
   line-height: 1.45;
-  background: #fff9ee;
-  border: 2rpx solid #eadfc8;
+  background: #ffffff;
+  border: 2rpx solid rgba(21, 23, 19, 0.1);
   border-radius: 22rpx;
 }
 

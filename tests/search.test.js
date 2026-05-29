@@ -18,6 +18,18 @@ function createMemoryAdapter() {
   };
 }
 
+function createMemoryAdapterWithData(initial) {
+  const data = Object.assign({}, initial);
+  return {
+    getStorageSync(key) {
+      return data[key];
+    },
+    setStorageSync(key, value) {
+      data[key] = value;
+    }
+  };
+}
+
 test('normalizes broad book queries into searchable keywords', () => {
   assert.deepEqual(normalize.normalizeQuery('帮我找一本书'), ['书', 'book']);
   assert.deepEqual(normalize.normalizeQuery('黑色签字笔'), ['黑色', '签字笔', 'pen']);
@@ -268,4 +280,31 @@ test('container search matches names locations and contained items', () => {
   assert.match(locationResults[0].matchSummary, /名称|位置|物品/);
   assert.equal(itemResults[0].container.name, '客厅工具盒');
   assert.match(itemResults[0].matchSummary, /卷尺/);
+});
+
+test('search includes legacy container-embedded inventory items', () => {
+  const service = storage.createStorageService(createMemoryAdapterWithData({
+    'findThings.containers': [
+      {
+        _id: 'legacy_embedded_box',
+        name: '历史箱子',
+        locationPath: '柜子',
+        contentImageFileId: '/tmp/legacy.jpg',
+        itemCount: 1,
+        updatedAt: 1,
+        items: [
+          { displayName: '黄色标签贴', colors: ['黄色'], confirmed: true }
+        ]
+      }
+    ],
+    'findThings.items': []
+  }));
+
+  const results = search.searchItems('黄色标签贴', {
+    containers: service.listContainers(),
+    items: service.listItems()
+  });
+
+  assert.equal(results[0].item.displayName, '黄色标签贴');
+  assert.equal(results[0].containerName, '历史箱子');
 });

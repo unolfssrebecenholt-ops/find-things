@@ -2,6 +2,7 @@ let storageService = null;
 const { isMockAssetPath } = require('../../utils/mock-assets');
 const { getContainerPreview } = require('../../utils/image-preview');
 const imageThumbs = require('../../services/image-thumbs');
+const imageDisplay = require('../../services/image-display');
 const { navigateHome } = require('../../utils/navigation');
 
 function getStorageService() {
@@ -33,7 +34,7 @@ function getContainerStatus(container, index) {
 
 function createContainerViewModel(container, index) {
   const preview = getContainerPreview(container);
-  const coverPhoto = preview.display || preview.original || '';
+  const coverPhoto = container.coverPhoto || preview.display || preview.original || '';
   const hasCoverPhoto = !!coverPhoto && !isMockAssetPath(coverPhoto);
   return Object.assign({}, container, {
     coverPhoto: hasCoverPhoto ? coverPhoto : '',
@@ -41,6 +42,28 @@ function createContainerViewModel(container, index) {
     displayLocation: container.locationPath || '未填写位置',
     displayStatus: getContainerStatus(container, Number(index) || 0)
   });
+}
+
+function collectContainerPreviewPaths(containers) {
+  return (containers || []).reduce((paths, container) => {
+    const preview = getContainerPreview(container);
+    paths.push(preview.display);
+    paths.push(preview.original);
+    return paths;
+  }, []).filter(Boolean);
+}
+
+function createContainerViewModels(containers) {
+  const paths = collectContainerPreviewPaths(containers);
+  if (!imageDisplay.hasResolvablePath(paths)) {
+    return (containers || []).map(createContainerViewModel);
+  }
+  return imageDisplay.resolveImagePaths(paths)
+    .then((resolvedPaths) => (containers || []).map((container, index) => {
+      const preview = getContainerPreview(container);
+      const displayPath = imageDisplay.pickDisplayPath([preview.display, preview.original], resolvedPaths);
+      return createContainerViewModel(Object.assign({}, container, { coverPhoto: displayPath }), index);
+    }));
 }
 
 Page({
@@ -65,13 +88,24 @@ Page({
 
     loadData
       .then((containers) => {
-        const recentContainers = containers.slice(0, 4).map(createContainerViewModel);
+        const visibleContainers = containers.slice(0, 4);
+        const rendered = createContainerViewModels(visibleContainers);
+        const apply = (recentContainers) => ({
+          containers,
+          visibleContainers,
+          recentContainers
+        });
+        return rendered && typeof rendered.then === 'function'
+          ? rendered.then(apply)
+          : apply(rendered);
+      })
+      .then(({ visibleContainers, recentContainers }) => {
         this.setData({
           recentContainers,
           hasRecentContainers: recentContainers.length > 0,
           showEmptyRecentContainers: recentContainers.length === 0
         });
-        this.ensureRecentThumbnails(containers.slice(0, 4));
+        this.ensureRecentThumbnails(visibleContainers);
       })
       .catch(showDataError);
   },
