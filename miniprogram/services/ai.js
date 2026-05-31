@@ -537,6 +537,84 @@ function normalizeCloudErrorCode(code) {
     : code;
 }
 
+function toFiniteNumber(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function normalizeUsageStatus(payload) {
+  const source = payload && payload.result && !Object.prototype.hasOwnProperty.call(payload, 'usedToday')
+    ? payload.result
+    : payload;
+  const usedToday = Math.max(0, toFiniteNumber(source && source.usedToday, 0));
+  const rawLimit = source && source.dailyAnalyzeLimit;
+  const dailyAnalyzeLimit = rawLimit === undefined || rawLimit === null || rawLimit === ''
+    ? null
+    : Math.max(0, toFiniteNumber(rawLimit, 0));
+  const rawRemaining = source && source.remainingToday;
+  const remainingToday = rawRemaining === undefined || rawRemaining === null || rawRemaining === ''
+    ? (dailyAnalyzeLimit === null ? null : Math.max(0, dailyAnalyzeLimit - usedToday))
+    : Math.max(0, toFiniteNumber(rawRemaining, 0));
+  const analyzeEnabled = !(source && source.analyzeEnabled === false);
+  const blocked = !!(source && source.blocked);
+  const errorCode = normalizeCloudErrorCode(source && source.errorCode) || '';
+  const quotaExhausted = dailyAnalyzeLimit !== null && remainingToday <= 0;
+  const canAnalyze = source && Object.prototype.hasOwnProperty.call(source, 'canAnalyze')
+    ? !!source.canAnalyze && analyzeEnabled && !blocked && !quotaExhausted
+    : analyzeEnabled && !blocked && !quotaExhausted;
+  const fallbackErrorCode = blocked
+    ? 'USER_BLOCKED'
+    : (!analyzeEnabled ? 'ANALYZE_DISABLED' : (quotaExhausted ? 'USAGE_LIMIT_EXCEEDED' : errorCode));
+  const errorMessage = source && source.errorMessage
+    ? friendlyAnalyzeErrorMessage(errorCode, source.errorMessage)
+    : (canAnalyze ? '' : friendlyAnalyzeErrorMessage(fallbackErrorCode));
+
+  return {
+    usedToday,
+    dailyAnalyzeLimit,
+    remainingToday,
+    analyzeEnabled,
+    blocked,
+    canAnalyze,
+    errorCode,
+    errorMessage
+  };
+}
+
+function fallbackUsageStatus(error) {
+  return {
+    usedToday: 0,
+    dailyAnalyzeLimit: null,
+    remainingToday: null,
+    analyzeEnabled: true,
+    blocked: false,
+    canAnalyze: true,
+    errorCode: error && error.code ? normalizeCloudErrorCode(error.code) : '',
+    errorMessage: error && error.message ? friendlyAnalyzeErrorMessage(error.code, error.message) : ''
+  };
+}
+
+function canCallUsageStatus(config) {
+  return config.cloudFunctionName
+    && config.transport === 'cloud'
+    && hasWx()
+    && wx.cloud
+    && wx.cloud.callFunction;
+}
+
+function getUsageStatus() {
+  const config = getRuntimeConfig();
+  if (!canCallUsageStatus(config)) {
+    return Promise.resolve(fallbackUsageStatus());
+  }
+  return wx.cloud.callFunction({
+    name: config.cloudFunctionName,
+    data: { action: 'getUsageStatus' }
+  })
+    .then((result) => normalizeUsageStatus(result && result.result ? result.result : result))
+    .catch((error) => fallbackUsageStatus(friendlyCloudCallError(error)));
+}
+
 function friendlyAnalyzeErrorMessage(code, message) {
   const normalizedCode = normalizeCloudErrorCode(code);
   const messages = {
@@ -544,6 +622,9 @@ function friendlyAnalyzeErrorMessage(code, message) {
     AI_REQUEST_TIMEOUT: '小懒看得有点久，请换一张更清晰或更小的照片后重试。',
     AI_TLS_CERTIFICATE_INVALID: '小懒没法信任识别服务的证书，请换可信服务地址或配置证书后重试。',
     AI_SERVICE_UNREACHABLE: '小懒没连上识别服务，请稍后重试或检查服务地址。',
+    USER_BLOCKED: '当前账号暂时不能使用 AI 识别。',
+    USAGE_LIMIT_EXCEEDED: '今天的 AI 识别次数已用完，明天再试试。',
+    ANALYZE_DISABLED: 'AI 识别暂时关闭，请稍后再试。',
     AI_REQUEST_FAILED: '小懒请求识别服务失败，请稍后重试。',
     AI_ANALYZE_FAILED: '小懒暂时没看清，请重试或手动添加物品。'
   };
@@ -648,6 +729,7 @@ function analyzeImage(options) {
 
 module.exports = {
   analyzeImage,
+  getUsageStatus,
   buildVisionPrompt,
   getRuntimeConfig,
   saveRuntimeConfig,

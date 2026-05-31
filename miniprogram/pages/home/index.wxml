@@ -23,6 +23,14 @@
     </view>
   </view>
 
+  <view wx:if="{{showExpiryReminderEntry}}" class="expiry-reminder-entry" bindtap="openExpiryReminders">
+    <view class="expiry-reminder-copy">
+      <text class="expiry-reminder-title">到期公示 · {{expiryReminderCount}} 条</text>
+      <text class="subtle">{{expiryReminderPreview}}</text>
+    </view>
+    <text class="expiry-reminder-action">知道了</text>
+  </view>
+
   <view class="section-row">
     <text class="section-heading">最近整理</text>
     <text class="text-link" bindtap="showContainers">全部容器</text>

@@ -5,6 +5,8 @@ const imageThumbs = require('../../services/image-thumbs');
 const imageDisplay = require('../../services/image-display');
 const { navigateHome } = require('../../utils/navigation');
 
+let expiryReminderService = null;
+
 function getStorageService() {
   if (!storageService) {
     try {
@@ -16,10 +18,55 @@ function getStorageService() {
   return storageService;
 }
 
+function getExpiryReminderService() {
+  if (!expiryReminderService) {
+    try {
+      expiryReminderService = require('../../services/expiry-reminder');
+    } catch (error) {
+      expiryReminderService = null;
+    }
+  }
+  return expiryReminderService;
+}
+
 function showDataError(error) {
   wx.showToast({
     title: error && error.message ? error.message : '数据同步失败',
     icon: 'none'
+  });
+}
+
+function markExpiryRemindersRead(service, notices) {
+  const targetNotices = (notices || []).filter((notice) => notice && notice._id);
+  if (!service || targetNotices.length === 0) return Promise.resolve();
+  const markRead = typeof service.markReminderNoticeReadAsync === 'function'
+    ? service.markReminderNoticeReadAsync.bind(service)
+    : typeof service.markReminderNoticeRead === 'function'
+      ? (noticeId, timestamp) => Promise.resolve(service.markReminderNoticeRead(noticeId, timestamp))
+      : null;
+  if (!markRead) return Promise.resolve();
+
+  const readAt = Date.now();
+  return Promise.all(targetNotices.map((notice) => markRead(notice._id, readAt)));
+}
+
+function refreshFutureReminderSubscriptions(service, reminderService) {
+  if (!service || !reminderService || typeof wx === 'undefined') {
+    return Promise.resolve();
+  }
+  if (typeof reminderService.readAcceptedSubscriptionSetting !== 'function') {
+    return Promise.resolve();
+  }
+  const upgrade = typeof service.upgradeFutureReminderSubscriptionsAsync === 'function'
+    ? service.upgradeFutureReminderSubscriptionsAsync.bind(service)
+    : typeof service.upgradeFutureReminderSubscriptions === 'function'
+      ? (timestamp) => Promise.resolve(service.upgradeFutureReminderSubscriptions(timestamp))
+      : null;
+  if (!upgrade) return Promise.resolve();
+
+  return reminderService.readAcceptedSubscriptionSetting(wx).then((setting) => {
+    if (!setting || !setting.accepted) return null;
+    return upgrade(Date.now());
   });
 }
 
@@ -66,11 +113,42 @@ function createContainerViewModels(containers) {
     }));
 }
 
+function listReminderNotices(service, useDatabase) {
+  if (!service) return Promise.resolve([]);
+  if (useDatabase && typeof service.listPendingReminderNoticesAsync === 'function') {
+    return service.listPendingReminderNoticesAsync();
+  }
+  if (typeof service.listPendingReminderNotices === 'function') {
+    return Promise.resolve(service.listPendingReminderNotices());
+  }
+  return Promise.resolve([]);
+}
+
+function triggerExpiryReminderScan(useDatabase) {
+  if (!useDatabase || typeof wx === 'undefined' || !wx.cloud || typeof wx.cloud.callFunction !== 'function') {
+    return Promise.resolve();
+  }
+  return wx.cloud.callFunction({
+    name: 'ftExpiryReminder',
+    data: { now: Date.now() }
+  }).catch(() => null);
+}
+
+function reminderPreview(notices) {
+  const first = (notices || [])[0];
+  if (!first) return '';
+  return first.message || `${first.displayName || first.name || '物品'} 已过期，请及时处理。`;
+}
+
 Page({
   data: {
     recentContainers: [],
     hasRecentContainers: false,
-    showEmptyRecentContainers: true
+    showEmptyRecentContainers: true,
+    expiryReminderCount: 0,
+    expiryReminderNotices: [],
+    expiryReminderPreview: '',
+    showExpiryReminderEntry: false
   },
 
   onShow() {
@@ -79,31 +157,52 @@ Page({
 
   load() {
     const service = getStorageService();
+    const reminderService = getExpiryReminderService();
     const useDatabase = service && typeof service.isDatabaseAvailable === 'function' && service.isDatabaseAvailable();
     const loadData = useDatabase && typeof service.removeDemoDataAsync === 'function'
-      ? service.removeDemoDataAsync().then(() => service.listUserContainersAsync())
-      : Promise.resolve(service
-        ? (typeof service.listUserContainers === 'function' ? service.listUserContainers() : service.listContainers())
-        : []);
+      ? service.removeDemoDataAsync().then(() => refreshFutureReminderSubscriptions(service, reminderService)).then(() => triggerExpiryReminderScan(true)).then(() => {
+        if (service && typeof service.loadFromDatabase === 'function') return service.loadFromDatabase();
+        return null;
+      }).then(() => Promise.all([
+        service.listUserContainersAsync(),
+        typeof service.listUserItemsAsync === 'function' ? service.listUserItemsAsync() : [],
+        listReminderNotices(service, true)
+      ]))
+      : refreshFutureReminderSubscriptions(service, reminderService).then(() => ([
+          service
+            ? (typeof service.listUserContainers === 'function' ? service.listUserContainers() : service.listContainers())
+            : [],
+          service
+            ? (typeof service.listUserItems === 'function' ? service.listUserItems() : [])
+            : [],
+          service && typeof service.listPendingReminderNotices === 'function'
+            ? service.listPendingReminderNotices()
+            : []
+        ]));
 
-    loadData
-      .then((containers) => {
+    return loadData
+      .then(([containers, items, reminderNotices]) => {
         const visibleContainers = containers.slice(0, 4);
         const rendered = createContainerViewModels(visibleContainers);
         const apply = (recentContainers) => ({
           containers,
           visibleContainers,
-          recentContainers
+          recentContainers,
+          expiryReminderNotices: reminderNotices || []
         });
         return rendered && typeof rendered.then === 'function'
           ? rendered.then(apply)
           : apply(rendered);
       })
-      .then(({ visibleContainers, recentContainers }) => {
+      .then(({ visibleContainers, recentContainers, expiryReminderNotices }) => {
         this.setData({
           recentContainers,
           hasRecentContainers: recentContainers.length > 0,
-          showEmptyRecentContainers: recentContainers.length === 0
+          showEmptyRecentContainers: recentContainers.length === 0,
+          expiryReminderNotices,
+          expiryReminderPreview: reminderPreview(expiryReminderNotices),
+          expiryReminderCount: expiryReminderNotices.length,
+          showExpiryReminderEntry: expiryReminderNotices.length > 0
         });
         this.ensureRecentThumbnails(visibleContainers);
       })
@@ -136,6 +235,32 @@ Page({
 
   showContainers() {
     wx.navigateTo({ url: '/pages/container/list' });
+  },
+
+  openExpiryReminders() {
+    const notices = this.data.expiryReminderNotices || [];
+    const messages = notices.slice(0, 3).map((notice) => notice.message || `${notice.displayName || notice.name || '物品'} 已过期，请及时处理。`);
+    wx.showModal({
+      title: '到期提醒',
+      content: messages.length ? messages.join('、') : '暂无需要处理的到期提醒',
+      showCancel: false,
+      confirmColor: '#1f6048',
+      success: (result) => {
+        if (!result || !result.confirm) return;
+        const service = getStorageService();
+        markExpiryRemindersRead(service, notices)
+          .then(() => {
+            this.setData({
+              expiryReminderNotices: [],
+              expiryReminderPreview: '',
+              expiryReminderCount: 0,
+              showExpiryReminderEntry: false
+            });
+            this.load();
+          })
+          .catch(showDataError);
+      }
+    });
   },
 
   openContainer(event) {

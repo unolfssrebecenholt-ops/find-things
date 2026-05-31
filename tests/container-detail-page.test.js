@@ -284,7 +284,9 @@ test('container detail resolves cloud image ids to display urls without replacin
 
   await withWx(wxMock, () => page.renderContainer.call(context, wxMock.getStorageSync('findThings.containers')[0]));
 
-  assert.match(context.data.container.coverDisplayFileId, /^https:\/\/display\.example\.com\//);
+  assert.equal(context.data.container.coverDisplayFileId, undefined);
+  assert.equal(context.data.container.coverImageFileId, 'cloud://env/find-things/covers/front.jpg');
+  assert.equal(context.data.container.coverThumbFileId, 'cloud://env/find-things/thumbs/front.jpg');
   assert.match(context.data.contentImages[0].displayFileId, /^https:\/\/display\.example\.com\//);
   assert.match(context.data.contentImages[0].displayThumbFileId, /^https:\/\/display\.example\.com\//);
   assert.match(context.data.contentImages[0].displaySrc, /^https:\/\/display\.example\.com\//);

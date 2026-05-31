@@ -8,17 +8,6 @@
   </view>
 
   <view class="detail-hero">
-    <view class="detail-cover cover-photo">
-      <image wx:if="{{hasCoverImage}}" mode="aspectFit" lazy-load="{{true}}" src="{{container.coverDisplayFileId}}"></image>
-      <view wx:if="{{hasCoverImage}}" class="cover-label">
-        <text>外观照片</text>
-      </view>
-      <view wx:if="{{showCoverPlaceholder}}" class="cover-placeholder">
-        <view class="cover-box-line"></view>
-        <view class="cover-box-shape"></view>
-        <view class="cover-box-shadow"></view>
-      </view>
-    </view>
     <view class="stats-row">
       <view class="stat">
         <text class="stat-value">{{container.itemCount}}</text>
@@ -124,6 +113,7 @@
       </view>
 
       <view wx:if="{{item.isCollapsed}}" class="inventory-summary">
+        <text wx:if="{{item.hasExpiry}}" class="expiry-badge {{item.expiryState}}">{{item.expiryLabel}}</text>
         <text class="subtle">{{item.displayDescription}}</text>
         <view wx:if="{{item.hasTags}}" class="inventory-tags">
           <text wx:for="{{item.tagList}}" wx:for-item="tag" wx:key="*this" class="mini-tag">{{tag}}</text>

@@ -284,6 +284,87 @@
   border: 1rpx solid rgba(31, 96, 72, 0.1);
 }
 
+.expiry-panel {
+  display: grid;
+  min-width: 0;
+  gap: 10rpx;
+  padding: 14rpx;
+  background: #f3f6f0;
+  border: 2rpx solid rgba(31, 96, 72, 0.1);
+  border-radius: 22rpx;
+}
+
+.expiry-row {
+  display: flex;
+  min-width: 0;
+  min-height: 54rpx;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+.expiry-row.compact {
+  justify-content: flex-start;
+}
+
+.expiry-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3rpx;
+}
+
+.expiry-hint {
+  color: #6f756d;
+  font-size: 22rpx;
+  font-weight: 720;
+  line-height: 1.25;
+}
+
+.expiry-switch {
+  flex: none;
+  transform: scale(0.78);
+  transform-origin: right center;
+}
+
+.expiry-picker {
+  flex: none;
+  min-width: 176rpx;
+}
+
+.expiry-badge {
+  min-height: 50rpx;
+  padding: 10rpx 14rpx;
+  color: #143e31;
+  font-size: 23rpx;
+  font-weight: 820;
+  line-height: 30rpx;
+  background: #ffffff;
+  border: 1rpx solid rgba(31, 96, 72, 0.14);
+  border-radius: 16rpx;
+}
+
+.reminder-control {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6rpx;
+}
+
+.offset-input {
+  width: 88rpx;
+  height: 52rpx;
+  min-height: 0;
+  padding: 0 12rpx;
+  color: #151713;
+  font-size: 24rpx;
+  font-weight: 800;
+  line-height: 52rpx;
+  text-align: center;
+  background: #ffffff;
+  border: 1rpx solid rgba(21, 23, 19, 0.12);
+  border-radius: 16rpx;
+}
+
 .description-input,
 .note {
   width: 100%;

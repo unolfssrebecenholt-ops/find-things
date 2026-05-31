@@ -17,6 +17,27 @@ function getChosenPath(result) {
   return '';
 }
 
+function createUsageLimitMessage(status) {
+  const message = status && status.errorMessage ? status.errorMessage : '今日识别次数已用完，请明天再试';
+  const remaining = Number(status && status.remainingToday);
+  const limit = Number(status && status.dailyAnalyzeLimit);
+  if (Number.isFinite(remaining) && Number.isFinite(limit)) {
+    return `${message}\n今日剩余 ${remaining}/${limit} 次`;
+  }
+  return message;
+}
+
+function showUsageLimit(status) {
+  wx.showModal({
+    title: status && status.errorCode === 'ANALYZE_DISABLED'
+      ? '识别暂时不可用'
+      : (status && status.blocked ? '账号暂时不可用' : '今日识别次数已用完'),
+    content: createUsageLimitMessage(status),
+    showCancel: false,
+    confirmColor: '#1f6048'
+  });
+}
+
 function createImageId(index) {
   return `draft_image_${Date.now()}_${index + 1}`;
 }
@@ -41,6 +62,21 @@ function getItemKey(item, imageId, index) {
   return String((item && (item.itemKey || item.tempId || item._id)) || `${imageId || 'image'}_item_${index + 1}`);
 }
 
+function toTimestamp(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+function formatExpiryDateValue(value) {
+  const expiresAt = toTimestamp(value);
+  if (!expiresAt) return '';
+  const date = new Date(expiresAt);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function createDraftItem(item, imageId, fileId, index) {
   return Object.assign({}, item, {
     itemKey: getItemKey(item, imageId, index),
@@ -61,6 +97,7 @@ function createItemViewModel(item, index, expandedItemKeys) {
     && Number.isFinite(bbox.y)
     && Number.isFinite(bbox.width)
     && Number.isFinite(bbox.height);
+  const expiryDateValue = formatExpiryDateValue(item.expiresAt);
   const viewModel = Object.assign({}, item, {
     itemKey,
     hasTags: tagList.length > 0,
@@ -73,6 +110,8 @@ function createItemViewModel(item, index, expandedItemKeys) {
     isCollapsed: !isExpanded,
     expandText: isExpanded ? '收起' : '展开',
     hasAnnotation,
+    expiryDateValue,
+    expiryDateText: expiryDateValue || '选择日期',
     annotationStyle: hasAnnotation
       ? `left:${Math.round(bbox.x * 100)}%;top:${Math.round(bbox.y * 100)}%;width:${Math.round(bbox.width * 100)}%;height:${Math.round(bbox.height * 100)}%;`
       : ''
@@ -345,17 +384,30 @@ Page({
         });
     };
 
-    if (wx.chooseMedia) {
-      wx.chooseMedia({
-        count: 1,
-        mediaType: ['image'],
-        sizeType: ['compressed'],
-        sourceType: ['camera', 'album'],
-        success
-      });
-      return;
-    }
-    wx.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['camera', 'album'], success });
+    const openPicker = () => {
+      if (wx.chooseMedia) {
+        wx.chooseMedia({
+          count: 1,
+          mediaType: ['image'],
+          sizeType: ['compressed'],
+          sourceType: ['camera', 'album'],
+          success
+        });
+        return;
+      }
+      wx.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['camera', 'album'], success });
+    };
+
+    Promise.resolve()
+      .then(() => ai.getUsageStatus())
+      .then((status) => {
+        if (status && status.canAnalyze === false) {
+          showUsageLimit(status);
+          return;
+        }
+        openPicker();
+      })
+      .catch(() => openPicker());
   },
 
   goNext() {

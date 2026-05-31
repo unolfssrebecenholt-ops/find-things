@@ -1,10 +1,98 @@
 const { COLORS } = require('../../utils/normalize');
 
+let expiryReminder = null;
+try {
+  expiryReminder = require('../../services/expiry-reminder');
+} catch (error) {
+  expiryReminder = null;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 function splitTerms(value) {
   return String(value || '')
     .split(/[、,，;；\s]+/)
     .map((term) => term.trim())
     .filter((term, index, terms) => term && terms.indexOf(term) === index);
+}
+
+function toTimestamp(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+function normalizeOffsetDays(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? Math.floor(number) : 1;
+}
+
+function computeRemindAt(expiresAt, offsetDays) {
+  if (expiryReminder && typeof expiryReminder.computeRemindAt === 'function') {
+    return expiryReminder.computeRemindAt(expiresAt, offsetDays);
+  }
+  return expiresAt ? Math.max(0, expiresAt - normalizeOffsetDays(offsetDays) * DAY_MS) : 0;
+}
+
+function dateToEndOfDay(value) {
+  if (!value) return 0;
+  const date = new Date(`${value}T23:59:59.999`);
+  const time = date.getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function formatDateInput(value) {
+  const expiresAt = toTimestamp(value);
+  if (!expiresAt) return '';
+  const date = new Date(expiresAt);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeReminderFields(item) {
+  if (expiryReminder && typeof expiryReminder.normalizeReminderFields === 'function') {
+    return expiryReminder.normalizeReminderFields(item, Date.now());
+  }
+  const value = Object.assign({}, item);
+  value.expiresAt = toTimestamp(value.expiresAt);
+  value.remindOffsetDays = normalizeOffsetDays(value.remindOffsetDays);
+  value.reminderEnabled = !!value.expiresAt && value.reminderEnabled === true;
+  value.remindAt = value.reminderEnabled ? computeRemindAt(value.expiresAt, value.remindOffsetDays) : 0;
+  value.subscribeAccepted = value.reminderEnabled && value.subscribeAccepted === true;
+  value.reminderChannel = value.subscribeAccepted ? 'subscribe' : 'inApp';
+  value.remindedAt = toTimestamp(value.remindedAt);
+  value.inAppReadAt = toTimestamp(value.inAppReadAt);
+  value.lastReminderError = String(value.lastReminderError || '');
+  return value;
+}
+
+function createReminderPatch(item, patch) {
+  const next = normalizeReminderFields(Object.assign({}, item, patch));
+  const expiryDateValue = formatDateInput(next.expiresAt);
+  return {
+    expiresAt: next.expiresAt,
+    expiryDateValue,
+    expiryDateText: expiryDateValue || '选择日期',
+    reminderEnabled: next.reminderEnabled,
+    remindOffsetDays: next.remindOffsetDays,
+    remindAt: next.remindAt,
+    reminderChannel: next.reminderChannel,
+    subscribeAccepted: next.subscribeAccepted,
+    remindedAt: 0,
+    inAppReadAt: 0,
+    lastReminderError: ''
+  };
+}
+
+function requestSubscribeAuthorization() {
+  if (!expiryReminder || typeof expiryReminder.requestSubscribeAuthorization !== 'function') {
+    return Promise.resolve({ accepted: false });
+  }
+  if (typeof wx === 'undefined') {
+    return Promise.resolve({ accepted: false });
+  }
+  return expiryReminder.requestSubscribeAuthorization(wx).catch(() => ({ accepted: false }));
 }
 
 Component({
@@ -52,6 +140,64 @@ Component({
         return Object.assign({}, item, patch);
       });
       this.emit(items);
+    },
+
+    toggleExpiry(event) {
+      const index = Number(event.currentTarget.dataset.index);
+      const item = this.data.items[index] || {};
+      const enabled = !!(event.detail && event.detail.value);
+      const expiresAt = enabled ? (toTimestamp(item.expiresAt) || dateToEndOfDay(formatDateInput(Date.now()))) : 0;
+      this.patchItem(index, createReminderPatch(item, {
+        expiresAt,
+        reminderEnabled: enabled && item.reminderEnabled === true
+      }));
+    },
+
+    changeExpiryDate(event) {
+      const index = Number(event.currentTarget.dataset.index);
+      const item = this.data.items[index] || {};
+      const expiresAt = dateToEndOfDay(event.detail && event.detail.value);
+      const patch = createReminderPatch(item, {
+        expiresAt,
+        reminderEnabled: !!expiresAt,
+        remindOffsetDays: normalizeOffsetDays(item.remindOffsetDays)
+      });
+      this.patchItem(index, patch);
+      if (!expiresAt) return Promise.resolve();
+      return requestSubscribeAuthorization().then((authorization) => {
+        this.patchItem(index, Object.assign({}, patch, {
+          subscribeAccepted: !!(authorization && authorization.accepted),
+          reminderChannel: authorization && authorization.accepted ? 'subscribe' : 'inApp'
+        }));
+      });
+    },
+
+    toggleReminder(event) {
+      const index = Number(event.currentTarget.dataset.index);
+      const item = this.data.items[index] || {};
+      const enabled = !!(event.detail && event.detail.value) && !!toTimestamp(item.expiresAt);
+      const applyAuthorization = (authorization) => {
+        this.patchItem(index, createReminderPatch(item, {
+          reminderEnabled: enabled,
+          remindOffsetDays: normalizeOffsetDays(item.remindOffsetDays),
+          subscribeAccepted: enabled && !!(authorization && authorization.accepted),
+          reminderChannel: enabled && authorization && authorization.accepted ? 'subscribe' : 'inApp'
+        }));
+      };
+      if (!enabled) {
+        applyAuthorization({ accepted: false });
+        return Promise.resolve();
+      }
+      return requestSubscribeAuthorization().then(applyAuthorization);
+    },
+
+    changeReminderOffset(event) {
+      const index = Number(event.currentTarget.dataset.index);
+      const item = this.data.items[index] || {};
+      this.patchItem(index, createReminderPatch(item, {
+        reminderEnabled: item.reminderEnabled === true,
+        remindOffsetDays: normalizeOffsetDays(event.detail && event.detail.value)
+      }));
     },
 
     toggleConfirmed(event) {

@@ -331,7 +331,6 @@ test('container detail keeps carousel indicators instead of photo switch buttons
   const wxss = readMiniProgramFile('pages', 'container', 'detail.wxss');
 
   assert.match(wxml, /detail-hero/);
-  assert.match(wxml, /detail-cover/);
   assert.match(wxml, /photo-card/);
   assert.match(wxml, /carousel-indicator/);
   assert.match(wxml, /compact="{{true}}"/);
@@ -347,6 +346,16 @@ test('container detail keeps carousel indicators instead of photo switch buttons
   assert.match(wxss, /\.inventory-tags[\s\S]*flex-wrap: wrap/);
   assert.doesNotMatch(wxml, /照片 1<\/button>/);
   assert.doesNotMatch(wxml, /照片 2<\/button>/);
+});
+
+test('container detail does not render the appearance photo hero', () => {
+  const wxml = readMiniProgramFile('pages', 'container', 'detail.wxml');
+  const wxss = readMiniProgramFile('pages', 'container', 'detail.wxss');
+
+  assert.match(wxml, /stats-row/);
+  assert.doesNotMatch(wxml, /detail-cover|cover-photo|cover-label|cover-placeholder/);
+  assert.doesNotMatch(wxml, /coverDisplayFileId|hasCoverImage|showCoverPlaceholder/);
+  assert.doesNotMatch(wxss, /\.cover-photo|\.cover-label|\.cover-placeholder|\.cover-box-/);
 });
 
 test('photo display modes separate thumbnails from full-photo review surfaces', () => {
@@ -365,10 +374,8 @@ test('photo display modes separate thumbnails from full-photo review surfaces', 
   assert.match(listWxml, /lazy-load="\{\{true\}\}"/);
   assert.match(resultCardWxml, /lazy-load="\{\{true\}\}"/);
   assert.match(editWxml, /lazy-load="\{\{true\}\}"/);
-  assert.match(detailWxml, /lazy-load="\{\{true\}\}"/);
   assert.match(annotatedWxml, /lazy-load="\{\{true\}\}"/);
   assert.match(editWxml, /mode="aspectFit"/);
-  assert.match(detailWxml, /mode="aspectFit"/);
   assert.match(annotatedWxml, /mode="aspectFit"/);
   assert.match(reviewWxml, /class="plain-photo" mode="aspectFit"/);
 });
@@ -376,11 +383,9 @@ test('photo display modes separate thumbnails from full-photo review surfaces', 
 test('container cover surfaces use landscape framing', () => {
   const homeWxss = readMiniProgramFile('pages', 'home', 'index.wxss');
   const listWxss = readMiniProgramFile('pages', 'container', 'list.wxss');
-  const detailWxss = readMiniProgramFile('pages', 'container', 'detail.wxss');
 
   assert.match(homeWxss, /\.container-thumb[\s\S]*height: 164rpx/);
   assert.match(listWxss, /\.container-photo[\s\S]*height: 124rpx/);
-  assert.match(detailWxss, /\.cover-photo[\s\S]*height: 360rpx/);
 });
 
 test('sloth minimal prototype visual tokens replace the warm orange style', () => {

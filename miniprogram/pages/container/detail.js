@@ -5,9 +5,14 @@ const storage = require('../../services/storage');
 const { withDisplayIndexes } = require('../../utils/geometry');
 const { navigateHome } = require('../../utils/navigation');
 const { createImageMetadata } = require('../../utils/image-metadata');
-const { getContainerPreview } = require('../../utils/image-preview');
 
 const CONTENT_IMAGE_LIMIT = storage.CONTENT_IMAGE_LIMIT || 5;
+let expiryReminder = null;
+try {
+  expiryReminder = require('../../services/expiry-reminder');
+} catch (error) {
+  expiryReminder = null;
+}
 
 function getChosenPath(result) {
   if (result && result.tempFiles && result.tempFiles[0]) {
@@ -17,6 +22,27 @@ function getChosenPath(result) {
     return result.tempFilePaths[0];
   }
   return '';
+}
+
+function createUsageLimitMessage(status) {
+  const message = status && status.errorMessage ? status.errorMessage : '今日识别次数已用完，请明天再试';
+  const remaining = Number(status && status.remainingToday);
+  const limit = Number(status && status.dailyAnalyzeLimit);
+  if (Number.isFinite(remaining) && Number.isFinite(limit)) {
+    return `${message}\n今日剩余 ${remaining}/${limit} 次`;
+  }
+  return message;
+}
+
+function showUsageLimit(status) {
+  wx.showModal({
+    title: status && status.errorCode === 'ANALYZE_DISABLED'
+      ? '识别暂时不可用'
+      : (status && status.blocked ? '账号暂时不可用' : '今日识别次数已用完'),
+    content: createUsageLimitMessage(status),
+    showCancel: false,
+    confirmColor: '#1f6048'
+  });
 }
 
 function createImageId(index) {
@@ -40,6 +66,57 @@ function unique(values) {
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
+}
+
+function toTimestamp(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+function formatExpiryDateValue(value) {
+  const expiresAt = toTimestamp(value);
+  if (!expiresAt) return '';
+  const date = new Date(expiresAt);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getFallbackExpiryState(item) {
+  const expiresAt = toTimestamp(item && item.expiresAt);
+  if (!expiresAt) {
+    return {
+      state: 'none',
+      label: ''
+    };
+  }
+  const now = Date.now();
+  const remindAt = toTimestamp(item && item.remindAt);
+  if (expiresAt < now) {
+    return {
+      state: 'expired',
+      label: '已过期'
+    };
+  }
+  if (remindAt && remindAt <= now) {
+    return {
+      state: 'expiring',
+      label: '即将到期'
+    };
+  }
+  const date = new Date(expiresAt);
+  return {
+    state: 'normal',
+    label: `${date.getMonth() + 1}月${date.getDate()}日到期`
+  };
+}
+
+function getExpiryState(item) {
+  if (expiryReminder && typeof expiryReminder.getExpiryState === 'function') {
+    return expiryReminder.getExpiryState(item, Date.now());
+  }
+  return getFallbackExpiryState(item);
 }
 
 function getItemKey(item, index) {
@@ -87,6 +164,13 @@ function stripItemViewFields(item) {
     'showCollapseAction',
     'showRemoveAction',
     'expandText',
+    'expiryLabel',
+    'expiryState',
+    'hasExpiry',
+    'isExpired',
+    'isExpiring',
+    'expiryDateValue',
+    'expiryDateText',
     'editorItems'
   ].forEach((key) => {
     delete value[key];
@@ -124,6 +208,8 @@ function createItemViewModel(item, index, expandedItemKeys) {
   const fallbackSourceLabel = Number.isFinite(sourceImageIndex) ? `照片 ${sourceImageIndex + 1}` : '清单物品';
   const sourceLabel = item.locationText || item.sourceImageLabel || fallbackSourceLabel;
   const featureSummary = tagList.join(' / ');
+  const expiry = getExpiryState(item);
+  const expiryDateValue = formatExpiryDateValue(item.expiresAt);
   const viewModel = Object.assign({}, item, {
     itemKey,
     hasTags: tagList.length > 0,
@@ -139,7 +225,14 @@ function createItemViewModel(item, index, expandedItemKeys) {
     showExpandAction: !isExpanded,
     showCollapseAction: isExpanded,
     showRemoveAction: isExpanded,
-    expandText: isExpanded ? '收起' : '展开'
+    expandText: isExpanded ? '收起' : '展开',
+    expiryLabel: expiry.label,
+    expiryState: expiry.state,
+    hasExpiry: expiry.state !== 'none',
+    isExpired: expiry.state === 'expired',
+    isExpiring: expiry.state === 'expiring',
+    expiryDateValue,
+    expiryDateText: expiryDateValue || '选择日期'
   });
   viewModel.editorItems = [Object.assign({}, viewModel)];
   return viewModel;
@@ -151,18 +244,13 @@ function getMissingInventoryText(container) {
 }
 
 function createContainerViewModel(container) {
-  const preview = getContainerPreview(container);
   return Object.assign({}, container, {
-    displayLocation: container.locationPath || '未填写位置',
-    coverDisplayFileId: container.coverDisplayFileId || preview.thumb || container.coverImageFileId || ''
+    displayLocation: container.locationPath || '未填写位置'
   });
 }
 
 function collectImagePaths(container, contentImages) {
-  const paths = [
-    container && container.coverThumbFileId,
-    container && container.coverImageFileId
-  ];
+  const paths = [];
   (contentImages || []).forEach((image) => {
     paths.push(image && image.thumbFileId);
     paths.push(image && image.fileId);
@@ -172,12 +260,8 @@ function collectImagePaths(container, contentImages) {
 
 function applyImageDisplayPaths(container, contentImages, resolvedPaths) {
   const resolved = resolvedPaths || {};
-  const coverDisplayFileId = resolved[container && container.coverThumbFileId]
-    || resolved[container && container.coverImageFileId]
-    || (container && (container.coverThumbFileId || container.coverImageFileId))
-    || '';
   return {
-    container: Object.assign({}, container, { coverDisplayFileId }),
+    container: Object.assign({}, container),
     contentImages: (contentImages || []).map((image) => Object.assign({}, image, {
       displayThumbFileId: resolved[image.thumbFileId] || image.thumbFileId || '',
       displayFileId: resolved[image.fileId] || image.fileId || '',
@@ -192,8 +276,6 @@ Page({
     container: null,
     hasContainer: false,
     showMissingContainer: false,
-    hasCoverImage: false,
-    showCoverPlaceholder: false,
     rawItems: [],
     items: [],
     hasItems: false,
@@ -248,8 +330,6 @@ Page({
         container: null,
         hasContainer: false,
         showMissingContainer: true,
-        hasCoverImage: false,
-        showCoverPlaceholder: false,
         rawItems: [],
         items: [],
         hasItems: false,
@@ -295,8 +375,6 @@ Page({
           container: createContainerViewModel(displayContainer),
           hasContainer: true,
           showMissingContainer: false,
-          hasCoverImage: !!(displayContainer.coverThumbFileId || displayContainer.coverImageFileId),
-          showCoverPlaceholder: !(displayContainer.coverThumbFileId || displayContainer.coverImageFileId),
           rawItems,
           items: this.createItemViewModels(rawItems, this.data.expandedItemKeys),
           hasItems: rawItems.length > 0,
@@ -518,8 +596,6 @@ Page({
           const images = (container.contentImages || contentImages).map(stripImageViewFields);
           this.setInventoryState(items, images, expandedItemKeys, {
             container: createContainerViewModel(container),
-            hasCoverImage: !!(container.coverThumbFileId || container.coverImageFileId),
-            showCoverPlaceholder: !(container.coverThumbFileId || container.coverImageFileId),
             inventoryStatusText: doneText || '已保存修改',
             inventorySaving: false
           });
@@ -699,17 +775,30 @@ Page({
         });
     };
 
-    if (wx.chooseMedia) {
-      wx.chooseMedia({
-        count: 1,
-        mediaType: ['image'],
-        sizeType: ['compressed'],
-        sourceType: ['camera', 'album'],
-        success
-      });
-      return;
-    }
-    wx.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['camera', 'album'], success });
+    const openPicker = () => {
+      if (wx.chooseMedia) {
+        wx.chooseMedia({
+          count: 1,
+          mediaType: ['image'],
+          sizeType: ['compressed'],
+          sourceType: ['camera', 'album'],
+          success
+        });
+        return;
+      }
+      wx.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['camera', 'album'], success });
+    };
+
+    Promise.resolve()
+      .then(() => ai.getUsageStatus())
+      .then((status) => {
+        if (status && status.canAnalyze === false) {
+          showUsageLimit(status);
+          return;
+        }
+        openPicker();
+      })
+      .catch(() => openPicker());
   },
 
   showRecognizingLayer(descText) {

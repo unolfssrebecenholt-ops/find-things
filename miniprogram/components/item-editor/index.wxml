@@ -67,6 +67,57 @@
       <text wx:for="{{item.tagList}}" wx:for-item="tag" wx:key="*this" class="tag">{{tag}}</text>
     </view>
 
+    <view class="expiry-panel">
+      <view class="expiry-row">
+        <view class="expiry-copy">
+          <text class="field-caption">到期日期</text>
+          <text class="expiry-hint">{{item.expiresAt ? item.expiryDateText : '未设置'}}</text>
+        </view>
+        <switch
+          class="expiry-switch"
+          checked="{{item.expiresAt > 0}}"
+          data-index="{{index}}"
+          color="#1f6048"
+          bindchange="toggleExpiry"
+        />
+      </view>
+      <view wx:if="{{item.expiresAt}}" class="expiry-row compact">
+        <picker
+          class="expiry-picker"
+          mode="date"
+          value="{{item.expiryDateValue}}"
+          data-index="{{index}}"
+          bindchange="changeExpiryDate"
+        >
+          <view class="expiry-badge">{{item.expiryDateText}}</view>
+        </picker>
+        <view class="reminder-control">
+          <text class="expiry-hint">提醒</text>
+          <switch
+            class="expiry-switch"
+            checked="{{item.reminderEnabled}}"
+            data-index="{{index}}"
+            color="#1f6048"
+            bindchange="toggleReminder"
+          />
+        </view>
+      </view>
+      <view wx:if="{{item.reminderEnabled}}" class="expiry-row compact">
+        <text class="expiry-hint">提前</text>
+        <input
+          class="offset-input"
+          type="number"
+          value="{{item.remindOffsetDays}}"
+          data-index="{{index}}"
+          bindinput="changeReminderOffset"
+          bindchange="changeReminderOffset"
+          bindblur="changeReminderOffset"
+          bindconfirm="changeReminderOffset"
+        />
+        <text class="expiry-hint">天提醒</text>
+      </view>
+    </view>
+
     <view class="description-field">
       <text class="field-caption">小懒描述</text>
       <textarea

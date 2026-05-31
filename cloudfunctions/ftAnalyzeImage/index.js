@@ -6,7 +6,18 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const DEFAULT_ENDPOINT = '/v1/chat/completions';
 const localConfig = loadLocalConfig();
 const ANALYZE_TASK_COLLECTION = 'ft_analyze_tasks';
+const OPS_CONFIG_COLLECTION = 'ft_ops_config';
+const USER_QUOTA_OVERRIDE_COLLECTION = 'ft_user_quota_overrides';
+const USER_USAGE_COLLECTION = 'ft_user_usage';
+const ABUSE_FLAG_COLLECTION = 'ft_abuse_flags';
 const MAX_REMOTE_IMAGE_BYTES = 8 * 1024 * 1024;
+const DEFAULT_OPS_CONFIG = {
+  dailyFreeAnalyzeLimit: 15,
+  maxAnalyzeImageBytes: 6 * 1024 * 1024,
+  cooldownMs: 30000,
+  hourlyAttemptLimit: 30,
+  analyzeEnabled: true
+};
 const DEFAULT_MAX_ITEMS = 12;
 const MAX_ITEMS_LIMIT = 16;
 const DEFAULT_FUNCTION_TIMEOUT_MS = 300000;
@@ -57,6 +68,36 @@ function taskCollection() {
   } catch (error) {
     return null;
   }
+}
+
+function database() {
+  try {
+    return cloud.database();
+  } catch (error) {
+    return null;
+  }
+}
+
+function collection(name) {
+  const db = database();
+  return db ? db.collection(name) : null;
+}
+
+async function readDoc(collectionName, id) {
+  const target = collection(collectionName);
+  if (!target || !id) return null;
+  try {
+    const result = await target.doc(id).get();
+    return result && result.data ? result.data : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+async function setDoc(collectionName, id, data) {
+  const target = collection(collectionName);
+  if (!target || !id) return;
+  await target.doc(id).set({ data: Object.assign({ updatedAt: nowMs() }, data || {}) });
 }
 
 async function writeTask(taskId, data) {
@@ -125,7 +166,13 @@ async function readTask(taskId) {
 
 async function resolveTaskForClient(taskId) {
   const task = await readTask(taskId);
-  if (!task || task.status !== 'processing') return task;
+  const context = getWxContext();
+  const requester = context.OPENID || '';
+  if (!task || task.status === 'missing' || task.status === 'pending') return task;
+  if (!requester || !task.openid || task.openid !== requester) {
+    return { status: 'missing', taskId };
+  }
+  if (task.status !== 'processing') return task;
 
   const startedAt = Number(task.startedAt) || Number(task.updatedAt) || 0;
   if (!startedAt || nowMs() - startedAt < staleTaskMs()) return task;
@@ -149,6 +196,319 @@ function dataUrlBytes(dataUrl) {
   const match = String(dataUrl || '').match(/^data:[^;]+;base64,(.*)$/);
   if (!match) return Buffer.byteLength(String(dataUrl || ''));
   return Math.floor(match[1].length * 3 / 4);
+}
+
+function chinaDay(ms) {
+  return new Date((ms == null ? nowMs() : ms) + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function usageDocId(openid, day) {
+  return `${openid}_${day}`;
+}
+
+function nonNegativeInteger(value, fallback) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const number = Math.floor(Number(value));
+  if (!Number.isFinite(number) || number < 0) return fallback;
+  return number;
+}
+
+async function readOpsConfig() {
+  const config = await readDoc(OPS_CONFIG_COLLECTION, 'global');
+  return Object.assign({}, DEFAULT_OPS_CONFIG, config || {}, {
+    dailyFreeAnalyzeLimit: nonNegativeInteger(
+      config && config.dailyFreeAnalyzeLimit,
+      DEFAULT_OPS_CONFIG.dailyFreeAnalyzeLimit
+    ),
+    maxAnalyzeImageBytes: nonNegativeInteger(
+      config && config.maxAnalyzeImageBytes,
+      DEFAULT_OPS_CONFIG.maxAnalyzeImageBytes
+    ),
+    cooldownMs: nonNegativeInteger(config && config.cooldownMs, DEFAULT_OPS_CONFIG.cooldownMs),
+    hourlyAttemptLimit: nonNegativeInteger(
+      config && config.hourlyAttemptLimit,
+      DEFAULT_OPS_CONFIG.hourlyAttemptLimit
+    ),
+    analyzeEnabled: config && Object.prototype.hasOwnProperty.call(config, 'analyzeEnabled')
+      ? config.analyzeEnabled !== false
+      : DEFAULT_OPS_CONFIG.analyzeEnabled
+  });
+}
+
+async function effectiveDailyAnalyzeLimit(openid, opsConfig) {
+  const override = await readDoc(USER_QUOTA_OVERRIDE_COLLECTION, openid);
+  if (override && Object.prototype.hasOwnProperty.call(override, 'dailyAnalyzeLimit')) {
+    return nonNegativeInteger(override.dailyAnalyzeLimit, opsConfig.dailyFreeAnalyzeLimit);
+  }
+  return opsConfig.dailyFreeAnalyzeLimit;
+}
+
+function isBlockedFlag(flag) {
+  if (!flag || flag.blocked !== true) return false;
+  const blockedUntil = Number(flag.blockedUntil) || 0;
+  return !blockedUntil || blockedUntil > nowMs();
+}
+
+function abuseError() {
+  return {
+    errorCode: 'ANALYZE_USER_BLOCKED',
+    errorMessage: '当前账号暂时无法使用智能识别。'
+  };
+}
+
+function disabledError() {
+  return {
+    errorCode: 'ANALYZE_DISABLED',
+    errorMessage: '智能识别暂时不可用，请稍后再试。'
+  };
+}
+
+function quotaError() {
+  return {
+    errorCode: 'ANALYZE_QUOTA_EXHAUSTED',
+    errorMessage: '今日智能识别次数已用完，明天再来试试。'
+  };
+}
+
+function cooldownError(remainingMs) {
+  return {
+    errorCode: 'ANALYZE_COOLDOWN',
+    errorMessage: `操作太快啦，请${Math.max(1, Math.ceil((remainingMs || 0) / 1000))}秒后再试。`
+  };
+}
+
+function hourlyLimitError() {
+  return {
+    errorCode: 'ANALYZE_HOURLY_LIMIT',
+    errorMessage: '短时间内识别次数较多，请稍后再试。'
+  };
+}
+
+function imageTooLargeError(maxBytes) {
+  return {
+    errorCode: 'IMAGE_TOO_LARGE',
+    errorMessage: `图片有点大，请换一张不超过${Math.max(1, Math.floor((maxBytes || DEFAULT_OPS_CONFIG.maxAnalyzeImageBytes) / 1024 / 1024))}MB的图片。`
+  };
+}
+
+function usageUpdateError() {
+  return {
+    errorCode: 'ANALYZE_USAGE_UPDATE_FAILED',
+    errorMessage: '识别次数记录暂时不可用，请稍后再试。'
+  };
+}
+
+function throwUsageUpdateError() {
+  const payload = usageUpdateError();
+  const error = new Error(payload.errorMessage);
+  error.code = payload.errorCode;
+  throw error;
+}
+
+function isExpectedUsageControlError(error) {
+  return [
+    'ANALYZE_QUOTA_EXHAUSTED',
+    'ANALYZE_COOLDOWN',
+    'ANALYZE_HOURLY_LIMIT'
+  ].includes(error && error.code);
+}
+
+function usageCounts(usage) {
+  const successfulAnalyzeCount = nonNegativeInteger(
+    usage && (usage.successfulAnalyzeCount == null ? usage.successCount : usage.successfulAnalyzeCount),
+    0
+  );
+  const reservedAnalyzeCount = nonNegativeInteger(usage && usage.reservedAnalyzeCount, 0);
+  const attemptCount = nonNegativeInteger(usage && usage.attemptCount, 0);
+  const recentAttemptTimestamps = Array.isArray(usage && usage.recentAttemptTimestamps)
+    ? usage.recentAttemptTimestamps.map(Number).filter(Number.isFinite)
+    : [];
+  return {
+    successfulAnalyzeCount,
+    reservedAnalyzeCount,
+    attemptCount,
+    lastAttemptAt: Number(usage && usage.lastAttemptAt) || 0,
+    recentAttemptTimestamps
+  };
+}
+
+function buildUsagePayload(openid, day, counts) {
+  return {
+    day,
+    openid,
+    successfulAnalyzeCount: counts.successfulAnalyzeCount,
+    reservedAnalyzeCount: counts.reservedAnalyzeCount,
+    attemptCount: counts.attemptCount,
+    lastAttemptAt: counts.lastAttemptAt,
+    recentAttemptTimestamps: counts.recentAttemptTimestamps
+  };
+}
+
+async function mutateUsageDoc(openid, day, updater) {
+  const id = usageDocId(openid, day);
+  const db = database();
+  if (db && typeof db.runTransaction === 'function') {
+    try {
+      return await db.runTransaction(async (transaction) => {
+        const doc = transaction && typeof transaction.collection === 'function'
+          ? transaction.collection(USER_USAGE_COLLECTION).doc(id)
+          : db.collection(USER_USAGE_COLLECTION).doc(id);
+        let current = null;
+        try {
+          const result = transaction && typeof transaction.get === 'function'
+            ? await transaction.get(doc)
+            : await doc.get();
+          current = result && result.data ? result.data : null;
+        } catch (error) {
+          current = null;
+        }
+        const nextCounts = updater(usageCounts(current));
+        const payload = Object.assign({ updatedAt: nowMs() }, buildUsagePayload(openid, day, nextCounts));
+        if (transaction && typeof transaction.set === 'function') {
+          await transaction.set(doc, { data: payload });
+        } else {
+          await doc.set({ data: payload });
+        }
+        return payload;
+      });
+    } catch (error) {
+      if (isExpectedUsageControlError(error)) {
+        throw error;
+      }
+      logWarn('用户识别用量事务更新失败，已拒绝本次识别', {
+        openid,
+        day,
+        errorMessage: error && error.message ? error.message : String(error)
+      });
+      throwUsageUpdateError();
+    }
+  }
+
+  const current = await readDoc(USER_USAGE_COLLECTION, id);
+  const nextCounts = updater(usageCounts(current));
+  const payload = buildUsagePayload(openid, day, nextCounts);
+  await setDoc(USER_USAGE_COLLECTION, id, payload);
+  return Object.assign({ updatedAt: nowMs() }, payload);
+}
+
+async function getUsageState(openid) {
+  const day = chinaDay();
+  const opsConfig = await readOpsConfig();
+  const dailyAnalyzeLimit = await effectiveDailyAnalyzeLimit(openid, opsConfig);
+  const usage = usageCounts(await readDoc(USER_USAGE_COLLECTION, usageDocId(openid, day)));
+  const abuseFlag = await readDoc(ABUSE_FLAG_COLLECTION, openid);
+  const blocked = isBlockedFlag(abuseFlag);
+  const usedToday = usage.successfulAnalyzeCount;
+  const reservedToday = usage.reservedAnalyzeCount;
+  const remainingToday = Math.max(0, dailyAnalyzeLimit - usedToday - reservedToday);
+  const status = {
+    status: 'usage',
+    openid,
+    day,
+    usedToday,
+    reservedToday,
+    dailyAnalyzeLimit,
+    remainingToday,
+    analyzeEnabled: opsConfig.analyzeEnabled,
+    blocked,
+    canAnalyze: opsConfig.analyzeEnabled && !blocked && remainingToday > 0
+  };
+  if (blocked) {
+    Object.assign(status, abuseError());
+  } else if (!opsConfig.analyzeEnabled) {
+    Object.assign(status, disabledError());
+  } else if (remainingToday <= 0) {
+    Object.assign(status, quotaError());
+  }
+  return { status, opsConfig, usage };
+}
+
+async function reserveAnalyzeAttempt(openid, day, opsConfig, dailyAnalyzeLimit) {
+  const current = nowMs();
+  await mutateUsageDoc(openid, day, (counts) => {
+    if (dailyAnalyzeLimit - counts.successfulAnalyzeCount - counts.reservedAnalyzeCount <= 0) {
+      const errorPayload = quotaError();
+      const error = new Error(errorPayload.errorMessage);
+      error.code = errorPayload.errorCode;
+      throw error;
+    }
+    const elapsed = counts.lastAttemptAt ? current - counts.lastAttemptAt : Infinity;
+    if (elapsed < opsConfig.cooldownMs) {
+      const errorPayload = cooldownError(opsConfig.cooldownMs - elapsed);
+      const error = new Error(errorPayload.errorMessage);
+      error.code = errorPayload.errorCode;
+      throw error;
+    }
+    if (counts.recentAttemptTimestamps.filter((timestamp) => current - timestamp < 60 * 60 * 1000).length >= opsConfig.hourlyAttemptLimit) {
+      const errorPayload = hourlyLimitError();
+      const error = new Error(errorPayload.errorMessage);
+      error.code = errorPayload.errorCode;
+      throw error;
+    }
+    const recentAttemptTimestamps = counts.recentAttemptTimestamps
+      .concat(current)
+      .filter((timestamp) => current - timestamp < 60 * 60 * 1000)
+      .slice(-100);
+    return {
+      successfulAnalyzeCount: counts.successfulAnalyzeCount,
+      reservedAnalyzeCount: counts.reservedAnalyzeCount + 1,
+      attemptCount: counts.attemptCount + 1,
+      lastAttemptAt: current,
+      recentAttemptTimestamps
+    };
+  });
+}
+
+async function releaseAnalyzeSlot(openid, day) {
+  if (!openid || !day) return;
+  await mutateUsageDoc(openid, day, (existing) => ({
+    successfulAnalyzeCount: existing.successfulAnalyzeCount,
+    reservedAnalyzeCount: Math.max(0, existing.reservedAnalyzeCount - 1),
+    attemptCount: existing.attemptCount,
+    lastAttemptAt: existing.lastAttemptAt,
+    recentAttemptTimestamps: existing.recentAttemptTimestamps
+  }));
+}
+
+async function completeReservedAnalyze(openid, day) {
+  await mutateUsageDoc(openid, day, (existing) => ({
+    successfulAnalyzeCount: existing.successfulAnalyzeCount + 1,
+    reservedAnalyzeCount: Math.max(0, existing.reservedAnalyzeCount - 1),
+    attemptCount: existing.attemptCount,
+    lastAttemptAt: existing.lastAttemptAt,
+    recentAttemptTimestamps: existing.recentAttemptTimestamps
+  }));
+}
+
+function recentHourlyAttempts(usage) {
+  const current = nowMs();
+  return usageCounts(usage).recentAttemptTimestamps.filter((timestamp) => current - timestamp < 60 * 60 * 1000);
+}
+
+async function ensureAnalyzeAllowed(openid, options) {
+  const state = await getUsageState(openid);
+  if (!state.status.canAnalyze) {
+    const error = new Error(state.status.errorMessage || 'analyze is not allowed');
+    error.code = state.status.errorCode || 'ANALYZE_NOT_ALLOWED';
+    throw error;
+  }
+  const counts = usageCounts(state.usage);
+  if (options && options.enforceAttemptRules) {
+    const elapsed = counts.lastAttemptAt ? nowMs() - counts.lastAttemptAt : Infinity;
+    if (elapsed < state.opsConfig.cooldownMs) {
+      const errorPayload = cooldownError(state.opsConfig.cooldownMs - elapsed);
+      const error = new Error(errorPayload.errorMessage);
+      error.code = errorPayload.errorCode;
+      throw error;
+    }
+    if (recentHourlyAttempts(state.usage).length >= state.opsConfig.hourlyAttemptLimit) {
+      const errorPayload = hourlyLimitError();
+      const error = new Error(errorPayload.errorMessage);
+      error.code = errorPayload.errorCode;
+      throw error;
+    }
+  }
+  return state;
 }
 
 function summarizeAiRequest(meta) {
@@ -865,11 +1225,29 @@ function sanitizeErrorBody(text) {
 function publicError(error) {
   const message = error && error.message ? error.message : String(error || '');
   const rawCode = error && error.code;
-  const code = TLS_CERTIFICATE_ERROR_CODES.has(rawCode)
+  const abuseCodes = new Set([
+    'ANALYZE_USER_BLOCKED',
+    'ANALYZE_DISABLED',
+    'ANALYZE_QUOTA_EXHAUSTED',
+    'ANALYZE_COOLDOWN',
+    'ANALYZE_HOURLY_LIMIT',
+    'ANALYZE_USAGE_UPDATE_FAILED',
+    'IMAGE_TOO_LARGE'
+  ]);
+  const code = abuseCodes.has(rawCode)
+    ? rawCode
+    : TLS_CERTIFICATE_ERROR_CODES.has(rawCode)
     ? 'AI_TLS_CERTIFICATE_INVALID'
     : (NETWORK_UNREACHABLE_ERROR_CODES.has(rawCode) ? 'AI_SERVICE_UNREACHABLE' : rawCode)
     || (/timeout/i.test(message) ? 'AI_REQUEST_TIMEOUT' : 'AI_ANALYZE_FAILED');
   const friendlyMessages = {
+    ANALYZE_USER_BLOCKED: abuseError().errorMessage,
+    ANALYZE_DISABLED: disabledError().errorMessage,
+    ANALYZE_QUOTA_EXHAUSTED: quotaError().errorMessage,
+    ANALYZE_COOLDOWN: message || cooldownError(0).errorMessage,
+    ANALYZE_HOURLY_LIMIT: hourlyLimitError().errorMessage,
+    ANALYZE_USAGE_UPDATE_FAILED: usageUpdateError().errorMessage,
+    IMAGE_TOO_LARGE: message || imageTooLargeError().errorMessage,
     AI_KEY_MISSING: '小懒还没接上识别服务，请检查云函数环境变量 OPENAI_COMPAT_API_KEY。',
     AI_REQUEST_TIMEOUT: '小懒看得有点久，请换一张更清晰或更小的照片后重试。',
     AI_TLS_CERTIFICATE_INVALID: '小懒没法信任识别服务的证书，请换可信服务地址或配置证书后重试。',
@@ -887,6 +1265,9 @@ function publicError(error) {
 }
 
 exports.main = async (event) => {
+  const context = getWxContext();
+  const openid = context.OPENID || '';
+
   if (event && event.action === 'getTask') {
     const task = await resolveTaskForClient(event.taskId);
     logInfo('客户端轮询识别任务', {
@@ -898,6 +1279,9 @@ exports.main = async (event) => {
     });
     return task;
   }
+  if (event && event.action === 'getUsageStatus') {
+    return (await getUsageState(openid)).status;
+  }
 
   const startedAt = nowMs();
   const taskId = (event && event.taskId) || createTaskId();
@@ -907,7 +1291,11 @@ exports.main = async (event) => {
     : (event && event.imageFileId ? 'imageFileId' : (event && event.imageUrl ? 'imageUrl' : 'empty'));
   console.log('[ftAnalyzeImage:timing]', { stage: 'start', source, maxItems, taskId });
 
+  let reservedUsageDay = '';
   try {
+    const preflight = await ensureAnalyzeAllowed(openid, { enforceAttemptRules: true });
+    await reserveAnalyzeAttempt(openid, preflight.status.day, preflight.opsConfig, preflight.status.dailyAnalyzeLimit);
+    reservedUsageDay = preflight.status.day;
     await writeTask(taskId, {
       status: 'processing',
       source,
@@ -919,6 +1307,8 @@ exports.main = async (event) => {
       || (event.imageUrl ? await timed('load_image', () => remoteImageToDataUrl(event.imageUrl), { source }) : '');
     if (!imageDataUrl) {
       const emptyResult = { items: [], warnings: ['没有收到可识别图片。'] };
+      await releaseAnalyzeSlot(openid, reservedUsageDay);
+      reservedUsageDay = '';
       await writeTask(taskId, {
         status: 'success',
         finishedAt: nowMs(),
@@ -926,9 +1316,19 @@ exports.main = async (event) => {
       });
       return Object.assign({ taskId }, emptyResult);
     }
+    const currentConfig = await readOpsConfig();
+    const imageBytes = dataUrlBytes(imageDataUrl);
+    if (imageBytes > currentConfig.maxAnalyzeImageBytes) {
+      const errorPayload = imageTooLargeError(currentConfig.maxAnalyzeImageBytes);
+      const error = new Error(errorPayload.errorMessage);
+      error.code = errorPayload.errorCode;
+      throw error;
+    }
     const aiResponse = await callAi(imageDataUrl, maxItems, taskId);
     const result = aiResponse.result;
     const aiRequest = aiResponse.aiRequest;
+    await completeReservedAnalyze(openid, reservedUsageDay);
+    reservedUsageDay = '';
     await writeTask(taskId, {
       status: 'success',
       finishedAt: nowMs(),
@@ -948,6 +1348,8 @@ exports.main = async (event) => {
       code: error && error.code,
       message: error && error.message ? error.message : String(error)
     });
+    await releaseAnalyzeSlot(openid, reservedUsageDay);
+    reservedUsageDay = '';
     const payload = publicError(error);
     await writeTask(taskId, Object.assign({
       status: 'failed',

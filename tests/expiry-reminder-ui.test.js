@@ -1,0 +1,168 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+function readMiniProgramFile(...segments) {
+  return fs.readFileSync(path.join(__dirname, '..', 'miniprogram', ...segments), 'utf8');
+}
+
+function loadItemEditor() {
+  const componentPath = path.join(__dirname, '..', 'miniprogram', 'components', 'item-editor', 'index.js');
+  const previousComponent = global.Component;
+  let definition = null;
+
+  delete require.cache[require.resolve(componentPath)];
+  global.Component = (componentDefinition) => {
+    definition = componentDefinition;
+  };
+  require(componentPath);
+  global.Component = previousComponent;
+
+  return definition;
+}
+
+function createComponentContext(definition, items) {
+  const events = [];
+  const context = {
+    data: {
+      items,
+      contextKey: 'item_1'
+    },
+    triggerEvent(name, detail) {
+      events.push({ name, detail });
+    },
+    events
+  };
+  Object.assign(context, definition.methods);
+  return context;
+}
+
+test('item editor exposes expiry date and reminder controls', () => {
+  const wxml = readMiniProgramFile('components', 'item-editor', 'index.wxml');
+  const wxss = readMiniProgramFile('components', 'item-editor', 'index.wxss');
+
+  assert.match(wxml, /bindchange="toggleExpiry"/);
+  assert.match(wxml, /mode="date"/);
+  assert.match(wxml, /bindchange="changeExpiryDate"/);
+  assert.match(wxml, /bindchange="toggleReminder"/);
+  assert.match(wxml, /bindchange="changeReminderOffset"/);
+  assert.match(wxss, /\.expiry-panel/);
+  assert.match(wxss, /\.expiry-badge/);
+});
+
+test('item editor emits shared reminder fields when expiry date changes', () => {
+  const definition = loadItemEditor();
+  const context = createComponentContext(definition, [{
+    displayName: 'milk',
+    expiresAt: 0,
+    reminderEnabled: false
+  }]);
+
+  definition.methods.changeExpiryDate.call(context, {
+    currentTarget: { dataset: { index: 0 } },
+    detail: { value: '2026-06-10' }
+  });
+
+  assert.equal(context.events.length, 1);
+  const item = context.events[0].detail.items[0];
+  assert.equal(item.expiresAt, new Date('2026-06-10T23:59:59.999').getTime());
+  assert.equal(item.reminderEnabled, true);
+  assert.equal(item.remindOffsetDays, 1);
+  assert.equal(item.remindAt, item.expiresAt - 24 * 60 * 60 * 1000);
+  assert.equal(item.reminderChannel, 'inApp');
+  assert.equal(item.subscribeAccepted, false);
+  assert.equal(item.expiryDateValue, '2026-06-10');
+  assert.equal(item.expiryDateText, '2026-06-10');
+});
+
+test('item editor requests subscribe authorization when expiry date changes', async () => {
+  const reminder = require('../miniprogram/services/expiry-reminder');
+  const originalRequest = reminder.requestSubscribeAuthorization;
+  const calls = [];
+  reminder.requestSubscribeAuthorization = (wxAdapter) => {
+    calls.push(wxAdapter);
+    return Promise.resolve({ accepted: true });
+  };
+  const definition = loadItemEditor();
+  const context = createComponentContext(definition, [{
+    displayName: 'milk',
+    expiresAt: 0,
+    reminderEnabled: false
+  }]);
+  const previousWx = global.wx;
+  global.wx = {
+    requestSubscribeMessage() {}
+  };
+
+  try {
+    await definition.methods.changeExpiryDate.call(context, {
+      currentTarget: { dataset: { index: 0 } },
+      detail: { value: '2026-06-10' }
+    });
+  } finally {
+    global.wx = previousWx;
+    reminder.requestSubscribeAuthorization = originalRequest;
+  }
+
+  const item = context.events.at(-1).detail.items[0];
+  assert.equal(calls.length, 1);
+  assert.equal(item.reminderEnabled, true);
+  assert.equal(item.subscribeAccepted, true);
+  assert.equal(item.reminderChannel, 'subscribe');
+});
+
+test('capture review item view models include expiry date display text', () => {
+  const js = readMiniProgramFile('pages', 'capture', 'review.js');
+
+  assert.match(js, /function formatExpiryDateValue/);
+  assert.match(js, /expiryDateValue/);
+  assert.match(js, /expiryDateText/);
+});
+
+test('item editor preserves in-app fallback fields when subscribe authorization is unavailable', async () => {
+  const definition = loadItemEditor();
+  const context = createComponentContext(definition, [{
+    displayName: 'milk',
+    expiresAt: new Date('2026-06-10T23:59:59.999').getTime(),
+    reminderEnabled: false,
+    remindOffsetDays: 1
+  }]);
+
+  const previousWx = global.wx;
+  global.wx = {};
+  try {
+    await definition.methods.toggleReminder.call(context, {
+      currentTarget: { dataset: { index: 0 } },
+      detail: { value: true }
+    });
+  } finally {
+    global.wx = previousWx;
+  }
+
+  const item = context.events.at(-1).detail.items[0];
+  assert.equal(item.reminderEnabled, true);
+  assert.equal(item.subscribeAccepted, false);
+  assert.equal(item.reminderChannel, 'inApp');
+  assert.equal(item.remindAt, item.expiresAt - 24 * 60 * 60 * 1000);
+});
+
+test('container detail renders and strips expiry view fields', () => {
+  const js = readMiniProgramFile('pages', 'container', 'detail.js');
+  const wxml = readMiniProgramFile('pages', 'container', 'detail.wxml');
+  const wxss = readMiniProgramFile('pages', 'container', 'detail.wxss');
+
+  assert.match(js, /expiryLabel/);
+  assert.match(js, /expiryState/);
+  assert.match(js, /hasExpiry/);
+  assert.match(js, /isExpired/);
+  assert.match(js, /isExpiring/);
+  assert.match(js, /'expiryLabel'/);
+  assert.match(js, /'expiryState'/);
+  assert.match(js, /'hasExpiry'/);
+  assert.match(wxml, /wx:if="\{\{item\.hasExpiry\}\}"/);
+  assert.match(wxml, /\{\{item\.expiryLabel\}\}/);
+  assert.match(wxss, /\.expiry-badge/);
+  assert.match(wxss, /\.expiry-badge\.expired/);
+  assert.match(wxss, /\.expiry-badge\.expiring/);
+});

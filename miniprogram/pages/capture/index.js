@@ -12,6 +12,27 @@ function getChosenPath(result) {
   return '';
 }
 
+function createUsageLimitMessage(status) {
+  const message = status && status.errorMessage ? status.errorMessage : '今日识别次数已用完，请明天再试';
+  const remaining = Number(status && status.remainingToday);
+  const limit = Number(status && status.dailyAnalyzeLimit);
+  if (Number.isFinite(remaining) && Number.isFinite(limit)) {
+    return `${message}\n今日剩余 ${remaining}/${limit} 次`;
+  }
+  return message;
+}
+
+function showUsageLimit(status) {
+  wx.showModal({
+    title: status && status.errorCode === 'ANALYZE_DISABLED'
+      ? '识别暂时不可用'
+      : (status && status.blocked ? '账号暂时不可用' : '今日识别次数已用完'),
+    content: createUsageLimitMessage(status),
+    showCancel: false,
+    confirmColor: '#1f6048'
+  });
+}
+
 Page({
   data: {
     choosing: false,
@@ -26,6 +47,7 @@ Page({
   chooseImage() {
     this.setData({ choosing: true });
     const complete = () => this.setData({ choosing: false });
+    const openPicker = () => {
 
     if (wx.chooseMedia) {
       wx.chooseMedia({
@@ -48,6 +70,19 @@ Page({
       fail: () => wx.showToast({ title: '已取消选择', icon: 'none' }),
       complete
     });
+    };
+
+    Promise.resolve()
+      .then(() => ai.getUsageStatus())
+      .then((status) => {
+        if (status && status.canAnalyze === false) {
+          complete();
+          showUsageLimit(status);
+          return;
+        }
+        openPicker();
+      })
+      .catch(() => openPicker());
   },
 
   analyze(imagePath, options) {

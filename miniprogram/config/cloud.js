@@ -5,8 +5,13 @@ const collectionPrefix = 'ft_';
 const collections = {
   containers: `${collectionPrefix}containers`,
   items: `${collectionPrefix}items`,
+  reminderNotices: `${collectionPrefix}reminder_notices`,
   analyzeTasks: `${collectionPrefix}analyze_tasks`,
-  queryLogs: `${collectionPrefix}query_logs`
+  queryLogs: `${collectionPrefix}query_logs`,
+  userUsage: `${collectionPrefix}user_usage`,
+  userQuotaOverrides: `${collectionPrefix}user_quota_overrides`,
+  abuseFlags: `${collectionPrefix}abuse_flags`,
+  opsConfig: `${collectionPrefix}ops_config`
 };
 
 module.exports = {

@@ -145,6 +145,119 @@ test('rewrites cloud call socket timeouts into Xiaolan copy', () => {
   assert.doesNotMatch(error.message, /ESOCKETTIMEDOUT|-501002/);
 });
 
+test('getUsageStatus normalizes cloud usage status for page preflight', async () => {
+  const previousWx = global.wx;
+  const calls = [];
+  global.wx = {
+    getStorageSync() {},
+    cloud: {
+      callFunction(options) {
+        calls.push(options);
+        return Promise.resolve({
+          result: {
+            usedToday: 2,
+            dailyAnalyzeLimit: 5,
+            remainingToday: 3,
+            analyzeEnabled: true,
+            blocked: false,
+            canAnalyze: true,
+            quotaOverrideSource: 'admin'
+          }
+        });
+      }
+    }
+  };
+
+  try {
+    const status = await ai.getUsageStatus();
+
+    assert.deepEqual(calls, [{
+      name: 'ftAnalyzeImage',
+      data: { action: 'getUsageStatus' }
+    }]);
+    assert.deepEqual(status, {
+      usedToday: 2,
+      dailyAnalyzeLimit: 5,
+      remainingToday: 3,
+      analyzeEnabled: true,
+      blocked: false,
+      canAnalyze: true,
+      errorCode: '',
+      errorMessage: ''
+    });
+  } finally {
+    if (previousWx === undefined) {
+      delete global.wx;
+    } else {
+      global.wx = previousWx;
+    }
+  }
+});
+
+test('getUsageStatus blocks preflight when disabled blocked or quota exhausted', async () => {
+  const previousWx = global.wx;
+  const payloads = [
+    { usedToday: 5, dailyAnalyzeLimit: 5, remainingToday: 0, analyzeEnabled: true, blocked: false },
+    { usedToday: 1, dailyAnalyzeLimit: 5, remainingToday: 4, analyzeEnabled: false, blocked: false },
+    { usedToday: 1, dailyAnalyzeLimit: 5, remainingToday: 4, analyzeEnabled: true, blocked: true, errorCode: 'USER_BLOCKED' }
+  ];
+  let index = 0;
+  global.wx = {
+    getStorageSync() {},
+    cloud: {
+      callFunction() {
+        const payload = payloads[index];
+        index += 1;
+        return Promise.resolve({ result: payload });
+      }
+    }
+  };
+
+  try {
+    const statuses = [];
+    for (const payload of payloads) {
+      const status = await ai.getUsageStatus();
+      statuses.push(status);
+
+      assert.equal(status.canAnalyze, false);
+      assert.equal(status.blocked, !!payload.blocked);
+    }
+    assert.match(statuses[0].errorMessage, /次数|明天|用完/);
+    assert.match(statuses[1].errorMessage, /暂时|关闭|稍后/);
+    assert.match(statuses[2].errorMessage, /账号|暂时|不能/);
+  } finally {
+    if (previousWx === undefined) {
+      delete global.wx;
+    } else {
+      global.wx = previousWx;
+    }
+  }
+});
+
+test('getUsageStatus allows local preflight when cloud function is unavailable', async () => {
+  const previousWx = global.wx;
+  delete global.wx;
+
+  try {
+    const status = await ai.getUsageStatus();
+
+    assert.equal(status.usedToday, 0);
+    assert.equal(status.dailyAnalyzeLimit, null);
+    assert.equal(status.remainingToday, null);
+    assert.equal(status.analyzeEnabled, true);
+    assert.equal(status.blocked, false);
+    assert.equal(status.canAnalyze, true);
+    assert.equal(status.errorCode, '');
+    assert.equal(status.errorMessage, '');
+  } finally {
+    if (previousWx === undefined) {
+      delete global.wx;
+    } else {
+      global.wx = previousWx;
+    }
+  }
+});
+
 test('polls analyze task when the initial cloud call times out', async () => {
   const previousWx = global.wx;
   let callCount = 0;

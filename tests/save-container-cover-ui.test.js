@@ -22,6 +22,26 @@ test('save container cover area uses playful landscape guidance without visible 
   assert.doesNotMatch(js, /4:3|16:9/);
 });
 
+test('save container uses Xiaolan themed saving overlay instead of native saving loading', () => {
+  const wxml = readMiniProgramFile('pages', 'container', 'edit.wxml');
+  const wxss = readMiniProgramFile('pages', 'container', 'edit.wxss');
+  const js = readMiniProgramFile('pages', 'container', 'edit.js');
+
+  assert.match(wxml, /wx:if="\{\{saving\}\}" class="saving-layer"/);
+  assert.match(wxml, /saving-orbit/);
+  assert.match(wxml, /saving-spinner/);
+  assert.match(wxml, /xiaolan-sloth\.svg/);
+  assert.match(wxml, /小懒正在收纳/);
+  assert.match(wxml, /先把照片和清单塞进小抽屉/);
+  assert.match(js, /saving:\s*false/);
+  assert.match(js, /this\.setData\(\{\s*saving:\s*true\s*\}\)/);
+  assert.match(js, /this\.setData\(\{\s*saving:\s*false\s*\}\)/);
+  assert.doesNotMatch(js, /wx\.showLoading\(\{\s*title:\s*['"]保存中/);
+  assert.doesNotMatch(js, /save\(\)\s*\{[\s\S]*wx\.hideLoading\(\)/);
+  assert.match(cssBlock(wxss, '.saving-layer'), /position:\s*fixed/);
+  assert.match(cssBlock(wxss, '.saving-spinner'), /animation:\s*saving-orbit-spin\s+1\.05s\s+linear\s+infinite/);
+});
+
 test('save container cover actions match the prototype pill action area without cramped labels', () => {
   const wxml = readMiniProgramFile('pages', 'container', 'edit.wxml');
   const wxss = readMiniProgramFile('pages', 'container', 'edit.wxss');

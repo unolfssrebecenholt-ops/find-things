@@ -91,6 +91,22 @@
 
   <view class="save-actions">
     <button class="soft-button back-button" bindtap="goBack">返回修改</button>
-    <button class="primary-button save-button" bindtap="save">保存并回首页</button>
+    <button class="primary-button save-button" disabled="{{saving}}" bindtap="save">保存并回首页</button>
+  </view>
+
+  <view wx:if="{{saving}}" class="saving-layer">
+    <view class="saving-card">
+      <view class="saving-top">
+        <view class="saving-orbit">
+          <image class="saving-spinner" mode="aspectFit" src="/assets/loading-orbit-arc.svg"></image>
+          <image class="saving-mascot" mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
+        </view>
+        <view class="saving-copy">
+          <text class="saving-title">小懒正在收纳</text>
+          <text class="saving-desc">先把照片和清单塞进小抽屉，马上带你回首页。</text>
+        </view>
+      </view>
+      <view class="saving-hint">东西别跑，小懒已经贴好标签啦。</view>
+    </view>
   </view>
 </view>

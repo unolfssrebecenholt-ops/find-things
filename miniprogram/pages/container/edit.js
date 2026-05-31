@@ -4,6 +4,13 @@ const storage = require('../../services/storage');
 const { navigateHome } = require('../../utils/navigation');
 const { createImageMetadata } = require('../../utils/image-metadata');
 
+let expiryReminder = null;
+try {
+  expiryReminder = require('../../services/expiry-reminder');
+} catch (error) {
+  expiryReminder = null;
+}
+
 function getChosenPath(result) {
   if (result && result.tempFiles && result.tempFiles[0]) {
     return result.tempFiles[0].tempFilePath;
@@ -86,6 +93,36 @@ function stripImageViewFields(image) {
   const value = Object.assign({}, image);
   delete value.displayFileId;
   return value;
+}
+
+function shouldRefreshReminderAuthorization(item) {
+  return item
+    && item.reminderEnabled === true
+    && item.expiresAt
+    && item.subscribeAccepted !== true;
+}
+
+function refreshReminderAuthorizationForSave(items) {
+  if (!expiryReminder || typeof expiryReminder.requestSubscribeAuthorization !== 'function') {
+    return Promise.resolve(items || []);
+  }
+  if (typeof wx === 'undefined') return Promise.resolve(items || []);
+  const targetIndexes = (items || []).reduce((indexes, item, index) => {
+    if (shouldRefreshReminderAuthorization(item)) indexes.push(index);
+    return indexes;
+  }, []);
+  if (!targetIndexes.length) return Promise.resolve(items || []);
+
+  return expiryReminder.requestSubscribeAuthorization(wx).then((authorization) => {
+    const accepted = !!(authorization && authorization.accepted);
+    return (items || []).map((item, index) => {
+      if (targetIndexes.indexOf(index) < 0) return item;
+      return Object.assign({}, item, {
+        subscribeAccepted: accepted,
+        reminderChannel: accepted ? 'subscribe' : 'inApp'
+      });
+    });
+  });
 }
 
 function collectDraftImagePaths(data) {
@@ -177,7 +214,8 @@ Page({
     itemCountText: '0 件物品',
     hasHiddenItems: false,
     showAllItems: false,
-    itemPreviewToggleText: ''
+    itemPreviewToggleText: '',
+    saving: false
   },
 
   onLoad() {
@@ -335,13 +373,14 @@ Page({
   },
 
   save() {
+    if (this.data.saving) return;
     const name = this.data.name.trim();
     if (!name) {
       wx.showToast({ title: '请填写容器名称', icon: 'none' });
       return;
     }
-    wx.showLoading({ title: '保存中' });
-    const saveData = {
+    this.setData({ saving: true });
+    const createSaveData = (items) => ({
       name,
       locationPath: this.data.locationPath,
       coverImageFileId: this.data.coverImageFileId,
@@ -349,12 +388,16 @@ Page({
       contentImageFileId: this.data.contentImageFileId,
       contentThumbFileId: (this.data.contentImages || [])[0] && (this.data.contentImages || [])[0].thumbFileId || '',
       contentImages: (this.data.contentImages || []).map(stripImageViewFields),
-      items: this.data.items
-    };
-    const runSave = typeof storage.saveContainerAsync === 'function'
-      ? storage.saveContainerAsync(saveData)
-      : Promise.resolve(storage.saveContainer(saveData));
-    runSave
+      items
+    });
+    return refreshReminderAuthorizationForSave(this.data.items)
+      .then((items) => {
+        this.setData({ items });
+        const saveData = createSaveData(items);
+        return typeof storage.saveContainerAsync === 'function'
+          ? storage.saveContainerAsync(saveData)
+          : Promise.resolve(storage.saveContainer(saveData));
+      })
       .then(() => {
         this.saved = true;
         wx.removeStorageSync('reviewDraft');
@@ -370,7 +413,7 @@ Page({
         });
       })
       .finally(() => {
-        wx.hideLoading();
+        this.setData({ saving: false });
       });
   }
 });

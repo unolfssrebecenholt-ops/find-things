@@ -10,7 +10,12 @@ test('uses the confirmed mini program appid and cloud environment id', () => {
   assert.equal(cloudConfig.envId, 'cloud1-d2g79srh64b6eb263');
   assert.equal(cloudConfig.collectionPrefix, 'ft_');
   assert.equal(cloudConfig.collections.containers, 'ft_containers');
+  assert.equal(cloudConfig.collections.reminderNotices, 'ft_reminder_notices');
   assert.equal(cloudConfig.collections.analyzeTasks, 'ft_analyze_tasks');
+  assert.equal(cloudConfig.collections.userUsage, 'ft_user_usage');
+  assert.equal(cloudConfig.collections.userQuotaOverrides, 'ft_user_quota_overrides');
+  assert.equal(cloudConfig.collections.abuseFlags, 'ft_abuse_flags');
+  assert.equal(cloudConfig.collections.opsConfig, 'ft_ops_config');
   assert.equal(cloudConfig.storageRoot, 'find-things');
 });
 

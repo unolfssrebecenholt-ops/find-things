@@ -22,7 +22,8 @@ function createMockWxWithDatabase(initial = {}) {
   const local = {};
   const rows = {
     ft_containers: (initial.ft_containers || []).slice(),
-    ft_items: (initial.ft_items || []).slice()
+    ft_items: (initial.ft_items || []).slice(),
+    ft_reminder_notices: (initial.ft_reminder_notices || []).slice()
   };
   const writes = [];
   function collection(name, options = {}) {
@@ -51,6 +52,17 @@ function createMockWxWithDatabase(initial = {}) {
               rows[name].push(next);
             }
             writes.push({ collection: name, id, data: next });
+            return Promise.resolve({});
+          },
+          update({ data }) {
+            const index = rows[name].findIndex((record) => record._id === id);
+            const next = Object.assign({}, index >= 0 ? rows[name][index] : { _id: id }, data);
+            if (index >= 0) {
+              rows[name][index] = next;
+            } else {
+              rows[name].push(next);
+            }
+            writes.push({ collection: name, id, data: next, update: data });
             return Promise.resolve({});
           }
         };
@@ -297,6 +309,196 @@ test('stores prototype-ready image metadata and item location text', () => {
   assert.equal(saved.items[0].sourceImageIndex, 0);
   assert.equal(saved.items[0].sourceImageLabel, '照片 1');
   assert.equal(saved.items[0].locationText, '照片 1 · 右上');
+});
+
+test('saveContainer preserves and normalizes reminder fields', () => {
+  const service = storage.createStorageService(createMemoryAdapter());
+  const expiresAt = Date.UTC(2026, 5, 10, 15, 59, 59, 999);
+
+  const saved = service.saveContainer({
+    name: 'Expiry box',
+    items: [
+      {
+        displayName: 'Milk',
+        confirmed: true,
+        expiresAt,
+        reminderEnabled: true,
+        remindOffsetDays: 2,
+        subscribeAccepted: true
+      },
+      {
+        displayName: 'Legacy item',
+        confirmed: true
+      }
+    ]
+  });
+  const items = service.listItems();
+  const reminderItem = items.find((item) => item._id === saved.items[0]._id);
+  const legacyItem = items.find((item) => item._id === saved.items[1]._id);
+
+  assert.equal(reminderItem.expiresAt, expiresAt);
+  assert.equal(reminderItem.reminderEnabled, true);
+  assert.equal(reminderItem.remindOffsetDays, 2);
+  assert.equal(reminderItem.remindAt, expiresAt - 2 * 24 * 60 * 60 * 1000);
+  assert.equal(reminderItem.reminderChannel, 'subscribe');
+  assert.equal(reminderItem.subscribeAccepted, true);
+  assert.equal(legacyItem.expiresAt, 0);
+  assert.equal(legacyItem.reminderEnabled, false);
+  assert.equal(legacyItem.remindAt, 0);
+  assert.equal(legacyItem.reminderChannel, 'inApp');
+});
+
+test('saveContainer clears reminder delivery state when reminder settings change', () => {
+  const service = storage.createStorageService(createMemoryAdapter());
+  const firstExpiry = Date.UTC(2026, 5, 10, 15, 59, 59, 999);
+  const secondExpiry = Date.UTC(2026, 5, 12, 15, 59, 59, 999);
+  const saved = service.saveContainer({
+    name: 'Expiry state box',
+    items: [
+      {
+        _id: 'expiry_state_item',
+        displayName: 'Yogurt',
+        confirmed: true,
+        expiresAt: firstExpiry,
+        reminderEnabled: true,
+        remindOffsetDays: 1,
+        remindedAt: 100,
+        inAppReadAt: 90,
+        lastReminderError: 'old'
+      }
+    ]
+  });
+
+  const updated = service.saveContainer(Object.assign({}, saved.container, {
+    items: [
+      Object.assign({}, saved.items[0], {
+        expiresAt: secondExpiry,
+        remindedAt: 100,
+        inAppReadAt: 90,
+        lastReminderError: 'old'
+      })
+    ]
+  }));
+
+  assert.equal(updated.items[0].remindedAt, 0);
+  assert.equal(updated.items[0].inAppReadAt, 0);
+  assert.equal(updated.items[0].lastReminderError, '');
+  assert.equal(updated.items[0].remindAt, secondExpiry - 24 * 60 * 60 * 1000);
+});
+
+test('replaceItemsForImage preserves and normalizes reminder fields', () => {
+  const service = storage.createStorageService(createMemoryAdapter());
+  const saved = service.saveContainer({
+    name: 'Image expiry box',
+    contentImages: [
+      { imageId: 'img_front', fileId: '/tmp/front.jpg', label: 'Front' }
+    ],
+    items: []
+  });
+  const expiresAt = Date.UTC(2026, 5, 10, 15, 59, 59, 999);
+
+  const updated = service.replaceItemsForImage(saved.container._id, 'img_front', [
+    {
+      displayName: 'Cheese',
+      confirmed: true,
+      expiresAt,
+      reminderEnabled: true,
+      remindOffsetDays: 3,
+      subscribeAccepted: false
+    }
+  ]);
+
+  assert.equal(updated.items[0].expiresAt, expiresAt);
+  assert.equal(updated.items[0].reminderEnabled, true);
+  assert.equal(updated.items[0].remindOffsetDays, 3);
+  assert.equal(updated.items[0].remindAt, expiresAt - 3 * 24 * 60 * 60 * 1000);
+  assert.equal(updated.items[0].reminderChannel, 'inApp');
+  assert.equal(updated.items[0].subscribeAccepted, false);
+});
+
+test('marks in-app reminders read without changing expiry settings', () => {
+  const service = storage.createStorageService(createMemoryAdapter());
+  const expiresAt = Date.UTC(2026, 5, 10, 15, 59, 59, 999);
+  const saved = service.saveContainer({
+    name: 'Read reminder box',
+    items: [
+      {
+        _id: 'read_reminder_item',
+        displayName: 'Milk',
+        confirmed: true,
+        expiresAt,
+        reminderEnabled: true,
+        remindOffsetDays: 1,
+        subscribeAccepted: false
+      }
+    ]
+  });
+
+  const result = service.markItemReminderRead(saved.items[0]._id, 12345);
+
+  assert.equal(result.item._id, 'read_reminder_item');
+  assert.equal(result.item.inAppReadAt, 12345);
+  assert.equal(result.item.expiresAt, expiresAt);
+  assert.equal(result.item.reminderEnabled, true);
+  assert.equal(service.listItems()[0].inAppReadAt, 12345);
+});
+
+test('lists pending reminder notices and hides read notices', () => {
+  const service = storage.createStorageService(createMemoryAdapter({
+    'findThings.reminderNotices': [
+      {
+        _id: 'notice_pending',
+        itemId: 'milk',
+        displayName: 'Milk',
+        message: 'Milk 已过期，请及时处理。',
+        status: 'pending',
+        createdAt: 2
+      },
+      {
+        _id: 'notice_read',
+        itemId: 'tea',
+        displayName: 'Tea',
+        message: 'Tea 已过期，请及时处理。',
+        status: 'read',
+        createdAt: 3
+      }
+    ]
+  }));
+
+  const notices = service.listPendingReminderNotices();
+
+  assert.deepEqual(notices.map((notice) => notice._id), ['notice_pending']);
+  assert.equal(notices[0].message, 'Milk 已过期，请及时处理。');
+});
+
+test('markReminderNoticeRead marks the notice read and updates the related item read timestamp', () => {
+  const service = storage.createStorageService(createMemoryAdapter({
+    'findThings.reminderNotices': [
+      {
+        _id: 'notice_pending',
+        itemId: 'milk',
+        status: 'pending',
+        createdAt: 2
+      }
+    ],
+    'findThings.items': [
+      {
+        _id: 'milk',
+        containerId: 'box',
+        displayName: 'Milk',
+        reminderEnabled: true,
+        inAppReadAt: 0,
+        deletedAt: null
+      }
+    ]
+  }));
+
+  const result = service.markReminderNoticeRead('notice_pending', 12345);
+
+  assert.equal(result.notice.status, 'read');
+  assert.equal(result.notice.readAt, 12345);
+  assert.equal(service.listPendingReminderNotices().length, 0);
+  assert.equal(service.listItems()[0].inAppReadAt, 12345);
 });
 
 test('keeps thumbnail file ids alongside durable container image paths', () => {
@@ -553,6 +755,102 @@ test('async storage reads cloud items with legacy foreign key fields', async () 
   });
 });
 
+test('async storage persists upgraded future subscription reminders to cloud database', async () => {
+  const now = Date.UTC(2026, 5, 9);
+  const mock = createMockWxWithDatabase({
+    ft_containers: [
+      {
+        _id: 'cloud_reminder_box',
+        name: 'Cloud reminder box',
+        itemCount: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        deletedAt: null
+      }
+    ],
+    ft_items: [
+      {
+        _id: 'cloud_future_item',
+        containerId: 'cloud_reminder_box',
+        displayName: 'Cloud future milk',
+        expiresAt: Date.UTC(2026, 5, 12),
+        remindAt: Date.UTC(2026, 5, 11),
+        reminderEnabled: true,
+        subscribeAccepted: false,
+        reminderChannel: 'inApp',
+        lastReminderError: 'user refused',
+        remindedAt: 0,
+        deletedAt: null
+      }
+    ]
+  });
+
+  await withWx(mock.wx, async () => {
+    const service = storage.createStorageService();
+    const result = await service.upgradeFutureReminderSubscriptionsAsync(now);
+
+    assert.deepEqual(result.updatedIds, ['cloud_future_item']);
+    const writtenItem = mock.writes.find((write) => write.collection === 'ft_items' && write.id === 'cloud_future_item');
+    assert.ok(writtenItem);
+    assert.equal(writtenItem.data.subscribeAccepted, true);
+    assert.equal(writtenItem.data.reminderChannel, 'subscribe');
+    assert.equal(writtenItem.data.lastReminderError, '');
+  });
+});
+
+test('async storage loads reminder notices and persists read acknowledgements', async () => {
+  const mock = createMockWxWithDatabase({
+    ft_containers: [
+      {
+        _id: 'cloud_reminder_box',
+        name: 'Cloud reminder box',
+        itemCount: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        deletedAt: null
+      }
+    ],
+    ft_items: [
+      {
+        _id: 'cloud_notice_item',
+        containerId: 'cloud_reminder_box',
+        displayName: 'Cloud milk',
+        reminderEnabled: true,
+        inAppReadAt: 0,
+        deletedAt: null
+      }
+    ],
+    ft_reminder_notices: [
+      {
+        _id: 'cloud_notice',
+        itemId: 'cloud_notice_item',
+        containerId: 'cloud_reminder_box',
+        displayName: 'Cloud milk',
+        message: 'Cloud milk 已过期，请及时处理。',
+        status: 'pending',
+        pushStatus: 'none',
+        createdAt: 2
+      }
+    ]
+  });
+
+  await withWx(mock.wx, async () => {
+    const service = storage.createStorageService();
+    const notices = await service.listPendingReminderNoticesAsync();
+    assert.deepEqual(notices.map((notice) => notice._id), ['cloud_notice']);
+
+    await service.markReminderNoticeReadAsync('cloud_notice', 12345);
+
+    const writtenNotice = mock.writes.find((write) => write.collection === 'ft_reminder_notices' && write.id === 'cloud_notice');
+    const writtenItem = mock.writes.find((write) => write.collection === 'ft_items' && write.id === 'cloud_notice_item');
+    assert.ok(writtenNotice);
+    assert.equal(writtenNotice.data.status, 'read');
+    assert.equal(writtenNotice.data.readAt, 12345);
+    assert.ok(writtenItem);
+    assert.equal(writtenItem.data.inAppReadAt, 12345);
+  });
+});
+
 test('replaces only items from one source image and updates image and container counts', () => {
   const service = storage.createStorageService(createMemoryAdapter());
   const saved = service.saveContainer({
@@ -669,6 +967,58 @@ test('replaceItemsForImage removes legacy items that only match the source image
     service.getItemsByContainer('mixed_container').map((item) => item.displayName).sort(),
     ['其他照片物品', '新文件来源物品'].sort()
   );
+});
+
+test('upgrades unread in-app reminders to subscription reminders', () => {
+  const now = Date.UTC(2026, 5, 9);
+  const service = storage.createStorageService(createMemoryAdapter({
+    'findThings.containers': [
+      {
+        _id: 'reminder_box',
+        name: 'Reminder box',
+        createdAt: 1,
+        updatedAt: 1,
+        deletedAt: null
+      }
+    ],
+    'findThings.items': [
+      {
+        _id: 'future_item',
+        containerId: 'reminder_box',
+        displayName: 'Future milk',
+        expiresAt: Date.UTC(2026, 5, 12),
+        remindAt: Date.UTC(2026, 5, 11),
+        reminderEnabled: true,
+        subscribeAccepted: false,
+        reminderChannel: 'inApp',
+        lastReminderError: 'user refused',
+        remindedAt: 0,
+        deletedAt: null
+      },
+      {
+        _id: 'due_item',
+        containerId: 'reminder_box',
+        displayName: 'Due milk',
+        expiresAt: Date.UTC(2026, 5, 10),
+        remindAt: Date.UTC(2026, 5, 8),
+        reminderEnabled: true,
+        subscribeAccepted: false,
+        reminderChannel: 'inApp',
+        remindedAt: 0,
+        deletedAt: null
+      }
+    ]
+  }));
+
+  const result = service.upgradeFutureReminderSubscriptions(now);
+  const items = service.listItems();
+
+  assert.deepEqual(result.updatedIds, ['future_item', 'due_item']);
+  assert.equal(items.find((item) => item._id === 'future_item').subscribeAccepted, true);
+  assert.equal(items.find((item) => item._id === 'future_item').reminderChannel, 'subscribe');
+  assert.equal(items.find((item) => item._id === 'future_item').lastReminderError, '');
+  assert.equal(items.find((item) => item._id === 'due_item').subscribeAccepted, true);
+  assert.equal(items.find((item) => item._id === 'due_item').reminderChannel, 'subscribe');
 });
 
 test('deletes a container and its items', () => {

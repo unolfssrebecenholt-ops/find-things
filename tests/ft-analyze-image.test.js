@@ -39,7 +39,12 @@ async function withNow(value, fn) {
 function loadAnalyzeFunction(options = {}) {
   const modulePath = path.join(__dirname, '..', 'cloudfunctions', 'ftAnalyzeImage', 'index.js');
   const originalLoad = Module._load;
-  const taskRows = Object.assign({}, options.taskRows || {});
+  const collections = options.collections || {};
+  if (!collections.ft_analyze_tasks) {
+    collections.ft_analyze_tasks = Object.assign({}, options.taskRows || {});
+  } else {
+    Object.assign(collections.ft_analyze_tasks, options.taskRows || {});
+  }
   const taskUpdates = options.taskUpdates || [];
   delete require.cache[require.resolve(modulePath)];
   Module._load = function patchedLoad(request, parent, isMain) {
@@ -51,24 +56,25 @@ function loadAnalyzeFunction(options = {}) {
         DYNAMIC_CURRENT_ENV: 'dynamic',
         init() {},
         getWXContext() {
-          return { OPENID: 'test-openid' };
+          return options.wxContext || { OPENID: options.openid || 'test-openid' };
         },
         database() {
-          return {
+          const db = {
             collection(name) {
+              if (!collections[name]) collections[name] = {};
               return {
                 doc(id) {
                   return {
                     get() {
-                      return Promise.resolve({ data: taskRows[id] || null });
+                      return Promise.resolve({ data: collections[name][id] || null });
                     },
                     set({ data }) {
-                      taskRows[id] = Object.assign({ _id: id }, data);
+                      collections[name][id] = Object.assign({ _id: id }, data);
                       return Promise.resolve({});
                     },
                     update({ data }) {
-                      taskUpdates.push({ id, data });
-                      taskRows[id] = Object.assign({ _id: id }, taskRows[id] || {}, data);
+                      taskUpdates.push({ collection: name, id, data });
+                      collections[name][id] = Object.assign({ _id: id }, collections[name][id] || {}, data);
                       return Promise.resolve({});
                     }
                   };
@@ -76,6 +82,10 @@ function loadAnalyzeFunction(options = {}) {
               };
             }
           };
+          if (Object.prototype.hasOwnProperty.call(options, 'runTransaction')) {
+            db.runTransaction = options.runTransaction;
+          }
+          return db;
         },
         downloadFile() {
           return Promise.resolve({ fileContent: Buffer.from('image') });
@@ -99,6 +109,7 @@ function createMockHttps(responseBody, options = {}) {
   const { EventEmitter } = require('node:events');
   return {
     request(requestOptions, callback) {
+      if (options.requests) options.requests.push(requestOptions);
       const request = new EventEmitter();
       request.write = () => {};
       request.end = () => {
@@ -431,11 +442,498 @@ test('cloud function writes streaming recognized item progress while response is
   assert.deepEqual(progressCounts, [1, 2]);
 });
 
+test('cloud function reports default daily usage status for a new user', async () => {
+  const analyzeFunction = loadAnalyzeFunction();
+
+  const result = await withNow(Date.UTC(2026, 4, 29, 16, 30), () => analyzeFunction.main({ action: 'getUsageStatus' }));
+
+  assert.equal(result.status, 'usage');
+  assert.equal(result.openid, 'test-openid');
+  assert.equal(result.day, '2026-05-30');
+  assert.equal(result.usedToday, 0);
+  assert.equal(result.dailyAnalyzeLimit, 15);
+  assert.equal(result.remainingToday, 15);
+  assert.equal(result.analyzeEnabled, true);
+  assert.equal(result.blocked, false);
+  assert.equal(result.canAnalyze, true);
+});
+
+test('cloud function usage status honors ops default quota override', async () => {
+  const analyzeFunction = loadAnalyzeFunction({
+    collections: {
+      ft_ops_config: {
+        global: { dailyFreeAnalyzeLimit: 7 }
+      }
+    }
+  });
+
+  const result = await analyzeFunction.main({ action: 'getUsageStatus' });
+
+  assert.equal(result.dailyAnalyzeLimit, 7);
+  assert.equal(result.remainingToday, 7);
+  assert.equal(result.canAnalyze, true);
+});
+
+test('cloud function usage status honors higher user quota override', async () => {
+  const analyzeFunction = loadAnalyzeFunction({
+    collections: {
+      ft_user_quota_overrides: {
+        'test-openid': { dailyAnalyzeLimit: 20 }
+      }
+    }
+  });
+
+  const result = await analyzeFunction.main({ action: 'getUsageStatus' });
+
+  assert.equal(result.dailyAnalyzeLimit, 20);
+  assert.equal(result.remainingToday, 20);
+  assert.equal(result.canAnalyze, true);
+});
+
+test('cloud function usage status honors lower user quota override', async () => {
+  const analyzeFunction = loadAnalyzeFunction({
+    collections: {
+      ft_ops_config: {
+        global: { dailyFreeAnalyzeLimit: 15 }
+      },
+      ft_user_quota_overrides: {
+        'test-openid': { dailyAnalyzeLimit: 3 }
+      }
+    }
+  });
+
+  const result = await analyzeFunction.main({ action: 'getUsageStatus' });
+
+  assert.equal(result.dailyAnalyzeLimit, 3);
+  assert.equal(result.remainingToday, 3);
+  assert.equal(result.canAnalyze, true);
+});
+
+test('cloud function usage status honors zero user quota override', async () => {
+  const analyzeFunction = loadAnalyzeFunction({
+    collections: {
+      ft_user_quota_overrides: {
+        'test-openid': { dailyAnalyzeLimit: 0 }
+      }
+    }
+  });
+
+  const result = await analyzeFunction.main({ action: 'getUsageStatus' });
+
+  assert.equal(result.dailyAnalyzeLimit, 0);
+  assert.equal(result.remainingToday, 0);
+  assert.equal(result.canAnalyze, false);
+  assert.equal(result.errorCode, 'ANALYZE_QUOTA_EXHAUSTED');
+  assert.match(result.errorMessage, /今日/);
+});
+
+test('cloud function usage status counts in-flight reserved analyzes against remaining quota', async () => {
+  const analyzeFunction = loadAnalyzeFunction({
+    collections: {
+      ft_user_usage: {
+        'test-openid_2026-05-30': {
+          successfulAnalyzeCount: 14,
+          reservedAnalyzeCount: 1,
+          attemptCount: 15
+        }
+      }
+    }
+  });
+
+  const result = await withNow(Date.UTC(2026, 4, 29, 17, 0), () => analyzeFunction.main({ action: 'getUsageStatus' }));
+
+  assert.equal(result.usedToday, 14);
+  assert.equal(result.reservedToday, 1);
+  assert.equal(result.dailyAnalyzeLimit, 15);
+  assert.equal(result.remainingToday, 0);
+  assert.equal(result.canAnalyze, false);
+  assert.equal(result.errorCode, 'ANALYZE_QUOTA_EXHAUSTED');
+});
+
+test('cloud function increments successful usage only after AI succeeds', async () => {
+  const collections = {};
+  const analyzeFunction = loadAnalyzeFunction({
+    collections,
+    https: createMockHttps(JSON.stringify({
+      output_text: '{"items":[{"displayName":"red box"}]}'
+    })),
+    localConfig: {
+      relays: [
+        {
+          id: 'responses-test',
+          baseUrl: 'https://relay.example.com',
+          endpoint: '/v1/responses',
+          model: 'gpt-5.5',
+          apiKey: 'test-key',
+          timeoutMs: 60000
+        }
+      ]
+    }
+  });
+
+  await withNow(Date.UTC(2026, 4, 29, 17, 0), () => analyzeFunction.main({
+    taskId: 'task_success_usage',
+    imageDataUrl: 'data:image/jpeg;base64,aW1hZ2U=',
+    maxItems: 4
+  }));
+
+  assert.equal(collections.ft_user_usage['test-openid_2026-05-30'].successfulAnalyzeCount, 1);
+  assert.equal(collections.ft_user_usage['test-openid_2026-05-30'].reservedAnalyzeCount, 0);
+  assert.equal(collections.ft_user_usage['test-openid_2026-05-30'].attemptCount, 1);
+});
+
+test('cloud function allows the final remaining analyze slot after reserving it', async () => {
+  const collections = {
+    ft_user_usage: {
+      'test-openid_2026-05-30': {
+        successfulAnalyzeCount: 14,
+        reservedAnalyzeCount: 0,
+        attemptCount: 14
+      }
+    }
+  };
+  const requests = [];
+  const analyzeFunction = loadAnalyzeFunction({
+    collections,
+    https: createMockHttps(JSON.stringify({
+      output_text: '{"items":[{"displayName":"red box"}]}'
+    }), { requests }),
+    localConfig: {
+      relays: [
+        {
+          id: 'responses-test',
+          baseUrl: 'https://relay.example.com',
+          endpoint: '/v1/responses',
+          model: 'gpt-5.5',
+          apiKey: 'test-key',
+          timeoutMs: 60000
+        }
+      ]
+    }
+  });
+
+  const result = await withNow(Date.UTC(2026, 4, 29, 17, 0), () => analyzeFunction.main({
+    taskId: 'task_last_slot',
+    imageDataUrl: 'data:image/jpeg;base64,aW1hZ2U=',
+    maxItems: 4
+  }));
+
+  assert.equal(result.items[0].displayName, 'red box');
+  assert.equal(requests.length, 1);
+  assert.equal(collections.ft_user_usage['test-openid_2026-05-30'].successfulAnalyzeCount, 15);
+  assert.equal(collections.ft_user_usage['test-openid_2026-05-30'].reservedAnalyzeCount, 0);
+  assert.equal(collections.ft_user_usage['test-openid_2026-05-30'].attemptCount, 15);
+});
+
+test('cloud function does not increment successful usage when AI fails', async () => {
+  const collections = {};
+  const analyzeFunction = loadAnalyzeFunction({
+    collections,
+    https: createMockHttps(JSON.stringify({ error: 'bad gateway' }), { statusCode: 502 }),
+    localConfig: {
+      relays: [
+        {
+          id: 'responses-test',
+          baseUrl: 'https://relay.example.com',
+          endpoint: '/v1/responses',
+          model: 'gpt-5.5',
+          apiKey: 'test-key',
+          timeoutMs: 60000
+        }
+      ]
+    }
+  });
+
+  await withNow(Date.UTC(2026, 4, 29, 17, 0), () => analyzeFunction.main({
+    taskId: 'task_failed_usage',
+    imageDataUrl: 'data:image/jpeg;base64,aW1hZ2U=',
+    maxItems: 4
+  }));
+
+  assert.equal(collections.ft_user_usage['test-openid_2026-05-30'].successfulAnalyzeCount || 0, 0);
+  assert.equal(collections.ft_user_usage['test-openid_2026-05-30'].reservedAnalyzeCount, 0);
+  assert.equal(collections.ft_user_usage['test-openid_2026-05-30'].attemptCount, 1);
+});
+
+test('cloud function rejects quota-exhausted analyze before calling AI', async () => {
+  const requests = [];
+  const analyzeFunction = loadAnalyzeFunction({
+    collections: {
+      ft_user_usage: {
+        'test-openid_2026-05-30': { successfulAnalyzeCount: 15, attemptCount: 15 }
+      }
+    },
+    https: createMockHttps(JSON.stringify({
+      output_text: '{"items":[{"displayName":"red box"}]}'
+    }), { requests }),
+    localConfig: {
+      relays: [
+        {
+          id: 'responses-test',
+          baseUrl: 'https://relay.example.com',
+          endpoint: '/v1/responses',
+          model: 'gpt-5.5',
+          apiKey: 'test-key'
+        }
+      ]
+    }
+  });
+
+  const result = await withNow(Date.UTC(2026, 4, 29, 17, 0), () => analyzeFunction.main({
+    taskId: 'task_quota_exhausted',
+    imageDataUrl: 'data:image/jpeg;base64,aW1hZ2U='
+  }));
+
+  assert.equal(result.errorCode, 'ANALYZE_QUOTA_EXHAUSTED');
+  assert.equal(requests.length, 0);
+});
+
+test('cloud function rejects analyze when global recognition is disabled', async () => {
+  const requests = [];
+  const analyzeFunction = loadAnalyzeFunction({
+    collections: {
+      ft_ops_config: {
+        global: { analyzeEnabled: false }
+      }
+    },
+    https: createMockHttps(JSON.stringify({
+      output_text: '{"items":[{"displayName":"red box"}]}'
+    }), { requests }),
+    localConfig: {
+      relays: [
+        {
+          id: 'responses-test',
+          baseUrl: 'https://relay.example.com',
+          endpoint: '/v1/responses',
+          model: 'gpt-5.5',
+          apiKey: 'test-key'
+        }
+      ]
+    }
+  });
+
+  const usage = await analyzeFunction.main({ action: 'getUsageStatus' });
+  const result = await analyzeFunction.main({
+    taskId: 'task_disabled',
+    imageDataUrl: 'data:image/jpeg;base64,aW1hZ2U='
+  });
+
+  assert.equal(usage.canAnalyze, false);
+  assert.equal(usage.errorCode, 'ANALYZE_DISABLED');
+  assert.equal(result.errorCode, 'ANALYZE_DISABLED');
+  assert.equal(requests.length, 0);
+});
+
+test('cloud function rejects hourly attempt limit before calling AI', async () => {
+  const requests = [];
+  const baseTime = Date.UTC(2026, 4, 29, 17, 0);
+  const analyzeFunction = loadAnalyzeFunction({
+    collections: {
+      ft_user_usage: {
+        'test-openid_2026-05-30': {
+          successfulAnalyzeCount: 0,
+          attemptCount: 30,
+          recentAttemptTimestamps: Array.from({ length: 30 }, (_, index) => baseTime - (index * 60 * 1000))
+        }
+      }
+    },
+    https: createMockHttps(JSON.stringify({
+      output_text: '{"items":[{"displayName":"red box"}]}'
+    }), { requests }),
+    localConfig: {
+      relays: [
+        {
+          id: 'responses-test',
+          baseUrl: 'https://relay.example.com',
+          endpoint: '/v1/responses',
+          model: 'gpt-5.5',
+          apiKey: 'test-key'
+        }
+      ]
+    }
+  });
+
+  const result = await withNow(baseTime, () => analyzeFunction.main({
+    taskId: 'task_hourly_limit',
+    imageDataUrl: 'data:image/jpeg;base64,aW1hZ2U='
+  }));
+
+  assert.equal(result.errorCode, 'ANALYZE_HOURLY_LIMIT');
+  assert.equal(requests.length, 0);
+});
+
+test('cloud function rejects analyze when usage transaction cannot reserve quota', async () => {
+  const requests = [];
+  const analyzeFunction = loadAnalyzeFunction({
+    runTransaction() {
+      return Promise.reject(new Error('transaction unavailable'));
+    },
+    https: createMockHttps(JSON.stringify({
+      output_text: '{"items":[{"displayName":"red box"}]}'
+    }), { requests }),
+    localConfig: {
+      relays: [
+        {
+          id: 'responses-test',
+          baseUrl: 'https://relay.example.com',
+          endpoint: '/v1/responses',
+          model: 'gpt-5.5',
+          apiKey: 'test-key'
+        }
+      ]
+    }
+  });
+
+  const result = await analyzeFunction.main({
+    taskId: 'task_transaction_failed',
+    imageDataUrl: 'data:image/jpeg;base64,aW1hZ2U='
+  });
+
+  assert.equal(result.errorCode, 'ANALYZE_USAGE_UPDATE_FAILED');
+  assert.equal(requests.length, 0);
+});
+
+test('cloud function rejects oversized images before calling AI', async () => {
+  const requests = [];
+  const tooLargeImage = `data:image/jpeg;base64,${Buffer.alloc((6 * 1024 * 1024) + 1).toString('base64')}`;
+  const analyzeFunction = loadAnalyzeFunction({
+    https: createMockHttps(JSON.stringify({
+      output_text: '{"items":[{"displayName":"red box"}]}'
+    }), { requests }),
+    localConfig: {
+      relays: [
+        {
+          id: 'responses-test',
+          baseUrl: 'https://relay.example.com',
+          endpoint: '/v1/responses',
+          model: 'gpt-5.5',
+          apiKey: 'test-key'
+        }
+      ]
+    }
+  });
+
+  const result = await analyzeFunction.main({
+    taskId: 'task_oversized',
+    imageDataUrl: tooLargeImage
+  });
+
+  assert.equal(result.errorCode, 'IMAGE_TOO_LARGE');
+  assert.equal(requests.length, 0);
+});
+
+test('cloud function cooldown rejects rapid analyze before calling AI', async () => {
+  const requests = [];
+  const analyzeFunction = loadAnalyzeFunction({
+    collections: {
+      ft_user_usage: {
+        'test-openid_2026-05-30': { successfulAnalyzeCount: 0, attemptCount: 1, lastAttemptAt: Date.UTC(2026, 4, 29, 17, 0, 0) }
+      }
+    },
+    https: createMockHttps(JSON.stringify({
+      output_text: '{"items":[{"displayName":"red box"}]}'
+    }), { requests }),
+    localConfig: {
+      relays: [
+        {
+          id: 'responses-test',
+          baseUrl: 'https://relay.example.com',
+          endpoint: '/v1/responses',
+          model: 'gpt-5.5',
+          apiKey: 'test-key'
+        }
+      ]
+    }
+  });
+
+  const result = await withNow(Date.UTC(2026, 4, 29, 17, 0, 10), () => analyzeFunction.main({
+    taskId: 'task_cooldown',
+    imageDataUrl: 'data:image/jpeg;base64,aW1hZ2U='
+  }));
+
+  assert.equal(result.errorCode, 'ANALYZE_COOLDOWN');
+  assert.equal(requests.length, 0);
+});
+
+test('cloud function blocks blacklisted users from usage status and analyze', async () => {
+  const requests = [];
+  const analyzeFunction = loadAnalyzeFunction({
+    collections: {
+      ft_abuse_flags: {
+        'test-openid': { blocked: true, reason: 'abuse' }
+      }
+    },
+    https: createMockHttps(JSON.stringify({
+      output_text: '{"items":[{"displayName":"red box"}]}'
+    }), { requests }),
+    localConfig: {
+      relays: [
+        {
+          id: 'responses-test',
+          baseUrl: 'https://relay.example.com',
+          endpoint: '/v1/responses',
+          model: 'gpt-5.5',
+          apiKey: 'test-key'
+        }
+      ]
+    }
+  });
+
+  const usage = await analyzeFunction.main({ action: 'getUsageStatus' });
+  const analyze = await analyzeFunction.main({
+    taskId: 'task_blocked',
+    imageDataUrl: 'data:image/jpeg;base64,aW1hZ2U='
+  });
+
+  assert.equal(usage.blocked, true);
+  assert.equal(usage.canAnalyze, false);
+  assert.equal(usage.errorCode, 'ANALYZE_USER_BLOCKED');
+  assert.equal(analyze.errorCode, 'ANALYZE_USER_BLOCKED');
+  assert.equal(requests.length, 0);
+});
+
+test('cloud function getTask only exposes results to the task owner', async () => {
+  const analyzeFunction = loadAnalyzeFunction({
+    openid: 'other-openid',
+    taskRows: {
+      task_owned: {
+        status: 'success',
+        openid: 'owner-openid',
+        result: { items: [{ displayName: 'private item' }] }
+      }
+    }
+  });
+
+  const result = await analyzeFunction.main({ action: 'getTask', taskId: 'task_owned' });
+
+  assert.equal(result.status, 'missing');
+  assert.equal(result.result, undefined);
+  assert.equal(result.errorCode, undefined);
+});
+
+test('cloud function getTask does not expose legacy tasks without an owner openid', async () => {
+  const analyzeFunction = loadAnalyzeFunction({
+    openid: 'test-openid',
+    taskRows: {
+      task_legacy_ownerless: {
+        status: 'success',
+        result: { items: [{ displayName: 'legacy private item' }] }
+      }
+    }
+  });
+
+  const result = await analyzeFunction.main({ action: 'getTask', taskId: 'task_legacy_ownerless' });
+
+  assert.equal(result.status, 'missing');
+  assert.equal(result.result, undefined);
+});
+
 test('cloud function exposes analyze task polling results', async () => {
   const analyzeFunction = loadAnalyzeFunction({
     taskRows: {
       task_done: {
         status: 'success',
+        openid: 'test-openid',
         result: { items: [{ displayName: '钥匙' }] }
       }
     }
@@ -452,6 +950,7 @@ test('cloud function marks stale processing analyze tasks as timed out during po
     taskRows: {
       stale_task: {
         status: 'processing',
+        openid: 'test-openid',
         startedAt: 1000,
         updatedAt: 1000
       }

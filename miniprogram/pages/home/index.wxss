@@ -113,6 +113,49 @@
   border-radius: 999rpx;
 }
 
+.expiry-reminder-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18rpx;
+  min-height: 112rpx;
+  margin-top: 20rpx;
+  padding: 20rpx 24rpx;
+  background: #fff7dc;
+  border: 2rpx solid rgba(117, 100, 68, 0.16);
+  border-radius: 28rpx;
+}
+
+.expiry-reminder-copy {
+  display: grid;
+  gap: 6rpx;
+  min-width: 0;
+}
+
+.expiry-reminder-title {
+  overflow: hidden;
+  color: #151713;
+  font-size: 28rpx;
+  font-weight: 800;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expiry-reminder-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 84rpx;
+  height: 56rpx;
+  padding: 0 20rpx;
+  color: #1f6048;
+  font-size: 24rpx;
+  font-weight: 800;
+  background: #fbfbf7;
+  border-radius: 999rpx;
+}
+
 .container-stack {
   display: grid;
   gap: 14rpx;

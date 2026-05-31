@@ -1,6 +1,8 @@
 const CONTAINERS_KEY = 'findThings.containers';
 const ITEMS_KEY = 'findThings.items';
+const REMINDER_NOTICES_KEY = 'findThings.reminderNotices';
 const cloudConfig = require('../config/cloud');
+const expiryReminder = require('./expiry-reminder');
 const imageDisplay = require('./image-display');
 
 const CONTAINER_LIMIT = 3;
@@ -310,7 +312,7 @@ function findSourceImage(rawItem, container) {
     || null;
 }
 
-function normalizeItem(rawItem, container, timestamp) {
+function normalizeItem(rawItem, container, timestamp, previousItem) {
   const itemId = rawItem._id || createId('item');
   const sourceImage = findSourceImage(rawItem, container);
   const sourceImageIndex = sourceImage
@@ -326,7 +328,7 @@ function normalizeItem(rawItem, container, timestamp) {
     rawItem.position
   ]);
   const locationText = (rawItem.locationText || [sourceImageLabel, relativePosition].filter(Boolean).join(' · ')).trim();
-  return Object.assign({}, rawItem, {
+  return expiryReminder.normalizeReminderFields(Object.assign({}, rawItem, {
     _id: itemId,
     containerId: container._id,
     sourceImageId: sourceImage ? sourceImage.imageId : getItemSourceImageId(rawItem),
@@ -339,7 +341,7 @@ function normalizeItem(rawItem, container, timestamp) {
     createdAt: rawItem.createdAt || timestamp,
     updatedAt: timestamp,
     deletedAt: null
-  });
+  }), timestamp, previousItem);
 }
 
 function normalizeRawEmbeddedItem(rawItem) {
@@ -501,11 +503,39 @@ function normalizeStoredItem(item) {
   if (containerId) normalized.containerId = containerId;
   if (displayName && !normalized.displayName) normalized.displayName = displayName;
   if (!normalized.category && normalized.type) normalized.category = normalized.type;
-  return normalized;
+  return expiryReminder.normalizeReminderFields(normalized);
 }
 
 function normalizeStoredItems(items) {
   return (items || []).filter(Boolean).map(normalizeStoredItem);
+}
+
+function normalizeReminderNotice(notice) {
+  const value = Object.assign({}, notice || {});
+  const status = value.status === 'read' ? 'read' : 'pending';
+  const pushStatus = ['sent', 'failed', 'none'].indexOf(value.pushStatus) >= 0 ? value.pushStatus : 'none';
+  return Object.assign({}, value, {
+    _id: firstText([value._id, value.id]),
+    type: firstText(value.type) || 'expiry',
+    itemId: firstText([value.itemId, value.item_id]),
+    containerId: firstText([value.containerId, value.container_id]),
+    displayName: firstText([value.displayName, value.name, value.itemName]) || '物品',
+    message: firstText(value.message) || `${firstText([value.displayName, value.name, value.itemName]) || '物品'} 已过期，请及时处理。`,
+    status,
+    pushStatus,
+    channel: firstText(value.channel) || (pushStatus === 'sent' ? 'subscribe' : 'inApp'),
+    expiresAt: finiteNumber(value.expiresAt, 0),
+    remindAt: finiteNumber(value.remindAt, 0),
+    sentAt: finiteNumber(value.sentAt, 0),
+    readAt: finiteNumber(value.readAt, 0),
+    createdAt: finiteNumber(value.createdAt, 0),
+    updatedAt: finiteNumber(value.updatedAt, 0),
+    lastError: firstText(value.lastError)
+  });
+}
+
+function normalizeReminderNotices(notices) {
+  return (notices || []).filter(Boolean).map(normalizeReminderNotice).filter((notice) => notice._id);
 }
 
 function createStorageService(adapter) {
@@ -539,6 +569,15 @@ function createStorageService(adapter) {
     return dedupeRecords(persistedItems.concat(embeddedItems));
   }
 
+  function listReminderNotices() {
+    return normalizeReminderNotices(readArray(storage, REMINDER_NOTICES_KEY))
+      .sort((a, b) => (b.createdAt || b.updatedAt || 0) - (a.createdAt || a.updatedAt || 0));
+  }
+
+  function listPendingReminderNotices() {
+    return listReminderNotices().filter((notice) => notice.status !== 'read');
+  }
+
   function listUserContainers() {
     return listContainers().filter((container) => !isDemoContainer(container));
   }
@@ -559,24 +598,28 @@ function createStorageService(adapter) {
     return canUseDatabase();
   }
 
-  function cacheDatabaseRows(containers, items) {
+  function cacheDatabaseRows(containers, items, reminderNotices) {
     writeArray(storage, CONTAINERS_KEY, containers || []);
     writeArray(storage, ITEMS_KEY, normalizeStoredItems(items || []));
+    writeArray(storage, REMINDER_NOTICES_KEY, normalizeReminderNotices(reminderNotices || []));
   }
 
   function loadFromDatabase() {
     if (!canUseDatabase()) {
       databaseReady = true;
-      return Promise.resolve({ containers: listContainers(), items: listItems() });
+      return Promise.resolve({ containers: listContainers(), items: listItems(), reminderNotices: listReminderNotices() });
     }
     const containersCollection = getCollection('containers');
     const itemsCollection = getCollection('items');
+    const reminderNoticesCollection = getCollection('reminderNotices');
     return Promise.all([
       getAllFromCollection(containersCollection),
-      getAllFromCollection(itemsCollection)
-    ]).then(([containers, items]) => {
+      getAllFromCollection(itemsCollection),
+      getAllFromCollection(reminderNoticesCollection)
+    ]).then(([containers, items, reminderNotices]) => {
       const cloudContainers = (containers || []).filter((container) => !container.deletedAt && !isDemoContainer(container));
       const cloudItems = normalizeStoredItems(items || []);
+      const cloudReminderNotices = normalizeReminderNotices(reminderNotices || []);
       const localContainers = readArray(storage, CONTAINERS_KEY)
         .filter((container) => !container.deletedAt && !isDemoContainer(container));
       const localContainerIds = localContainers.reduce((ids, container) => {
@@ -591,6 +634,7 @@ function createStorageService(adapter) {
       const localItems = readArray(storage, ITEMS_KEY)
         .map(normalizeStoredItem)
         .filter((item) => !item.deletedAt && availableContainerIds[getItemContainerId(item)] && !isDemoItem(item));
+      const localReminderNotices = normalizeReminderNotices(readArray(storage, REMINDER_NOTICES_KEY));
       const mergedContainers = mergeMissingRecords(cloudContainers, localContainers);
       const mergedContainerIds = mergedContainers.reduce((ids, container) => {
         if (container && container._id && !container.deletedAt) ids[container._id] = true;
@@ -598,17 +642,20 @@ function createStorageService(adapter) {
       }, {});
       const mergeableLocalItems = localItems.filter((item) => mergedContainerIds[getItemContainerId(item)]);
       const mergedItems = mergeMissingRecords(cloudItems, mergeableLocalItems);
-      const hasLocalFallbackRows = mergedContainers.length > cloudContainers.length || mergedItems.length > cloudItems.length;
+      const mergedReminderNotices = mergeMissingRecords(cloudReminderNotices, localReminderNotices);
+      const hasLocalFallbackRows = mergedContainers.length > cloudContainers.length
+        || mergedItems.length > cloudItems.length
+        || mergedReminderNotices.length > cloudReminderNotices.length;
       if (hasLocalFallbackRows) {
-        return persistRecords(mergedContainers, mergedItems).then(() => {
-          cacheDatabaseRows(mergedContainers, mergedItems);
+        return persistRecords(mergedContainers, mergedItems, mergedReminderNotices).then(() => {
+          cacheDatabaseRows(mergedContainers, mergedItems, mergedReminderNotices);
           databaseReady = true;
-          return { containers: listContainers(), items: listItems() };
+          return { containers: listContainers(), items: listItems(), reminderNotices: listReminderNotices() };
         });
       }
-      cacheDatabaseRows(mergedContainers, mergedItems);
+      cacheDatabaseRows(mergedContainers, mergedItems, mergedReminderNotices);
       databaseReady = true;
-      return { containers: listContainers(), items: listItems() };
+      return { containers: listContainers(), items: listItems(), reminderNotices: listReminderNotices() };
     });
   }
 
@@ -657,9 +704,15 @@ function createStorageService(adapter) {
       throw error;
     }
 
+    const previousItemsById = listItems()
+      .filter((item) => itemBelongsToContainer(item, container._id))
+      .reduce((itemsById, item) => {
+        itemsById[item._id] = item;
+        return itemsById;
+      }, {});
     const items = (input.items || [])
       .filter((item) => item.confirmed !== false)
-      .map((item) => normalizeItem(item, container, timestamp));
+      .map((item) => normalizeItem(item, container, timestamp, item._id ? previousItemsById[item._id] : null));
     container = refreshContentImageCounts(container, items);
 
     const otherContainers = listContainers().filter((item) => item._id !== container._id);
@@ -745,12 +798,18 @@ function createStorageService(adapter) {
     const activeItems = listItems();
     const keptContainerItems = activeItems.filter((item) => itemBelongsToContainer(item, containerId) && !isItemFromImage(item, image));
     const otherItems = activeItems.filter((item) => !itemBelongsToContainer(item, containerId));
+    const previousItemsById = activeItems
+      .filter((item) => itemBelongsToContainer(item, containerId))
+      .reduce((itemsById, item) => {
+        itemsById[item._id] = item;
+        return itemsById;
+      }, {});
     const replacementItems = (items || [])
       .filter((item) => item.confirmed !== false)
       .map((item) => normalizeItem(Object.assign({}, item, {
         sourceImageId: image.imageId,
         sourceImageFileId: image.fileId
-      }), container, timestamp));
+      }), container, timestamp, item._id ? previousItemsById[item._id] : null));
     const nextContainerItems = replacementItems.concat(keptContainerItems);
     const updatedContainer = refreshContentImageCounts(Object.assign({}, container, { updatedAt: timestamp }), nextContainerItems);
 
@@ -802,13 +861,80 @@ function createStorageService(adapter) {
     };
   }
 
-  function persistRecords(containers, items) {
+  function markItemReminderRead(itemId, timestamp) {
+    const readAt = finiteNumber(timestamp, now());
+    let updatedItem = null;
+    const items = readArray(storage, ITEMS_KEY).map((item) => {
+      if (!item || item._id !== itemId || item.deletedAt) return item;
+      updatedItem = Object.assign({}, item, {
+        inAppReadAt: readAt,
+        updatedAt: readAt
+      });
+      return updatedItem;
+    });
+    if (!updatedItem) {
+      throw new Error('Item not found');
+    }
+    writeArray(storage, ITEMS_KEY, items);
+    return { item: normalizeStoredItem(updatedItem) };
+  }
+
+  function markReminderNoticeRead(noticeId, timestamp) {
+    const readAt = finiteNumber(timestamp, now());
+    let updatedNotice = null;
+    const notices = normalizeReminderNotices(readArray(storage, REMINDER_NOTICES_KEY)).map((notice) => {
+      if (!notice || notice._id !== noticeId) return notice;
+      updatedNotice = Object.assign({}, notice, {
+        status: 'read',
+        readAt,
+        updatedAt: readAt
+      });
+      return updatedNotice;
+    });
+    if (!updatedNotice) {
+      throw new Error('Reminder notice not found');
+    }
+    writeArray(storage, REMINDER_NOTICES_KEY, notices);
+
+    let updatedItem = null;
+    if (updatedNotice.itemId) {
+      const items = readArray(storage, ITEMS_KEY).map((item) => {
+        if (!item || item._id !== updatedNotice.itemId || item.deletedAt) return item;
+        updatedItem = Object.assign({}, item, {
+          inAppReadAt: readAt,
+          updatedAt: readAt
+        });
+        return updatedItem;
+      });
+      if (updatedItem) writeArray(storage, ITEMS_KEY, items);
+    }
+
+    return {
+      notice: normalizeReminderNotice(updatedNotice),
+      item: updatedItem ? normalizeStoredItem(updatedItem) : null
+    };
+  }
+
+  function upgradeFutureReminderSubscriptions(timestamp) {
+    const result = expiryReminder.upgradeFutureInAppReminders(readArray(storage, ITEMS_KEY), timestamp || now());
+    if (result.updatedIds.length) {
+      writeArray(storage, ITEMS_KEY, result.items);
+    }
+    return {
+      updatedIds: result.updatedIds,
+      items: result.items.filter((item) => result.updatedIds.indexOf(item._id) >= 0).map(normalizeStoredItem)
+    };
+  }
+
+  function persistRecords(containers, items, reminderNotices) {
     if (!canUseDatabase()) return Promise.resolve();
     const containerCollection = getCollection('containers');
     const itemCollection = getCollection('items');
+    const reminderNoticeCollection = getCollection('reminderNotices');
     return Promise.all(
       (containers || []).map((container) => upsertDocument(containerCollection, container))
         .concat((items || []).map((item) => upsertDocument(itemCollection, item)))
+        .concat((reminderNotices || []).map((notice) => upsertDocument(reminderNoticeCollection, notice)))
     ).then(() => {});
   }
 
@@ -877,6 +1003,28 @@ function createStorageService(adapter) {
     });
   }
 
+  function markItemReminderReadAsync(itemId, timestamp) {
+    return ensureDatabaseLoaded().then(() => {
+      const updated = markItemReminderRead(itemId, timestamp);
+      return persistRecords([], [updated.item]).then(() => updated);
+    });
+  }
+
+  function markReminderNoticeReadAsync(noticeId, timestamp) {
+    return ensureDatabaseLoaded().then(() => {
+      const updated = markReminderNoticeRead(noticeId, timestamp);
+      const items = updated.item ? [updated.item] : [];
+      return persistRecords([], items, [updated.notice]).then(() => updated);
+    });
+  }
+
+  function upgradeFutureReminderSubscriptionsAsync(timestamp) {
+    return ensureDatabaseLoaded().then(() => {
+      const upgraded = upgradeFutureReminderSubscriptions(timestamp);
+      return persistRecords([], upgraded.items).then(() => upgraded);
+    });
+  }
+
   function removeDemoDataAsync() {
     return ensureDatabaseLoaded().then(() => removeDemoData());
   }
@@ -895,6 +1043,10 @@ function createStorageService(adapter) {
 
   function listUserItemsAsync() {
     return ensureDatabaseLoaded().then(() => listUserItems());
+  }
+
+  function listPendingReminderNoticesAsync() {
+    return ensureDatabaseLoaded().then(() => listPendingReminderNotices());
   }
 
   function getContainerAsync(id) {
@@ -1142,6 +1294,8 @@ function createStorageService(adapter) {
     listItemsAsync,
     listUserItems,
     listUserItemsAsync,
+    listPendingReminderNotices,
+    listPendingReminderNoticesAsync,
     getContainer,
     getContainerAsync,
     getItemsByContainer,
@@ -1160,6 +1314,12 @@ function createStorageService(adapter) {
     deleteContainerAsync,
     deleteContainers,
     deleteContainersAsync,
+    markItemReminderRead,
+    markItemReminderReadAsync,
+    markReminderNoticeRead,
+    markReminderNoticeReadAsync,
+    upgradeFutureReminderSubscriptions,
+    upgradeFutureReminderSubscriptionsAsync,
     removeDemoData,
     removeDemoDataAsync,
     loadFromDatabase,
