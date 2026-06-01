@@ -7,10 +7,12 @@ function createWxMock(initialStorage) {
   const storage = Object.assign({}, initialStorage);
   const modals = [];
   const cloudCalls = [];
+  const toasts = [];
   return {
     storage,
     modals,
     cloudCalls,
+    toasts,
     subscriptionAccepted: false,
     getStorageSync(key) {
       return storage[key];
@@ -21,7 +23,9 @@ function createWxMock(initialStorage) {
     removeStorageSync(key) {
       delete storage[key];
     },
-    showToast() {},
+    showToast(options) {
+      toasts.push(options);
+    },
     showModal(options) {
       modals.push(options);
       if (typeof options.success === 'function') {
@@ -161,9 +165,27 @@ test('home page derives and renders an in-app expiry reminder entry', () => {
   assert.match(wxml, /expiryReminderCount/);
   assert.match(wxml, /expiryReminderPreview/);
   assert.match(wxml, /openExpiryReminders/);
+  assert.match(wxml, /showExpiryReminderPanel/);
+  assert.match(wxml, /expiryReminderDetails/);
+  assert.match(wxml, /expiry-reminder-detail-photo/);
+  assert.match(wxml, /expiry-detail-location/);
+  assert.match(wxml, /expiry-detail-date/);
+  assert.match(wxml, /expiry-detail-days/);
+  assert.match(wxml, /小懒盯到 \{\{expiryReminderCount\}\} 件快到期/);
+  assert.match(wxml, /看看/);
+  assert.match(wxml, /xiaolan-sloth\.svg/);
+  assert.doesNotMatch(wxml, /到期公示/);
+  assert.doesNotMatch(wxml, /知道了/);
 
-  assert.match(cssBlock(wxss, '.expiry-reminder-entry'), /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto/);
+  assert.match(cssBlock(wxss, '.expiry-reminder-entry'), /grid-template-columns:\s*72rpx\s+minmax\(0,\s*1fr\)\s+auto/);
   assert.match(cssBlock(wxss, '.expiry-reminder-entry'), /border-radius:\s*28rpx/);
+  assert.match(cssBlock(wxss, '.expiry-reminder-mascot'), /width:\s*72rpx/);
+  assert.match(cssBlock(wxss, '.expiry-reminder-sheet'), /z-index:\s*60/);
+  assert.match(cssBlock(wxss, '.expiry-reminder-panel'), /grid-template-rows:\s*auto\s+minmax\(0,\s*1fr\)\s+auto/);
+  assert.match(cssBlock(wxss, '.expiry-reminder-panel'), /max-height:\s*78vh/);
+  assert.match(cssBlock(wxss, '.expiry-reminder-detail'), /grid-template-columns:\s*112rpx\s+minmax\(0,\s*1fr\)/);
+  assert.match(cssBlock(wxss, '.expiry-reminder-action-bar'), /padding:\s*14rpx\s+0\s+22rpx/);
+  assert.match(cssBlock(wxss, '.expiry-reminder-done'), /justify-content:\s*center/);
 });
 
 test('home page triggers the expiry reminder cloud function before reading notices', async () => {
@@ -207,7 +229,7 @@ test('home page triggers the expiry reminder cloud function before reading notic
   assert.ok(wxMock.cloudCalls.some((call) => call.name === 'ftExpiryReminder'));
 });
 
-test('home expiry reminder modal marks shown reminders read after confirm', async () => {
+test('home expiry reminder panel marks shown reminders read after confirm', async () => {
   const wxMock = createWxMock({
     'findThings.containers': [],
     'findThings.items': [
@@ -234,20 +256,151 @@ test('home expiry reminder modal marks shown reminders read after confirm', asyn
   const page = loadHomePage(wxMock);
   const context = createPageContext(page, Object.assign({}, page.data, {
     expiryReminderNotices: [{ _id: 'notice_due_item', itemId: 'due_item', displayName: 'Milk', message: 'Milk 已过期，请及时处理。' }],
+    expiryReminderDetails: [{ _id: 'notice_due_item', displayName: 'Milk', containerText: 'Fridge', expiryDateText: '2026-06-10', remainingDaysText: '还有 9 天', imagePath: '/tmp/milk.jpg' }],
     expiryReminderCount: 1,
     expiryReminderPreview: 'Milk 已过期，请及时处理。',
     showExpiryReminderEntry: true
   }));
 
   await withWx(wxMock, () => page.openExpiryReminders.call(context));
+  assert.equal(context.data.showExpiryReminderPanel, true);
+  assert.equal(wxMock.modals.length, 0);
+
+  await withWx(wxMock, () => page.confirmExpiryReminderDetails.call(context));
   await new Promise((resolve) => setImmediate(resolve));
 
-  assert.equal(wxMock.modals.length, 1);
   assert.equal(wxMock.storage['findThings.reminderNotices'][0].status, 'read');
   assert.equal(wxMock.storage['findThings.items'][0].inAppReadAt > 0, true);
+  assert.deepEqual(wxMock.toasts.at(-1), { title: '小懒先帮你收起啦', icon: 'none' });
   assert.equal(context.data.expiryReminderCount, 0);
   assert.equal(context.data.showExpiryReminderEntry, false);
+  assert.equal(context.data.showExpiryReminderPanel, false);
   assert.equal(context.loadCalls, 1);
+});
+
+test('home expiry reminder panel lists all due item details after tapping see', async () => {
+  const wxMock = createWxMock({
+    'findThings.containers': [],
+    'findThings.items': [],
+    'findThings.reminderNotices': [
+      { _id: 'notice_milk', displayName: '牛奶', status: 'pending' },
+      { _id: 'notice_vitamin', displayName: '维生素', status: 'pending' },
+      { _id: 'notice_mask', displayName: '面膜', status: 'pending' },
+      { _id: 'notice_spray', displayName: '喷雾', status: 'pending' },
+      { _id: 'notice_tea', displayName: '茶包', status: 'pending' }
+    ]
+  });
+  const page = loadHomePage(wxMock);
+  const notices = [
+    { _id: 'notice_milk', displayName: '牛奶', imagePath: '/tmp/milk.jpg', containerName: '冰箱', expiresAt: new Date('2026-06-03T23:59:59+08:00').getTime() },
+    { _id: 'notice_vitamin', displayName: '维生素', imagePath: '/tmp/vitamin.jpg', containerLocation: '卧室抽屉', containerName: '药盒', expiresAt: new Date('2026-06-04T23:59:59+08:00').getTime() },
+    { _id: 'notice_mask', displayName: '面膜', imagePath: '/tmp/mask.jpg', containerName: '浴室柜', expiresAt: new Date('2026-06-05T23:59:59+08:00').getTime() },
+    { _id: 'notice_spray', displayName: '喷雾', imagePath: '/tmp/spray.jpg', containerName: '玄关柜', expiresAt: new Date('2026-06-06T23:59:59+08:00').getTime() },
+    { _id: 'notice_tea', displayName: '茶包', imagePath: '/tmp/tea.jpg', containerName: '厨房储物盒', expiresAt: new Date('2026-06-07T23:59:59+08:00').getTime() }
+  ];
+  const context = createPageContext(page, Object.assign({}, page.data, {
+    expiryReminderNotices: notices,
+    expiryReminderDetails: [],
+    expiryReminderCount: notices.length,
+    expiryReminderPreview: '牛奶、维生素、面膜要到期啦，另外还有 2 件也快到期啦。',
+    showExpiryReminderEntry: true
+  }));
+  const originalDateNow = Date.now;
+  Date.now = () => new Date('2026-06-01T10:00:00+08:00').getTime();
+
+  try {
+    await withWx(wxMock, () => page.openExpiryReminders.call(context));
+  } finally {
+    Date.now = originalDateNow;
+  }
+
+  assert.equal(context.data.showExpiryReminderPanel, true);
+  assert.equal(context.data.expiryReminderDetails.length, 5);
+  assert.deepEqual(context.data.expiryReminderDetails.map((item) => item.displayName), ['牛奶', '维生素', '面膜', '喷雾', '茶包']);
+  assert.deepEqual(context.data.expiryReminderDetails.map((item) => item.imagePath), ['/tmp/milk.jpg', '/tmp/vitamin.jpg', '/tmp/mask.jpg', '/tmp/spray.jpg', '/tmp/tea.jpg']);
+  assert.equal(context.data.expiryReminderDetails[1].containerText, '卧室抽屉 / 药盒');
+  assert.equal(context.data.expiryReminderDetails[0].expiryDateText, '2026-06-03');
+  assert.equal(context.data.expiryReminderDetails[0].remainingDaysText, '还有 2 天');
+});
+
+test('home expiry reminder panel backfills legacy notice images and container text', async () => {
+  const now = new Date('2026-06-01T10:00:00+08:00').getTime();
+  const wxMock = createWxMock({
+    'findThings.containers': [
+      {
+        _id: 'box',
+        name: '冰箱上层',
+        locationPath: '厨房',
+        contentImages: [
+          {
+            imageId: 'image_milk',
+            fileId: 'cloud://env/find-things/content/milk.jpg',
+            thumbFileId: 'cloud://env/find-things/thumbs/milk.jpg'
+          }
+        ],
+        createdAt: 1,
+        updatedAt: 1,
+        deletedAt: null
+      }
+    ],
+    'findThings.items': [
+      {
+        _id: 'milk',
+        containerId: 'box',
+        displayName: '牛奶',
+        sourceImageId: 'image_milk',
+        sourceImageFileId: 'cloud://env/find-things/content/milk.jpg',
+        expiresAt: new Date('2026-06-03T23:59:59+08:00').getTime(),
+        reminderEnabled: true,
+        subscribeAccepted: false,
+        reminderChannel: 'inApp',
+        remindAt: now - 1,
+        remindedAt: 0,
+        deletedAt: null
+      }
+    ],
+    'findThings.reminderNotices': [
+      {
+        _id: `expiry_milk_${now - 1}`,
+        itemId: 'milk',
+        containerId: 'box',
+        displayName: '牛奶',
+        status: 'pending',
+        remindAt: now - 1,
+        expiresAt: new Date('2026-06-03T23:59:59+08:00').getTime()
+      }
+    ]
+  });
+  wxMock.cloud.getTempFileURL = ({ fileList, success }) => {
+    success({
+      fileList: fileList.map((file) => ({
+        fileID: file.fileID,
+        tempFileURL: `https://display.example.com/${file.fileID.split('/').pop()}`
+      }))
+    });
+  };
+  const page = loadHomePage(wxMock);
+  const context = Object.assign({}, page, {
+    data: Object.assign({}, page.data),
+    setData(patch) {
+      this.data = Object.assign({}, this.data, patch);
+    },
+    ensureRecentThumbnails() {}
+  });
+  const originalDateNow = Date.now;
+  Date.now = () => now;
+
+  try {
+    await withWx(wxMock, () => page.load.call(context));
+  } finally {
+    Date.now = originalDateNow;
+  }
+
+  assert.equal(context.data.expiryReminderDetails.length, 1);
+  assert.equal(context.data.expiryReminderDetails[0].imagePath, 'https://display.example.com/milk.jpg');
+  assert.equal(context.data.expiryReminderDetails[0].hasImage, true);
+  assert.equal(context.data.expiryReminderDetails[0].showImagePlaceholder, false);
+  assert.equal(context.data.expiryReminderDetails[0].containerText, '厨房 / 冰箱上层');
 });
 
 test('home page does not upgrade future reminders from subscription settings alone', async () => {
@@ -399,5 +552,5 @@ test('home page shows pending reminder notices from the notice table', async () 
   assert.equal(context.data.showExpiryReminderEntry, true);
   assert.equal(context.data.expiryReminderCount, 1);
   assert.equal(context.data.expiryReminderNotices[0]._id, 'notice_expired_item');
-  assert.equal(context.data.expiryReminderPreview, 'Expired spray 已过期，请及时处理。');
+  assert.equal(context.data.expiryReminderPreview, 'Expired spray要到期啦。');
 });

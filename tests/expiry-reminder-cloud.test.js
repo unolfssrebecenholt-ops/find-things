@@ -265,6 +265,9 @@ test('main sends subscribe messages and stores success updates', async () => {
         displayName: 'Milk',
         expiresAt: now + 86400000,
         containerName: 'Fridge',
+        locationText: '上层左侧',
+        sourceImageFileId: 'cloud://env/find-things/content/milk.jpg',
+        sourceImageThumbFileId: 'cloud://env/find-things/thumbs/milk.jpg',
         reminderEnabled: true,
         subscribeAccepted: true,
         remindAt: now - 1,
@@ -302,6 +305,9 @@ test('main sends subscribe messages and stores success updates', async () => {
   assert.equal(notice.pushStatus, 'sent');
   assert.equal(notice.channel, 'subscribe');
   assert.equal(notice.sentAt, now);
+  assert.equal(notice.locationText, '上层左侧');
+  assert.equal(notice.sourceImageFileId, 'cloud://env/find-things/content/milk.jpg');
+  assert.equal(notice.thumbFileId, 'cloud://env/find-things/thumbs/milk.jpg');
   assert.match(notice.message, /Milk/);
 });
 
@@ -312,7 +318,18 @@ test('main creates in-app notice records for rejected subscriptions without push
   const sends = [];
   const collections = {
     ft_containers: {
-      active: { _id: 'active', name: 'Pantry', locationPath: 'Kitchen' }
+      active: {
+        _id: 'active',
+        name: 'Pantry',
+        locationPath: 'Kitchen',
+        contentImages: [
+          {
+            imageId: 'inside_1',
+            fileId: 'cloud://env/find-things/content/pantry.jpg',
+            thumbFileId: 'cloud://env/find-things/thumbs/pantry.jpg'
+          }
+        ]
+      }
     },
     ft_items: {
       milk: {
@@ -321,6 +338,7 @@ test('main creates in-app notice records for rejected subscriptions without push
         containerId: 'active',
         displayName: 'Milk',
         expiresAt: now - 1,
+        sourceImageId: 'inside_1',
         reminderEnabled: true,
         subscribeAccepted: false,
         reminderChannel: 'inApp',
@@ -348,7 +366,59 @@ test('main creates in-app notice records for rejected subscriptions without push
   assert.equal(notice.status, 'pending');
   assert.equal(notice.pushStatus, 'none');
   assert.equal(notice.channel, 'inApp');
+  assert.equal(notice.locationPath, 'Kitchen');
+  assert.equal(notice.containerName, 'Pantry');
+  assert.equal(notice.sourceImageFileId, 'cloud://env/find-things/content/pantry.jpg');
+  assert.equal(notice.thumbFileId, 'cloud://env/find-things/thumbs/pantry.jpg');
   assert.equal(notice.message, 'Milk 已过期，请及时处理。');
+});
+
+test('main records in-app fallbacks when only part of a batch has subscribe quota', async () => {
+  const now = Date.UTC(2026, 4, 31, 9);
+  const updates = [];
+  const sends = [];
+  const sendFailures = [];
+  const collections = {
+    ft_containers: {
+      active: { _id: 'active', name: 'Pantry' }
+    },
+    ft_items: {}
+  };
+  for (let index = 0; index < 8; index += 1) {
+    collections.ft_items[`item_${index}`] = {
+      _id: `item_${index}`,
+      _openid: 'user-openid',
+      containerId: 'active',
+      displayName: `物品${index + 1}`,
+      reminderEnabled: true,
+      subscribeAccepted: true,
+      remindAt: now - 1 - index,
+      expiresAt: now + 86400000,
+      remindedAt: 0
+    };
+  }
+  const cloud = createMockCloud({ collections, updates, sends });
+  cloud.openapi.subscribeMessage.send = (payload) => {
+    sends.push(payload);
+    if (sends.length > 2) {
+      const error = new Error('quota exhausted');
+      sendFailures.push(payload.data.thing5.value);
+      return Promise.reject(error);
+    }
+    return Promise.resolve({});
+  };
+  const expiryReminder = loadExpiryReminderFunction({ cloud });
+
+  const result = await expiryReminder.main({ now, templateId: 'template-id' }, {});
+
+  assert.equal(result.scanned, 8);
+  assert.equal(result.sent, 2);
+  assert.equal(result.failed, 6);
+  assert.equal(sends.length, 8);
+  assert.equal(sendFailures.length, 6);
+  assert.equal(Object.values(collections.ft_reminder_notices).length, 8);
+  assert.equal(Object.values(collections.ft_reminder_notices).filter((notice) => notice.pushStatus === 'sent').length, 2);
+  assert.equal(Object.values(collections.ft_reminder_notices).filter((notice) => notice.pushStatus === 'failed' && notice.channel === 'inApp').length, 6);
 });
 
 test('main writes notices without sending _id in document data', async () => {

@@ -99,7 +99,7 @@ function shouldRefreshReminderAuthorization(item) {
   return item
     && item.reminderEnabled === true
     && item.expiresAt
-    && item.subscribeAccepted !== true;
+    && item.confirmed !== false;
 }
 
 function refreshReminderAuthorizationForSave(items) {

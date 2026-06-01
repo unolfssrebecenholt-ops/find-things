@@ -122,3 +122,47 @@ test('container save requests a fresh subscribe quota before persisting reminder
   assert.equal(savedItems[0].reminderEnabled, true);
   assert.equal(savedItems[0].remindOffsetDays, 0);
 });
+
+test('container save refreshes subscribe quota even for previously accepted reminder items', async () => {
+  const expiresAt = Date.UTC(2026, 5, 1, 15, 59, 59, 999);
+  const wxMock = createWxMock({
+    'findThings.containers': [],
+    'findThings.items': []
+  });
+  const page = loadEditPage(wxMock);
+  const context = createPageContext(page, {
+    name: 'Reminder box',
+    locationPath: 'Shelf',
+    contentImages: [],
+    items: [
+      {
+        displayName: 'Milk',
+        confirmed: true,
+        expiresAt,
+        remindAt: expiresAt,
+        remindOffsetDays: 0,
+        reminderEnabled: true,
+        subscribeAccepted: true,
+        reminderChannel: 'subscribe'
+      },
+      {
+        displayName: 'Mask',
+        confirmed: true,
+        expiresAt,
+        remindAt: expiresAt,
+        remindOffsetDays: 0,
+        reminderEnabled: true,
+        subscribeAccepted: true,
+        reminderChannel: 'subscribe'
+      }
+    ]
+  });
+
+  await withWx(wxMock, () => page.save.call(context));
+
+  const savedItems = wxMock.storage['findThings.items'];
+  assert.equal(wxMock.subscribeRequests.length, 2);
+  assert.equal(savedItems.length, 2);
+  assert.equal(savedItems.every((item) => item.subscribeAccepted === true), true);
+  assert.equal(savedItems.every((item) => item.reminderChannel === 'subscribe'), true);
+});

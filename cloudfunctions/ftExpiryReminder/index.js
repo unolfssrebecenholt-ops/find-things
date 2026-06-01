@@ -279,6 +279,61 @@ function buildContainerMap(containers) {
   }, {});
 }
 
+function firstText(values) {
+  const list = Array.isArray(values) ? values : [values];
+  for (let index = 0; index < list.length; index += 1) {
+    const value = list[index];
+    if (value === undefined || value === null) continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function imageFileId(image) {
+  return firstText([
+    image && image.fileId,
+    image && image.fileID,
+    image && image.imageFileId,
+    image && image.imagePath,
+    image && image.url
+  ]);
+}
+
+function imageThumbFileId(image) {
+  return firstText([
+    image && image.thumbFileId,
+    image && image.thumbnailFileId,
+    image && image.previewFileId,
+    image && image.thumb_file_id
+  ]);
+}
+
+function findSourceImage(item, container) {
+  const images = (container && container.contentImages) || [];
+  const sourceImageId = firstText([
+    item && item.sourceImageId,
+    item && item.imageId,
+    item && item.image_id
+  ]);
+  const sourceImageFileId = firstText([
+    item && item.sourceImageFileId,
+    item && item.imageFileId,
+    item && item.imagePath
+  ]);
+  return images.find((image) => sourceImageId && image && image.imageId === sourceImageId)
+    || images.find((image) => sourceImageFileId && imageFileId(image) === sourceImageFileId)
+    || null;
+}
+
+function reminderLocationText(item) {
+  return firstText([
+    item && item.locationText,
+    item && item.relativePosition,
+    item && item.positionText
+  ]);
+}
+
 function findExistingNotice(notices, item) {
   const noticeId = noticeIdForItem(item);
   return (notices || []).find((notice) => notice && notice._id === noticeId)
@@ -297,6 +352,7 @@ function buildNoticeMessage(item) {
 
 function buildReminderNotice(item, container, existingNotice, timestamp) {
   const existing = existingNotice || {};
+  const sourceImage = findSourceImage(item, container);
   const remindedAt = toTimestamp(item && item.remindedAt);
   const subscribeAccepted = item && item.subscribeAccepted === true;
   const pushStatus = existing.pushStatus || (remindedAt ? 'sent' : 'none');
@@ -311,6 +367,30 @@ function buildReminderNotice(item, container, existingNotice, timestamp) {
     _openid: item._openid || existing._openid || '',
     displayName: String(item.displayName || item.name || existing.displayName || '物品'),
     containerName: String(item.containerName || (container && (container.name || container.locationPath)) || existing.containerName || ''),
+    locationPath: String((container && container.locationPath) || existing.locationPath || ''),
+    locationText: reminderLocationText(item) || String(existing.locationText || ''),
+    thumbFileId: firstText([
+      existing.thumbFileId,
+      item && item.thumbFileId,
+      item && item.sourceImageThumbFileId,
+      imageThumbFileId(sourceImage),
+      container && container.contentThumbFileId
+    ]),
+    sourceImageFileId: firstText([
+      existing.sourceImageFileId,
+      item && item.sourceImageFileId,
+      item && item.imagePath,
+      imageFileId(sourceImage),
+      container && container.contentImageFileId
+    ]),
+    contentImageFileId: firstText([
+      existing.contentImageFileId,
+      container && container.contentImageFileId
+    ]),
+    contentThumbFileId: firstText([
+      existing.contentThumbFileId,
+      container && container.contentThumbFileId
+    ]),
     message: existing.message || buildNoticeMessage(item),
     expiresAt: toTimestamp(item.expiresAt || item.remindAt),
     remindAt: toTimestamp(item.remindAt),

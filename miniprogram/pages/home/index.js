@@ -102,9 +102,241 @@ function triggerExpiryReminderScan(useDatabase) {
 }
 
 function reminderPreview(notices) {
-  const first = (notices || [])[0];
-  if (!first) return '';
-  return first.message || `${first.displayName || first.name || '物品'} 已过期，请及时处理。`;
+  return createXiaolanReminderSummary(notices);
+}
+
+function reminderName(notice) {
+  const name = notice && (notice.displayName || notice.name || notice.itemName);
+  return name || '有件物品';
+}
+
+function firstText(values) {
+  const list = Array.isArray(values) ? values : [values];
+  for (let index = 0; index < list.length; index += 1) {
+    const value = list[index];
+    if (value === undefined || value === null) continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function createXiaolanReminderSummary(notices) {
+  const list = (notices || []).filter(Boolean);
+  if (!list.length) return '';
+  const names = list.slice(0, 3).map(reminderName).join('、');
+  const remaining = Math.max(0, list.length - 3);
+  return remaining > 0
+    ? `${names}要到期啦，另外还有 ${remaining} 件也快到期啦。`
+    : `${names}要到期啦。`;
+}
+
+function toTimestamp(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+function formatDate(timestamp) {
+  const value = toTimestamp(timestamp);
+  if (!value) return '未设置日期';
+  return new Date(value + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function remainingDaysText(expiresAt, now) {
+  const expiry = toTimestamp(expiresAt);
+  if (!expiry) return '';
+  const dayMs = 24 * 60 * 60 * 1000;
+  const beijingOffset = 8 * 60 * 60 * 1000;
+  const today = Math.floor((toTimestamp(now) + beijingOffset) / dayMs);
+  const expiryDay = Math.floor((expiry + beijingOffset) / dayMs);
+  const days = expiryDay - today;
+  if (days < 0) return `已过期 ${Math.abs(days)} 天`;
+  if (days === 0) return '今天到期';
+  return `还有 ${days} 天`;
+}
+
+function detailImagePath(notice) {
+  return (notice && (
+    notice.thumbFileId
+    || notice.sourceImageThumbFileId
+    || notice.contentThumbFileId
+    || notice.imagePath
+    || notice.photo
+    || notice.coverPhoto
+    || notice.sourceImageFileId
+    || notice.contentImageFileId
+  )) || '';
+}
+
+function containerText(notice) {
+  const location = notice && (notice.containerLocation || notice.locationPath || notice.locationText);
+  const name = notice && (notice.containerName || notice.boxName);
+  return [location, name].filter(Boolean).join(' / ') || '未填写位置';
+}
+
+function mapById(records) {
+  return (records || []).reduce((map, record) => {
+    if (record && record._id) map[record._id] = record;
+    return map;
+  }, {});
+}
+
+function itemContainerId(item) {
+  return firstText([
+    item && item.containerId,
+    item && item.parentId,
+    item && item.container_id
+  ]);
+}
+
+function imageFileId(image) {
+  return firstText([
+    image && image.fileId,
+    image && image.fileID,
+    image && image.imageFileId,
+    image && image.imagePath
+  ]);
+}
+
+function imageThumbFileId(image) {
+  return firstText([
+    image && image.thumbFileId,
+    image && image.thumbnailFileId,
+    image && image.previewFileId
+  ]);
+}
+
+function findSourceImage(item, container) {
+  const images = (container && container.contentImages) || [];
+  const sourceImageId = firstText([
+    item && item.sourceImageId,
+    item && item.imageId,
+    item && item.image_id
+  ]);
+  const sourceImageFileId = firstText([
+    item && item.sourceImageFileId,
+    item && item.imageFileId,
+    item && item.imagePath
+  ]);
+  return images.find((image) => sourceImageId && image && image.imageId === sourceImageId)
+    || images.find((image) => sourceImageFileId && imageFileId(image) === sourceImageFileId)
+    || null;
+}
+
+function findNoticeItem(notice, itemsById, items) {
+  const itemId = firstText(notice && notice.itemId);
+  if (itemId && itemsById[itemId]) return itemsById[itemId];
+  const name = firstText(notice && [notice.displayName, notice.name, notice.itemName]);
+  const remindAt = toTimestamp(notice && notice.remindAt);
+  return (items || []).find((item) => (
+    name
+    && reminderName(item) === name
+    && (!remindAt || toTimestamp(item && item.remindAt) === remindAt)
+  )) || null;
+}
+
+function findNoticeContainer(notice, item, containersById) {
+  const containerId = firstText([
+    notice && notice.containerId,
+    itemContainerId(item)
+  ]);
+  return containerId ? containersById[containerId] || null : null;
+}
+
+function enrichReminderNotice(notice, itemsById, containersById, items) {
+  const item = findNoticeItem(notice, itemsById, items);
+  const container = findNoticeContainer(notice, item, containersById);
+  const sourceImage = findSourceImage(item, container);
+  const containerPreview = getContainerPreview(container || {});
+  const thumbFileId = firstText([
+    notice && notice.thumbFileId,
+    notice && notice.sourceImageThumbFileId,
+    item && item.thumbFileId,
+    item && item.sourceImageThumbFileId,
+    imageThumbFileId(sourceImage),
+    container && container.contentThumbFileId,
+    containerPreview.thumb
+  ]);
+  const sourceImageFileId = firstText([
+    notice && notice.sourceImageFileId,
+    notice && notice.contentImageFileId,
+    item && item.sourceImageFileId,
+    item && item.imagePath,
+    imageFileId(sourceImage),
+    container && container.contentImageFileId,
+    containerPreview.original
+  ]);
+  return Object.assign({}, notice, {
+    displayName: firstText([
+      notice && notice.displayName,
+      item && item.displayName,
+      item && item.name
+    ]) || reminderName(notice),
+    containerName: firstText([
+      notice && notice.containerName,
+      notice && notice.boxName,
+      item && item.containerName,
+      container && container.name
+    ]),
+    locationPath: firstText([
+      notice && notice.locationPath,
+      notice && notice.containerLocation,
+      container && container.locationPath
+    ]),
+    locationText: firstText([
+      notice && notice.locationText,
+      item && item.locationText,
+      item && item.relativePosition
+    ]),
+    thumbFileId,
+    sourceImageFileId,
+    contentThumbFileId: firstText([
+      notice && notice.contentThumbFileId,
+      container && container.contentThumbFileId
+    ]),
+    contentImageFileId: firstText([
+      notice && notice.contentImageFileId,
+      container && container.contentImageFileId
+    ])
+  });
+}
+
+function enrichReminderNotices(notices, items, containers) {
+  const itemsById = mapById(items);
+  const containersById = mapById(containers);
+  return (notices || []).map((notice) => enrichReminderNotice(notice, itemsById, containersById, items || []));
+}
+
+function createReminderDetails(notices, now) {
+  const timestamp = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+  return (notices || []).filter(Boolean).map((notice) => Object.assign({}, notice, {
+    displayName: reminderName(notice),
+    imagePath: detailImagePath(notice),
+    hasImage: !!detailImagePath(notice),
+    showImagePlaceholder: !detailImagePath(notice),
+    containerText: containerText(notice),
+    expiryDateText: formatDate(notice.expiresAt || notice.remindAt),
+    remainingDaysText: remainingDaysText(notice.expiresAt || notice.remindAt, timestamp)
+  }));
+}
+
+function collectReminderImagePaths(details) {
+  return (details || []).map((detail) => detail && detail.imagePath).filter(Boolean);
+}
+
+function resolveReminderDetails(details) {
+  const paths = collectReminderImagePaths(details);
+  if (!imageDisplay.hasResolvablePath(paths)) return Promise.resolve(details || []);
+  return imageDisplay.resolveImagePaths(paths).then((resolvedPaths) => (
+    (details || []).map((detail) => {
+      const imagePath = imageDisplay.pickDisplayPath([detail.imagePath], resolvedPaths);
+      return Object.assign({}, detail, {
+        imagePath,
+        hasImage: !!imagePath,
+        showImagePlaceholder: !imagePath
+      });
+    })
+  ));
 }
 
 Page({
@@ -114,8 +346,10 @@ Page({
     showEmptyRecentContainers: true,
     expiryReminderCount: 0,
     expiryReminderNotices: [],
+    expiryReminderDetails: [],
     expiryReminderPreview: '',
-    showExpiryReminderEntry: false
+    showExpiryReminderEntry: false,
+    showExpiryReminderPanel: false
   },
 
   onShow() {
@@ -160,17 +394,22 @@ Page({
           ? rendered.then(apply)
           : apply(rendered);
       })
-      .then(({ visibleContainers, recentContainers, expiryReminderNotices }) => {
-        this.setData({
-          recentContainers,
-          hasRecentContainers: recentContainers.length > 0,
-          showEmptyRecentContainers: recentContainers.length === 0,
-          expiryReminderNotices,
-          expiryReminderPreview: reminderPreview(expiryReminderNotices),
-          expiryReminderCount: expiryReminderNotices.length,
-          showExpiryReminderEntry: expiryReminderNotices.length > 0
+      .then(({ containers, items, visibleContainers, recentContainers, expiryReminderNotices }) => {
+        const enrichedNotices = enrichReminderNotices(expiryReminderNotices, items, containers);
+        const details = createReminderDetails(enrichedNotices);
+        return resolveReminderDetails(details).then((expiryReminderDetails) => {
+          this.setData({
+            recentContainers,
+            hasRecentContainers: recentContainers.length > 0,
+            showEmptyRecentContainers: recentContainers.length === 0,
+            expiryReminderNotices: enrichedNotices,
+            expiryReminderDetails,
+            expiryReminderPreview: reminderPreview(enrichedNotices),
+            expiryReminderCount: enrichedNotices.length,
+            showExpiryReminderEntry: enrichedNotices.length > 0
+          });
+          this.ensureRecentThumbnails(visibleContainers);
         });
-        this.ensureRecentThumbnails(visibleContainers);
       })
       .catch(showDataError);
   },
@@ -205,28 +444,40 @@ Page({
 
   openExpiryReminders() {
     const notices = this.data.expiryReminderNotices || [];
-    const messages = notices.slice(0, 3).map((notice) => notice.message || `${notice.displayName || notice.name || '物品'} 已过期，请及时处理。`);
-    wx.showModal({
-      title: '到期提醒',
-      content: messages.length ? messages.join('、') : '暂无需要处理的到期提醒',
-      showCancel: false,
-      confirmColor: '#1f6048',
-      success: (result) => {
-        if (!result || !result.confirm) return;
-        const service = getStorageService();
-        markExpiryRemindersRead(service, notices)
-          .then(() => {
-            this.setData({
-              expiryReminderNotices: [],
-              expiryReminderPreview: '',
-              expiryReminderCount: 0,
-              showExpiryReminderEntry: false
-            });
-            this.load();
-          })
-          .catch(showDataError);
-      }
-    });
+    const details = createReminderDetails(notices);
+    return resolveReminderDetails(details).then((expiryReminderDetails) => this.setData({
+      expiryReminderDetails,
+      showExpiryReminderPanel: true
+    }));
+  },
+
+  closeExpiryReminderDetails() {
+    this.setData({ showExpiryReminderPanel: false });
+  },
+
+  confirmExpiryReminderDetails() {
+    const wxAdapter = wx;
+    const notices = this.data.expiryReminderNotices || [];
+    const service = getStorageService();
+    return markExpiryRemindersRead(service, notices)
+      .then(() => {
+        this.setData({
+          expiryReminderNotices: [],
+          expiryReminderDetails: [],
+          expiryReminderPreview: '',
+          expiryReminderCount: 0,
+          showExpiryReminderEntry: false,
+          showExpiryReminderPanel: false
+        });
+        wxAdapter.showToast({ title: '小懒先帮你收起啦', icon: 'none' });
+        this.load();
+      })
+      .catch((error) => {
+        wxAdapter.showToast({
+          title: error && error.message ? error.message : '数据同步失败',
+          icon: 'none'
+        });
+      });
   },
 
   openContainer(event) {

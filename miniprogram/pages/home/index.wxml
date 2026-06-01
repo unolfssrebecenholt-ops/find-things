@@ -24,11 +24,50 @@
   </view>
 
   <view wx:if="{{showExpiryReminderEntry}}" class="expiry-reminder-entry" bindtap="openExpiryReminders">
+    <view class="expiry-reminder-mascot">
+      <image mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
+    </view>
     <view class="expiry-reminder-copy">
-      <text class="expiry-reminder-title">到期公示 · {{expiryReminderCount}} 条</text>
+      <text class="expiry-reminder-title">小懒盯到 {{expiryReminderCount}} 件快到期</text>
       <text class="subtle">{{expiryReminderPreview}}</text>
     </view>
-    <text class="expiry-reminder-action">知道了</text>
+    <text class="expiry-reminder-action">看看</text>
+  </view>
+
+  <view wx:if="{{showExpiryReminderPanel}}" class="expiry-reminder-sheet">
+    <view class="expiry-reminder-scrim" bindtap="closeExpiryReminderDetails"></view>
+    <view class="expiry-reminder-panel">
+      <view class="expiry-reminder-panel-head">
+        <view>
+          <text class="expiry-reminder-panel-title">小懒提醒你</text>
+          <text class="expiry-reminder-panel-subtitle">{{expiryReminderPreview}}</text>
+        </view>
+        <button class="expiry-reminder-close" bindtap="closeExpiryReminderDetails">×</button>
+      </view>
+      <scroll-view class="expiry-reminder-detail-list" scroll-y="{{true}}">
+        <view
+          wx:for="{{expiryReminderDetails}}"
+          wx:key="_id"
+          class="expiry-reminder-detail"
+        >
+          <view class="expiry-reminder-detail-photo">
+            <image wx:if="{{item.hasImage}}" mode="aspectFill" lazy-load="{{true}}" src="{{item.imagePath}}"></image>
+            <image wx:if="{{item.showImagePlaceholder}}" mode="aspectFit" src="/assets/xiaolan-sloth.svg"></image>
+          </view>
+          <view class="expiry-reminder-detail-copy">
+            <text class="expiry-detail-name">{{item.displayName}}</text>
+            <text class="expiry-detail-location">{{item.containerText}}</text>
+            <view class="expiry-detail-meta">
+              <text class="expiry-detail-date">{{item.expiryDateText}}</text>
+              <text class="expiry-detail-days">{{item.remainingDaysText}}</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+      <view class="expiry-reminder-action-bar">
+        <button class="expiry-reminder-done" bindtap="confirmExpiryReminderDetails">我知道啦</button>
+      </view>
+    </view>
   </view>
 
   <view class="section-row">
