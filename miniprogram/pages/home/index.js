@@ -5,8 +5,6 @@ const imageThumbs = require('../../services/image-thumbs');
 const imageDisplay = require('../../services/image-display');
 const { navigateHome } = require('../../utils/navigation');
 
-let expiryReminderService = null;
-
 function getStorageService() {
   if (!storageService) {
     try {
@@ -16,17 +14,6 @@ function getStorageService() {
     }
   }
   return storageService;
-}
-
-function getExpiryReminderService() {
-  if (!expiryReminderService) {
-    try {
-      expiryReminderService = require('../../services/expiry-reminder');
-    } catch (error) {
-      expiryReminderService = null;
-    }
-  }
-  return expiryReminderService;
 }
 
 function showDataError(error) {
@@ -48,26 +35,6 @@ function markExpiryRemindersRead(service, notices) {
 
   const readAt = Date.now();
   return Promise.all(targetNotices.map((notice) => markRead(notice._id, readAt)));
-}
-
-function refreshFutureReminderSubscriptions(service, reminderService) {
-  if (!service || !reminderService || typeof wx === 'undefined') {
-    return Promise.resolve();
-  }
-  if (typeof reminderService.readAcceptedSubscriptionSetting !== 'function') {
-    return Promise.resolve();
-  }
-  const upgrade = typeof service.upgradeFutureReminderSubscriptionsAsync === 'function'
-    ? service.upgradeFutureReminderSubscriptionsAsync.bind(service)
-    : typeof service.upgradeFutureReminderSubscriptions === 'function'
-      ? (timestamp) => Promise.resolve(service.upgradeFutureReminderSubscriptions(timestamp))
-      : null;
-  if (!upgrade) return Promise.resolve();
-
-  return reminderService.readAcceptedSubscriptionSetting(wx).then((setting) => {
-    if (!setting || !setting.accepted) return null;
-    return upgrade(Date.now());
-  });
 }
 
 function getContainerStatus(container, index) {
@@ -157,10 +124,9 @@ Page({
 
   load() {
     const service = getStorageService();
-    const reminderService = getExpiryReminderService();
     const useDatabase = service && typeof service.isDatabaseAvailable === 'function' && service.isDatabaseAvailable();
     const loadData = useDatabase && typeof service.removeDemoDataAsync === 'function'
-      ? service.removeDemoDataAsync().then(() => refreshFutureReminderSubscriptions(service, reminderService)).then(() => triggerExpiryReminderScan(true)).then(() => {
+      ? service.removeDemoDataAsync().then(() => triggerExpiryReminderScan(true)).then(() => {
         if (service && typeof service.loadFromDatabase === 'function') return service.loadFromDatabase();
         return null;
       }).then(() => Promise.all([
@@ -168,7 +134,7 @@ Page({
         typeof service.listUserItemsAsync === 'function' ? service.listUserItemsAsync() : [],
         listReminderNotices(service, true)
       ]))
-      : refreshFutureReminderSubscriptions(service, reminderService).then(() => ([
+      : Promise.resolve([
           service
             ? (typeof service.listUserContainers === 'function' ? service.listUserContainers() : service.listContainers())
             : [],
@@ -178,7 +144,7 @@ Page({
           service && typeof service.listPendingReminderNotices === 'function'
             ? service.listPendingReminderNotices()
             : []
-        ]));
+        ]);
 
     return loadData
       .then(([containers, items, reminderNotices]) => {

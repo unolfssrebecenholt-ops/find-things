@@ -7,6 +7,7 @@ function createWxMock(initialStorage) {
   return {
     storage,
     toasts: [],
+    subscribeRequests: [],
     navigatedHome: false,
     getStorageSync(key) {
       return storage[key];
@@ -33,8 +34,11 @@ function createWxMock(initialStorage) {
         }
       });
     },
-    requestSubscribeMessage() {
-      throw new Error('save should use existing subscription setting without prompting');
+    requestSubscribeMessage(options) {
+      this.subscribeRequests.push(options);
+      options.success({
+        YQ16_zieaD46dXPv_mMrSGIkR6WLLpc9fxMFF1q5jEI: 'accept'
+      });
     }
   };
 }
@@ -83,7 +87,7 @@ function withWx(wxMock, callback) {
     });
 }
 
-test('container save refreshes accepted subscribe settings before persisting reminder items', async () => {
+test('container save requests a fresh subscribe quota before persisting reminder items', async () => {
   const expiresAt = Date.UTC(2026, 5, 1, 15, 59, 59, 999);
   const wxMock = createWxMock({
     'findThings.containers': [],
@@ -111,6 +115,7 @@ test('container save refreshes accepted subscribe settings before persisting rem
   await withWx(wxMock, () => page.save.call(context));
 
   const savedItems = wxMock.storage['findThings.items'];
+  assert.equal(wxMock.subscribeRequests.length, 1);
   assert.equal(savedItems.length, 1);
   assert.equal(savedItems[0].subscribeAccepted, true);
   assert.equal(savedItems[0].reminderChannel, 'subscribe');

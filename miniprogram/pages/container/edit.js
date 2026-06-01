@@ -107,22 +107,25 @@ function refreshReminderAuthorizationForSave(items) {
     return Promise.resolve(items || []);
   }
   if (typeof wx === 'undefined') return Promise.resolve(items || []);
+  const initialItems = items || [];
   const targetIndexes = (items || []).reduce((indexes, item, index) => {
     if (shouldRefreshReminderAuthorization(item)) indexes.push(index);
     return indexes;
   }, []);
-  if (!targetIndexes.length) return Promise.resolve(items || []);
+  if (!targetIndexes.length) return Promise.resolve(initialItems);
 
-  return expiryReminder.requestSubscribeAuthorization(wx).then((authorization) => {
-    const accepted = !!(authorization && authorization.accepted);
-    return (items || []).map((item, index) => {
-      if (targetIndexes.indexOf(index) < 0) return item;
-      return Object.assign({}, item, {
-        subscribeAccepted: accepted,
-        reminderChannel: accepted ? 'subscribe' : 'inApp'
+  return targetIndexes.reduce((promise, targetIndex) => (
+    promise.then((currentItems) => expiryReminder.requestSubscribeAuthorization(wx).then((authorization) => {
+      const accepted = !!(authorization && authorization.accepted);
+      return currentItems.map((item, index) => {
+        if (index !== targetIndex) return item;
+        return Object.assign({}, item, {
+          subscribeAccepted: accepted,
+          reminderChannel: accepted ? 'subscribe' : 'inApp'
+        });
       });
-    });
-  });
+    }))
+  ), Promise.resolve(initialItems));
 }
 
 function collectDraftImagePaths(data) {

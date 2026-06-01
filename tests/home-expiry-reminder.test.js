@@ -250,7 +250,7 @@ test('home expiry reminder modal marks shown reminders read after confirm', asyn
   assert.equal(context.loadCalls, 1);
 });
 
-test('home page upgrades future in-app reminders after user later accepts subscription', async () => {
+test('home page does not upgrade future reminders from subscription settings alone', async () => {
   const now = Date.now();
   const wxMock = createWxMock({
     'findThings.containers': [
@@ -290,11 +290,11 @@ test('home page upgrades future in-app reminders after user later accepts subscr
   await withWx(wxMock, () => page.load.call(context));
   await new Promise((resolve) => setImmediate(resolve));
 
-  assert.equal(wxMock.storage['findThings.items'][0].subscribeAccepted, true);
-  assert.equal(wxMock.storage['findThings.items'][0].reminderChannel, 'subscribe');
+  assert.equal(wxMock.storage['findThings.items'][0].subscribeAccepted, false);
+  assert.equal(wxMock.storage['findThings.items'][0].reminderChannel, 'inApp');
 });
 
-test('home page upgrades already due in-app reminders after user later accepts subscription', async () => {
+test('home page does not upgrade already due reminders from subscription settings alone', async () => {
   const now = Date.now();
   const wxMock = createWxMock({
     'findThings.containers': [
@@ -335,8 +335,8 @@ test('home page upgrades already due in-app reminders after user later accepts s
   await withWx(wxMock, () => page.load.call(context));
   await new Promise((resolve) => setImmediate(resolve));
 
-  assert.equal(wxMock.storage['findThings.items'][0].subscribeAccepted, true);
-  assert.equal(wxMock.storage['findThings.items'][0].reminderChannel, 'subscribe');
+  assert.equal(wxMock.storage['findThings.items'][0].subscribeAccepted, false);
+  assert.equal(wxMock.storage['findThings.items'][0].reminderChannel, 'inApp');
 });
 
 test('home page shows pending reminder notices from the notice table', async () => {

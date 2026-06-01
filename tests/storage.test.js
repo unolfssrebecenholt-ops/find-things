@@ -755,7 +755,7 @@ test('async storage reads cloud items with legacy foreign key fields', async () 
   });
 });
 
-test('async storage persists upgraded future subscription reminders to cloud database', async () => {
+test('async storage does not persist subscription upgrades without a fresh request', async () => {
   const now = Date.UTC(2026, 5, 9);
   const mock = createMockWxWithDatabase({
     ft_containers: [
@@ -789,12 +789,9 @@ test('async storage persists upgraded future subscription reminders to cloud dat
     const service = storage.createStorageService();
     const result = await service.upgradeFutureReminderSubscriptionsAsync(now);
 
-    assert.deepEqual(result.updatedIds, ['cloud_future_item']);
+    assert.deepEqual(result.updatedIds, []);
     const writtenItem = mock.writes.find((write) => write.collection === 'ft_items' && write.id === 'cloud_future_item');
-    assert.ok(writtenItem);
-    assert.equal(writtenItem.data.subscribeAccepted, true);
-    assert.equal(writtenItem.data.reminderChannel, 'subscribe');
-    assert.equal(writtenItem.data.lastReminderError, '');
+    assert.equal(writtenItem, undefined);
   });
 });
 
@@ -969,7 +966,7 @@ test('replaceItemsForImage removes legacy items that only match the source image
   );
 });
 
-test('upgrades unread in-app reminders to subscription reminders', () => {
+test('does not upgrade in-app reminders to subscription without a fresh request', () => {
   const now = Date.UTC(2026, 5, 9);
   const service = storage.createStorageService(createMemoryAdapter({
     'findThings.containers': [
@@ -1013,12 +1010,12 @@ test('upgrades unread in-app reminders to subscription reminders', () => {
   const result = service.upgradeFutureReminderSubscriptions(now);
   const items = service.listItems();
 
-  assert.deepEqual(result.updatedIds, ['future_item', 'due_item']);
-  assert.equal(items.find((item) => item._id === 'future_item').subscribeAccepted, true);
-  assert.equal(items.find((item) => item._id === 'future_item').reminderChannel, 'subscribe');
-  assert.equal(items.find((item) => item._id === 'future_item').lastReminderError, '');
-  assert.equal(items.find((item) => item._id === 'due_item').subscribeAccepted, true);
-  assert.equal(items.find((item) => item._id === 'due_item').reminderChannel, 'subscribe');
+  assert.deepEqual(result.updatedIds, []);
+  assert.equal(items.find((item) => item._id === 'future_item').subscribeAccepted, false);
+  assert.equal(items.find((item) => item._id === 'future_item').reminderChannel, 'inApp');
+  assert.equal(items.find((item) => item._id === 'future_item').lastReminderError, 'user refused');
+  assert.equal(items.find((item) => item._id === 'due_item').subscribeAccepted, false);
+  assert.equal(items.find((item) => item._id === 'due_item').reminderChannel, 'inApp');
 });
 
 test('deletes a container and its items', () => {

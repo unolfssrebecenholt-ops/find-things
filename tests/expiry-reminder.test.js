@@ -80,9 +80,9 @@ test('deriveInAppReminders returns unread due reminders', () => {
   assert.deepEqual(reminders.map((item) => item._id), ['a', 'f']);
 });
 
-test('upgrades unread in-app reminders when subscription is accepted later', () => {
+test('does not upgrade in-app reminders from settings-only subscription state', () => {
   const now = Date.UTC(2026, 5, 9);
-  const items = reminder.upgradeFutureInAppReminders([
+  const sourceItems = [
     {
       _id: 'future_in_app',
       expiresAt: Date.UTC(2026, 5, 12),
@@ -125,16 +125,17 @@ test('upgrades unread in-app reminders when subscription is accepted later', () 
       subscribeAccepted: false,
       reminderChannel: 'inApp'
     }
-  ], now);
+  ];
+  const items = reminder.upgradeFutureInAppReminders(sourceItems, now);
 
-  assert.deepEqual(items.updatedIds, ['future_in_app', 'due_in_app', 'expired_in_app']);
-  assert.equal(items.items[0].subscribeAccepted, true);
-  assert.equal(items.items[0].reminderChannel, 'subscribe');
-  assert.equal(items.items[0].lastReminderError, '');
-  assert.equal(items.items[1].subscribeAccepted, true);
-  assert.equal(items.items[1].reminderChannel, 'subscribe');
-  assert.equal(items.items[2].subscribeAccepted, true);
-  assert.equal(items.items[2].reminderChannel, 'subscribe');
+  assert.deepEqual(items.updatedIds, []);
+  assert.equal(items.items[0].subscribeAccepted, false);
+  assert.equal(items.items[0].reminderChannel, 'inApp');
+  assert.equal(items.items[0].lastReminderError, 'user refused');
+  assert.equal(items.items[1].subscribeAccepted, false);
+  assert.equal(items.items[1].reminderChannel, 'inApp');
+  assert.equal(items.items[2].subscribeAccepted, false);
+  assert.equal(items.items[2].reminderChannel, 'inApp');
   assert.equal(items.items[3].subscribeAccepted, false);
   assert.equal(items.items[4].subscribeAccepted, false);
 });
@@ -152,11 +153,10 @@ test('requestSubscribeAuthorization uses the configured expiry template id', asy
   assert.deepEqual(requests[0].tmplIds, [TEMPLATE_ID]);
 });
 
-test('requestSubscribeAuthorization reads accepted subscription settings before prompting', async () => {
+test('requestSubscribeAuthorization requests a fresh quota even when settings are already accepted', async () => {
   let promptCalled = false;
   const result = await reminder.requestSubscribeAuthorization({
     getSetting(options) {
-      assert.equal(options.withSubscriptions, true);
       options.success({
         subscriptionsSetting: {
           itemSettings: {
@@ -167,11 +167,11 @@ test('requestSubscribeAuthorization reads accepted subscription settings before 
     },
     requestSubscribeMessage(options) {
       promptCalled = true;
-      options.fail({ errMsg: 'should not prompt' });
+      assert.deepEqual(options.tmplIds, [TEMPLATE_ID]);
+      options.success({ [TEMPLATE_ID]: 'accept' });
     }
   });
 
   assert.equal(result.accepted, true);
-  assert.equal(result.fromSetting, true);
-  assert.equal(promptCalled, false);
+  assert.equal(promptCalled, true);
 });

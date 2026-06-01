@@ -95,42 +95,12 @@ function deriveInAppReminders(items, now) {
     ));
 }
 
-function isDeleted(item) {
-  return item && (
-    item.deleted === true
-    || item.isDeleted === true
-    || item.deletedAt
-  );
-}
-
-function shouldUpgradeInAppReminder(item, now) {
-  const timestamp = getNowTimestamp(now);
-  const normalized = normalizeReminderFields(item, timestamp);
-  return !isDeleted(item)
-    && normalized.reminderEnabled === true
-    && normalized.subscribeAccepted !== true
-    && !normalized.remindedAt
-    && !normalized.inAppReadAt
-    && normalized.remindAt
-    && normalized.reminderChannel !== 'subscribe';
-}
-
-function upgradeFutureInAppReminders(items, now) {
-  const timestamp = getNowTimestamp(now);
-  const updatedIds = [];
-  const nextItems = (items || []).map((item) => {
-    if (!shouldUpgradeInAppReminder(item, timestamp)) return item;
-    const upgraded = Object.assign({}, normalizeReminderFields(item, timestamp), {
-      subscribeAccepted: true,
-      reminderChannel: 'subscribe',
-      lastReminderError: ''
-    });
-    if (upgraded._id) updatedIds.push(upgraded._id);
-    return upgraded;
-  });
+function upgradeFutureInAppReminders(items) {
+  // A settings-level accept does not grant send quota for historical items.
+  // Keep this compatibility helper as a no-op so old call sites cannot infer it.
   return {
-    items: nextItems,
-    updatedIds
+    items: (items || []).slice(),
+    updatedIds: []
   };
 }
 
@@ -166,27 +136,19 @@ function requestSubscribeAuthorization(wxAdapter, templateId) {
   if (!tmplId || !wxAdapter || typeof wxAdapter.requestSubscribeMessage !== 'function') {
     return Promise.resolve({ accepted: false, reason: 'unavailable' });
   }
-  return readAcceptedSubscriptionSetting(wxAdapter, tmplId).then((setting) => {
-    if (setting.accepted) {
-      return {
-        accepted: true,
-        fromSetting: true,
-        result: setting.result
-      };
-    }
-    return new Promise((resolve) => {
-      wxAdapter.requestSubscribeMessage({
-        tmplIds: [tmplId],
-        success(result) {
-          resolve({ accepted: result && result[tmplId] === 'accept', result });
-        },
-        fail(error) {
-          resolve({
-            accepted: false,
-            reason: error && error.errMsg ? error.errMsg : 'failed'
-          });
-        }
-      });
+  return new Promise((resolve) => {
+    // One-time subscribe messages need a fresh request call for each send quota.
+    wxAdapter.requestSubscribeMessage({
+      tmplIds: [tmplId],
+      success(result) {
+        resolve({ accepted: result && result[tmplId] === 'accept', result });
+      },
+      fail(error) {
+        resolve({
+          accepted: false,
+          reason: error && error.errMsg ? error.errMsg : 'failed'
+        });
+      }
     });
   });
 }
