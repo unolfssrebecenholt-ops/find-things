@@ -14,9 +14,8 @@ try {
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
-const FUNCTION_VERSION = 'ftExpiryReminder-2026-06-01-debug-v3';
+const FUNCTION_VERSION = 'ftExpiryReminder-2026-06-01-debug-v4';
 const LOG_PREFIX = '[ftExpiryReminder]';
-const DEFAULT_TEMPLATE_ID = process.env.EXPIRY_REMINDER_TEMPLATE_ID || 'YQ16_zieaD46dXPv_mMrSGIkR6WLLpc9fxMFF1q5jEI';
 const DEFAULT_PAGE = 'pages/home/index';
 const ITEM_COLLECTION = (cloudConfig.collections && cloudConfig.collections.items) || 'ft_items';
 const CONTAINER_COLLECTION = (cloudConfig.collections && cloudConfig.collections.containers) || 'ft_containers';
@@ -34,6 +33,10 @@ function diagnosticLog(stage, data) {
   } catch (error) {
     console.log(LOG_PREFIX, stage, record);
   }
+}
+
+function configuredTemplateId() {
+  return String(process.env.EXPIRY_REMINDER_TEMPLATE_ID || '').trim();
 }
 
 function toTimestamp(value) {
@@ -226,40 +229,38 @@ function errorMessage(error) {
   return error.message || error.errMsg || String(error);
 }
 
-function remainingDays(expiresAt, now) {
-  const expiry = toTimestamp(expiresAt);
-  if (!expiry) return 0;
-  const timestamp = toTimestamp(now) || Date.now();
-  const dayMs = 24 * 60 * 60 * 1000;
-  const beijingOffset = 8 * 60 * 60 * 1000;
-  const expiryDay = Math.floor((expiry + beijingOffset) / dayMs);
-  const currentDay = Math.floor((timestamp + beijingOffset) / dayMs);
-  return Math.max(0, expiryDay - currentDay);
+function truncateTemplateText(value, limit) {
+  const text = String(value || '').trim();
+  const maxLength = Math.max(0, Number(limit) || 0);
+  if (!maxLength || text.length <= maxLength) return text;
+  if (maxLength <= 3) return text.slice(0, maxLength);
+  return `${text.slice(0, maxLength - 3)}...`;
 }
 
-function buildSubscribeMessage(item, templateId, now) {
+function itemDisplayName(item) {
+  return String((item && (item.displayName || item.name)) || '物品').trim() || '物品';
+}
+
+function buildBatchItemNames(items) {
+  return truncateTemplateText((items || []).map(itemDisplayName).join(' '), 20);
+}
+
+function buildSubscribeMessage(items, templateId, openid) {
+  const batchItems = (items || []).filter(Boolean);
   return {
-    touser: item._openid,
+    touser: openid,
     templateId,
     page: DEFAULT_PAGE,
     data: {
-      thing5: { value: String(item.displayName || item.name || '物品').slice(0, 20) },
-      time16: { value: formatDate(item.expiresAt || item.remindAt) },
-      thing10: { value: String(item.containerName || '收纳位置').slice(0, 20) },
-      thing3: { value: String(item.reminderNote || '请及时处理').slice(0, 20) },
-      number2: { value: String(remainingDays(item.expiresAt || item.remindAt, now)) }
+      thing5: { value: buildBatchItemNames(batchItems) || '过期物品' },
+      number7: { value: String(batchItems.length) },
+      thing3: { value: '有空记得要清理过期物品哦！' }
     }
   };
 }
 
-function formatDate(timestamp) {
-  const value = toTimestamp(timestamp);
-  if (!value) return '';
-  return new Date(value + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
-
-async function sendReminder(item, templateId, now) {
-  if (!item._openid) {
+async function sendReminderBatch(items, templateId, openid) {
+  if (!openid) {
     throw new Error('NO_OPENID');
   }
   if (!templateId) {
@@ -268,7 +269,7 @@ async function sendReminder(item, templateId, now) {
   if (!cloud.openapi || !cloud.openapi.subscribeMessage || typeof cloud.openapi.subscribeMessage.send !== 'function') {
     throw new Error('SUBSCRIBE_MESSAGE_UNAVAILABLE');
   }
-  return cloud.openapi.subscribeMessage.send(buildSubscribeMessage(item, templateId, now));
+  return cloud.openapi.subscribeMessage.send(buildSubscribeMessage(items, templateId, openid));
 }
 
 function buildContainerMap(containers) {
@@ -414,9 +415,62 @@ function shouldSendSubscribeReminder(item, notice) {
     && hasEmptyReminderTimestamp(item);
 }
 
+function shouldIncludeInSubscribeBatch(item, notice) {
+  return item
+    && notice
+    && notice.status !== 'read'
+    && notice.pushStatus !== 'sent'
+    && hasEmptyReminderTimestamp(item);
+}
+
+function createSubscribeBatches(records) {
+  const groups = (records || []).reduce((map, record) => {
+    const openid = record && record.item && record.item._openid;
+    if (!openid) return map;
+    if (!map[openid]) map[openid] = [];
+    map[openid].push(record);
+    return map;
+  }, {});
+
+  return Object.keys(groups).map((openid) => {
+    const groupRecords = groups[openid];
+    const quotaRecords = groupRecords.filter((record) => shouldSendSubscribeReminder(record.item, record.notice));
+    const recordsToSend = groupRecords.filter((record) => shouldIncludeInSubscribeBatch(record.item, record.notice));
+    return {
+      openid,
+      quotaRecords,
+      records: quotaRecords.length ? recordsToSend : []
+    };
+  }).filter((batch) => batch.records.length);
+}
+
+function createMissingOpenidSubscribeRecords(records) {
+  return (records || []).filter((record) => (
+    shouldSendSubscribeReminder(record.item, record.notice)
+    && !(record.item && record.item._openid)
+  ));
+}
+
+function recordItemIds(records) {
+  return (records || [])
+    .map((record) => record && record.item && record.item._id)
+    .filter(Boolean);
+}
+
 async function main(event, context) {
+  const templateId = configuredTemplateId();
+  if (event && event.action === 'config') {
+    diagnosticLog('config', {
+      hasTemplateId: !!templateId
+    });
+    return {
+      version: FUNCTION_VERSION,
+      expiryTemplateId: templateId,
+      hasTemplateId: !!templateId
+    };
+  }
+
   const timestamp = toTimestamp(event && event.now) || Date.now();
-  const templateId = (event && event.templateId) || DEFAULT_TEMPLATE_ID;
   diagnosticLog('start', {
     timestamp,
     eventNow: event && event.now,
@@ -442,6 +496,7 @@ async function main(event, context) {
     failed: 0,
     failures: []
   };
+  const records = [];
 
   for (const item of dueItems) {
     const existingNotice = findExistingNotice(notices, item);
@@ -482,48 +537,76 @@ async function main(event, context) {
         throw error;
       }
     }
+    records.push({ item, notice });
+  }
 
-    if (!needsSubscribeSend) {
-      continue;
-    }
+  const missingOpenidRecords = createMissingOpenidSubscribeRecords(records);
+  for (const record of missingOpenidRecords) {
+    const item = record.item;
+    const message = 'NO_OPENID';
+    await updateItem(item._id, applySendFailure(item, message));
+    record.notice = Object.assign({}, record.notice, {
+      channel: 'inApp',
+      pushStatus: 'failed',
+      lastError: message,
+      updatedAt: timestamp
+    });
+    await setNotice(record.notice._id, record.notice);
+    result.failed += 1;
+    result.failures.push({ itemId: item._id, error: message });
+    diagnosticLog('send-subscribe-failure', {
+      itemId: item && item._id,
+      noticeId: record.notice && record.notice._id,
+      error: message
+    });
+  }
 
+  const subscribeBatches = createSubscribeBatches(records);
+  for (const batch of subscribeBatches) {
+    const itemIds = recordItemIds(batch.records);
     try {
       diagnosticLog('send-subscribe-start', {
-        itemId: item && item._id,
-        noticeId: notice && notice._id,
-        hasOpenid: !!(item && item._openid)
+        openid: batch.openid,
+        itemIds,
+        count: batch.records.length
       });
-      await sendReminder(item, templateId, timestamp);
-      await updateItem(item._id, applySendSuccess(item, timestamp));
-      notice = Object.assign({}, notice, {
-        channel: 'subscribe',
-        pushStatus: 'sent',
-        sentAt: timestamp,
-        lastError: '',
-        updatedAt: timestamp
-      });
-      await setNotice(notice._id, notice);
+      await sendReminderBatch(batch.records.map((record) => record.item), templateId, batch.openid);
+      await Promise.all(batch.records.map((record) => updateItem(record.item._id, applySendSuccess(record.item, timestamp))));
+      await Promise.all(batch.records.map((record) => {
+        record.notice = Object.assign({}, record.notice, {
+          channel: 'subscribe',
+          pushStatus: 'sent',
+          sentAt: timestamp,
+          lastError: '',
+          updatedAt: timestamp
+        });
+        return setNotice(record.notice._id, record.notice);
+      }));
       result.sent += 1;
       diagnosticLog('send-subscribe-success', {
-        itemId: item && item._id,
-        noticeId: notice && notice._id,
+        openid: batch.openid,
+        itemIds,
+        count: batch.records.length,
         sentAt: timestamp
       });
     } catch (error) {
       const message = errorMessage(error);
-      await updateItem(item._id, applySendFailure(item, message));
-      notice = Object.assign({}, notice, {
-        channel: 'inApp',
-        pushStatus: 'failed',
-        lastError: message,
-        updatedAt: timestamp
-      });
-      await setNotice(notice._id, notice);
+      await Promise.all(batch.records.map((record) => updateItem(record.item._id, applySendFailure(record.item, message))));
+      await Promise.all(batch.records.map((record) => {
+        record.notice = Object.assign({}, record.notice, {
+          channel: 'inApp',
+          pushStatus: 'failed',
+          lastError: message,
+          updatedAt: timestamp
+        });
+        return setNotice(record.notice._id, record.notice);
+      }));
       result.failed += 1;
-      result.failures.push({ itemId: item._id, error: message });
+      result.failures.push({ itemId: itemIds[0] || '', itemIds, error: message });
       diagnosticLog('send-subscribe-failure', {
-        itemId: item && item._id,
-        noticeId: notice && notice._id,
+        openid: batch.openid,
+        itemIds,
+        count: batch.records.length,
         error: message
       });
     }

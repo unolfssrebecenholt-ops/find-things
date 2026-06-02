@@ -102,6 +102,12 @@ function shouldRefreshReminderAuthorization(item) {
     && item.confirmed !== false;
 }
 
+function primeReminderTemplateConfig() {
+  if (!expiryReminder || typeof expiryReminder.resolveExpiryTemplateId !== 'function') return;
+  if (typeof wx === 'undefined') return;
+  expiryReminder.resolveExpiryTemplateId(wx).catch(() => {});
+}
+
 function refreshReminderAuthorizationForSave(items) {
   if (!expiryReminder || typeof expiryReminder.requestSubscribeAuthorization !== 'function') {
     return Promise.resolve(items || []);
@@ -114,18 +120,20 @@ function refreshReminderAuthorizationForSave(items) {
   }, []);
   if (!targetIndexes.length) return Promise.resolve(initialItems);
 
-  return targetIndexes.reduce((promise, targetIndex) => (
-    promise.then((currentItems) => expiryReminder.requestSubscribeAuthorization(wx).then((authorization) => {
-      const accepted = !!(authorization && authorization.accepted);
-      return currentItems.map((item, index) => {
-        if (index !== targetIndex) return item;
-        return Object.assign({}, item, {
-          subscribeAccepted: accepted,
-          reminderChannel: accepted ? 'subscribe' : 'inApp'
-        });
+  return expiryReminder.requestSubscribeAuthorization(wx).then((authorization) => {
+    const targetIndexMap = {};
+    targetIndexes.forEach((targetIndex) => {
+      targetIndexMap[targetIndex] = authorization || { accepted: false };
+    });
+    return initialItems.map((item, index) => {
+      if (!targetIndexMap[index]) return item;
+      const accepted = !!(targetIndexMap[index] && targetIndexMap[index].accepted);
+      return Object.assign({}, item, {
+        subscribeAccepted: accepted,
+        reminderChannel: accepted ? 'subscribe' : 'inApp'
       });
-    }))
-  ), Promise.resolve(initialItems));
+    });
+  });
 }
 
 function collectDraftImagePaths(data) {
@@ -223,6 +231,7 @@ Page({
 
   onLoad() {
     this.loadDraft();
+    primeReminderTemplateConfig();
   },
 
   onUnload() {

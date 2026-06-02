@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
+const TEMPLATE_ID = 'test-template-id';
+
 function createWxMock(initialStorage) {
   const storage = Object.assign({}, initialStorage);
   const modals = [];
@@ -35,6 +37,13 @@ function createWxMock(initialStorage) {
     cloud: {
       callFunction(options) {
         cloudCalls.push(options);
+        if (options && options.data && options.data.action === 'config') {
+          const configResult = { result: { expiryTemplateId: TEMPLATE_ID } };
+          if (typeof options.success === 'function') {
+            options.success(configResult);
+          }
+          return Promise.resolve(configResult);
+        }
         if (typeof options.success === 'function') {
           options.success({ result: { scanned: 0, notices: 0 } });
         }
@@ -42,11 +51,10 @@ function createWxMock(initialStorage) {
       }
     },
     getSetting(options) {
-      const templateId = 'YQ16_zieaD46dXPv_mMrSGIkR6WLLpc9fxMFF1q5jEI';
       options.success({
         subscriptionsSetting: {
           itemSettings: {
-            [templateId]: this.subscriptionAccepted ? 'accept' : 'reject'
+            [TEMPLATE_ID]: this.subscriptionAccepted ? 'accept' : 'reject'
           }
         }
       });
@@ -553,4 +561,111 @@ test('home page shows pending reminder notices from the notice table', async () 
   assert.equal(context.data.expiryReminderCount, 1);
   assert.equal(context.data.expiryReminderNotices[0]._id, 'notice_expired_item');
   assert.equal(context.data.expiryReminderPreview, 'Expired spray要到期啦。');
+});
+
+test('home page derives in-app reminders from due items when notice table is empty', async () => {
+  const now = new Date('2026-06-01T00:12:00+08:00').getTime();
+  const wxMock = createWxMock({
+    'findThings.containers': [
+      {
+        _id: 'box',
+        name: '药品盒',
+        locationPath: '客厅',
+        createdAt: 1,
+        updatedAt: 1,
+        deletedAt: null
+      }
+    ],
+    'findThings.items': [
+      {
+        _id: 'expired_milk',
+        containerId: 'box',
+        displayName: '牛奶',
+        expiresAt: now - 24 * 60 * 60 * 1000,
+        remindAt: now - 24 * 60 * 60 * 1000,
+        remindOffsetDays: 0,
+        reminderEnabled: true,
+        subscribeAccepted: true,
+        reminderChannel: 'subscribe',
+        remindedAt: now - 1,
+        inAppReadAt: 0,
+        deletedAt: null
+      },
+      {
+        _id: 'expired_mask',
+        containerId: 'box',
+        displayName: '面膜',
+        expiresAt: now - 2 * 24 * 60 * 60 * 1000,
+        remindAt: now - 2 * 24 * 60 * 60 * 1000,
+        remindOffsetDays: 0,
+        reminderEnabled: true,
+        subscribeAccepted: false,
+        reminderChannel: 'inApp',
+        remindedAt: 0,
+        inAppReadAt: 0,
+        deletedAt: null
+      }
+    ],
+    'findThings.reminderNotices': []
+  });
+  const page = loadHomePage(wxMock);
+  const context = Object.assign({}, page, {
+    data: Object.assign({}, page.data),
+    setData(patch) {
+      this.data = Object.assign({}, this.data, patch);
+    },
+    ensureRecentThumbnails() {}
+  });
+  const originalDateNow = Date.now;
+  Date.now = () => now;
+
+  try {
+    await withWx(wxMock, () => page.load.call(context));
+    await new Promise((resolve) => setImmediate(resolve));
+  } finally {
+    Date.now = originalDateNow;
+  }
+
+  assert.equal(context.data.showExpiryReminderEntry, true);
+  assert.equal(context.data.expiryReminderCount, 2);
+  assert.equal(context.data.expiryReminderNotices.every((notice) => notice.derived === true), true);
+  assert.deepEqual(context.data.expiryReminderNotices.map((notice) => notice.displayName).sort(), ['牛奶', '面膜'].sort());
+  assert.equal(context.data.expiryReminderDetails.length, 2);
+});
+
+test('home page marks derived in-app reminders read by item id', async () => {
+  const wxMock = createWxMock({
+    'findThings.containers': [],
+    'findThings.items': [
+      {
+        _id: 'due_item',
+        displayName: 'Milk',
+        expiresAt: Date.UTC(2026, 5, 10),
+        reminderEnabled: true,
+        remindAt: Date.UTC(2026, 5, 8),
+        inAppReadAt: 0
+      }
+    ],
+    'findThings.reminderNotices': []
+  });
+  const page = loadHomePage(wxMock);
+  const context = createPageContext(page, Object.assign({}, page.data, {
+    expiryReminderNotices: [{
+      _id: 'derived_expiry_due_item_1780876800000',
+      derived: true,
+      itemId: 'due_item',
+      displayName: 'Milk',
+      status: 'pending'
+    }],
+    expiryReminderDetails: [],
+    expiryReminderCount: 1,
+    expiryReminderPreview: 'Milk要到期啦。',
+    showExpiryReminderEntry: true
+  }));
+
+  await withWx(wxMock, () => page.confirmExpiryReminderDetails.call(context));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(wxMock.storage['findThings.items'][0].inAppReadAt > 0, true);
+  assert.equal(context.data.showExpiryReminderEntry, false);
 });

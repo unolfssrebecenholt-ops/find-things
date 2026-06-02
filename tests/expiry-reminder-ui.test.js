@@ -45,7 +45,7 @@ test('item editor exposes expiry date and reminder controls', () => {
   assert.match(wxml, /bindchange="toggleExpiry"/);
   assert.match(wxml, /mode="date"/);
   assert.match(wxml, /bindchange="changeExpiryDate"/);
-  assert.match(wxml, /bindchange="toggleReminder"/);
+  assert.doesNotMatch(wxml, /bindchange="toggleReminder"/);
   assert.match(wxml, /bindchange="changeReminderOffset"/);
   assert.match(wxss, /\.expiry-panel/);
   assert.match(wxss, /\.expiry-badge/);
@@ -108,6 +108,70 @@ test('item editor requests subscribe authorization when expiry date changes', as
   const item = context.events.at(-1).detail.items[0];
   assert.equal(calls.length, 1);
   assert.equal(item.reminderEnabled, true);
+  assert.equal(item.subscribeAccepted, true);
+  assert.equal(item.reminderChannel, 'subscribe');
+});
+
+test('item editor primes subscribe template config when attached', async () => {
+  const reminder = require('../miniprogram/services/expiry-reminder');
+  const originalResolve = reminder.resolveExpiryTemplateId;
+  const calls = [];
+  reminder.resolveExpiryTemplateId = (wxAdapter) => {
+    calls.push(wxAdapter);
+    return Promise.resolve('template-id');
+  };
+  const definition = loadItemEditor();
+  const previousWx = global.wx;
+  global.wx = {
+    cloud: {
+      callFunction() {}
+    }
+  };
+
+  try {
+    definition.lifetimes.attached();
+    await Promise.resolve();
+  } finally {
+    global.wx = previousWx;
+    reminder.resolveExpiryTemplateId = originalResolve;
+  }
+
+  assert.equal(calls.length, 1);
+});
+
+test('item editor single expiry toggle enables reminder and requests authorization once', async () => {
+  const reminder = require('../miniprogram/services/expiry-reminder');
+  const originalRequest = reminder.requestSubscribeAuthorization;
+  const calls = [];
+  reminder.requestSubscribeAuthorization = (wxAdapter) => {
+    calls.push(wxAdapter);
+    return Promise.resolve({ accepted: true });
+  };
+  const definition = loadItemEditor();
+  const context = createComponentContext(definition, [{
+    displayName: 'milk',
+    expiresAt: 0,
+    reminderEnabled: false
+  }]);
+  const previousWx = global.wx;
+  global.wx = {
+    requestSubscribeMessage() {}
+  };
+
+  try {
+    await definition.methods.toggleExpiry.call(context, {
+      currentTarget: { dataset: { index: 0 } },
+      detail: { value: true }
+    });
+  } finally {
+    global.wx = previousWx;
+    reminder.requestSubscribeAuthorization = originalRequest;
+  }
+
+  const item = context.events.at(-1).detail.items[0];
+  assert.equal(calls.length, 1);
+  assert.equal(item.reminderEnabled, true);
+  assert.equal(item.expiresAt > 0, true);
   assert.equal(item.subscribeAccepted, true);
   assert.equal(item.reminderChannel, 'subscribe');
 });

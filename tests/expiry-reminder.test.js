@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const reminder = require('../miniprogram/services/expiry-reminder');
-const TEMPLATE_ID = 'YQ16_zieaD46dXPv_mMrSGIkR6WLLpc9fxMFF1q5jEI';
+const TEMPLATE_ID = 'test-template-id';
 
 test('normalizes empty reminder fields to inactive in-app defaults', () => {
   const item = reminder.normalizeReminderFields({ displayName: 'battery' }, 1780243200000);
@@ -141,8 +141,15 @@ test('does not upgrade in-app reminders from settings-only subscription state', 
 });
 
 test('requestSubscribeAuthorization uses the configured expiry template id', async () => {
+  const configCalls = [];
   const requests = [];
   const result = await reminder.requestSubscribeAuthorization({
+    cloud: {
+      callFunction(options) {
+        configCalls.push(options);
+        return Promise.resolve({ result: { expiryTemplateId: TEMPLATE_ID } });
+      }
+    },
     requestSubscribeMessage(options) {
       requests.push(options);
       options.success({ [TEMPLATE_ID]: 'accept' });
@@ -150,10 +157,12 @@ test('requestSubscribeAuthorization uses the configured expiry template id', asy
   });
 
   assert.equal(result.accepted, true);
+  assert.equal(configCalls[0].name, 'ftExpiryReminder');
+  assert.deepEqual(configCalls[0].data, { action: 'config' });
   assert.deepEqual(requests[0].tmplIds, [TEMPLATE_ID]);
 });
 
-test('requestSubscribeAuthorization requests a fresh quota even when settings are already accepted', async () => {
+test('requestSubscribeAuthorization requests a send quota when subscription setting is already accepted', async () => {
   let promptCalled = false;
   const result = await reminder.requestSubscribeAuthorization({
     getSetting(options) {
@@ -170,8 +179,106 @@ test('requestSubscribeAuthorization requests a fresh quota even when settings ar
       assert.deepEqual(options.tmplIds, [TEMPLATE_ID]);
       options.success({ [TEMPLATE_ID]: 'accept' });
     }
-  });
+  }, TEMPLATE_ID);
 
   assert.equal(result.accepted, true);
   assert.equal(promptCalled, true);
+});
+
+test('requestSubscribeAuthorization prompts once per user action when setting is not accepted', async () => {
+  let promptCalls = 0;
+  const wxAdapter = {
+    getSetting(options) {
+      options.success({
+        subscriptionsSetting: {
+          itemSettings: {
+            [TEMPLATE_ID]: 'reject'
+          }
+        }
+      });
+    },
+    requestSubscribeMessage(options) {
+      promptCalls += 1;
+      assert.deepEqual(options.tmplIds, [TEMPLATE_ID]);
+      options.success({ [TEMPLATE_ID]: 'reject' });
+    }
+  };
+
+  const first = await reminder.requestSubscribeAuthorization(wxAdapter, TEMPLATE_ID);
+  const second = await reminder.requestSubscribeAuthorization(wxAdapter, TEMPLATE_ID);
+
+  assert.equal(first.accepted, false);
+  assert.equal(second.accepted, false);
+  assert.equal(promptCalls, 2);
+});
+
+test('requestSubscribeAuthorizations requests one quota per item when setting is accepted', async () => {
+  let promptCalls = 0;
+  const results = await reminder.requestSubscribeAuthorizations({
+    getSetting(options) {
+      options.success({
+        subscriptionsSetting: {
+          itemSettings: {
+            [TEMPLATE_ID]: 'accept'
+          }
+        }
+      });
+    },
+    requestSubscribeMessage(options) {
+      promptCalls += 1;
+      assert.deepEqual(options.tmplIds, [TEMPLATE_ID]);
+      options.success({ [TEMPLATE_ID]: 'accept' });
+    }
+  }, 3, TEMPLATE_ID);
+
+  assert.equal(promptCalls, 3);
+  assert.deepEqual(results.map((item) => item.accepted), [true, true, true]);
+});
+
+test('requestSubscribeAuthorizations does not silently invent extra quotas after a one-time accept', async () => {
+  let promptCalls = 0;
+  const results = await reminder.requestSubscribeAuthorizations({
+    getSetting(options) {
+      options.success({
+        subscriptionsSetting: {
+          itemSettings: {
+            [TEMPLATE_ID]: 'reject'
+          }
+        }
+      });
+    },
+    requestSubscribeMessage(options) {
+      promptCalls += 1;
+      options.success({ [TEMPLATE_ID]: 'accept' });
+    }
+  }, 3, TEMPLATE_ID);
+
+  assert.equal(promptCalls, 1);
+  assert.deepEqual(results.map((item) => item.accepted), [true, false, false]);
+});
+
+test('requestSubscribeAuthorization can request another quota after a one-time accept', async () => {
+  let promptCalls = 0;
+  const wxAdapter = {
+    getSetting(options) {
+      options.success({
+        subscriptionsSetting: {
+          itemSettings: {
+            [TEMPLATE_ID]: 'reject'
+          }
+        }
+      });
+    },
+    requestSubscribeMessage(options) {
+      promptCalls += 1;
+      options.success({ [TEMPLATE_ID]: 'accept' });
+    }
+  };
+
+  const first = await reminder.requestSubscribeAuthorization(wxAdapter, TEMPLATE_ID);
+  const second = await reminder.requestSubscribeAuthorization(wxAdapter, TEMPLATE_ID);
+
+  assert.equal(first.accepted, true);
+  assert.equal(second.accepted, true);
+  assert.equal(promptCalls, 2);
 });

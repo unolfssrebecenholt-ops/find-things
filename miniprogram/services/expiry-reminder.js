@@ -1,6 +1,9 @@
 const remindersConfig = require('../config/reminders');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const CONFIG_FUNCTION_NAME = 'ftExpiryReminder';
+let cachedExpiryTemplateId = '';
+let expiryTemplateConfigPromise = null;
 
 function toTimestamp(value) {
   const number = Number(value);
@@ -104,8 +107,82 @@ function upgradeFutureInAppReminders(items) {
   };
 }
 
+function normalizeTemplateId(templateId) {
+  return String(templateId || '').trim();
+}
+
+function readLocalExpiryTemplateId() {
+  return normalizeTemplateId(remindersConfig && remindersConfig.expiryTemplateId);
+}
+
+function extractExpiryTemplateId(response) {
+  const result = response && response.result ? response.result : response;
+  return normalizeTemplateId(result && (result.expiryTemplateId || result.templateId));
+}
+
+function callExpiryTemplateConfig(wxAdapter) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const settle = (templateId) => {
+      if (settled) return;
+      settled = true;
+      resolve(normalizeTemplateId(templateId));
+    };
+
+    try {
+      const request = wxAdapter.cloud.callFunction({
+        name: CONFIG_FUNCTION_NAME,
+        data: { action: 'config' },
+        success(response) {
+          settle(extractExpiryTemplateId(response));
+        },
+        fail() {
+          settle('');
+        }
+      });
+      if (request && typeof request.then === 'function') {
+        request.then((response) => {
+          settle(extractExpiryTemplateId(response));
+        }).catch(() => {
+          settle('');
+        });
+      }
+    } catch (error) {
+      settle('');
+    }
+  });
+}
+
+function fetchExpiryTemplateId(wxAdapter) {
+  if (cachedExpiryTemplateId) return Promise.resolve(cachedExpiryTemplateId);
+  if (expiryTemplateConfigPromise) return expiryTemplateConfigPromise;
+
+  const localTemplateId = readLocalExpiryTemplateId();
+  if (!wxAdapter || !wxAdapter.cloud || typeof wxAdapter.cloud.callFunction !== 'function') {
+    return Promise.resolve(localTemplateId);
+  }
+
+  expiryTemplateConfigPromise = callExpiryTemplateConfig(wxAdapter).then((templateId) => {
+    const resolved = normalizeTemplateId(templateId) || localTemplateId;
+    if (resolved) cachedExpiryTemplateId = resolved;
+    expiryTemplateConfigPromise = null;
+    return resolved;
+  });
+
+  return expiryTemplateConfigPromise;
+}
+
+function resolveExpiryTemplateId(wxAdapter, templateId) {
+  const directTemplateId = normalizeTemplateId(templateId);
+  if (directTemplateId) return Promise.resolve(directTemplateId);
+  return fetchExpiryTemplateId(wxAdapter);
+}
+
 function readAcceptedSubscriptionSetting(wxAdapter, templateId) {
-  const tmplId = templateId || remindersConfig.expiryTemplateId;
+  const tmplId = normalizeTemplateId(templateId);
+  if (!tmplId) {
+    return Promise.resolve({ accepted: false, reason: 'template_id_missing' });
+  }
   if (!wxAdapter || typeof wxAdapter.getSetting !== 'function') {
     return Promise.resolve({ accepted: false });
   }
@@ -131,26 +208,67 @@ function readAcceptedSubscriptionSetting(wxAdapter, templateId) {
   });
 }
 
-function requestSubscribeAuthorization(wxAdapter, templateId) {
-  const tmplId = templateId || remindersConfig.expiryTemplateId;
-  if (!tmplId || !wxAdapter || typeof wxAdapter.requestSubscribeMessage !== 'function') {
-    return Promise.resolve({ accepted: false, reason: 'unavailable' });
+function requestOneSubscribeAuthorization(wxAdapter, templateId, setting) {
+  const tmplId = normalizeTemplateId(templateId);
+  if (!tmplId) {
+    return Promise.resolve({ accepted: false, reason: 'template_id_missing', setting });
+  }
+  if (!wxAdapter || typeof wxAdapter.requestSubscribeMessage !== 'function') {
+    return Promise.resolve({ accepted: false, reason: 'unavailable', setting });
   }
   return new Promise((resolve) => {
-    // One-time subscribe messages need a fresh request call for each send quota.
     wxAdapter.requestSubscribeMessage({
       tmplIds: [tmplId],
       success(result) {
-        resolve({ accepted: result && result[tmplId] === 'accept', result });
+        const accepted = result && result[tmplId] === 'accept';
+        resolve({ accepted, result, setting });
       },
       fail(error) {
         resolve({
           accepted: false,
-          reason: error && error.errMsg ? error.errMsg : 'failed'
+          reason: error && error.errMsg ? error.errMsg : 'failed',
+          setting
         });
       }
     });
   });
+}
+
+function requestSubscribeAuthorizations(wxAdapter, count, templateId) {
+  const total = Math.max(0, Math.floor(Number(count) || 0));
+  if (!total) return Promise.resolve([]);
+  return resolveExpiryTemplateId(wxAdapter, templateId).then((tmplId) => {
+    if (!tmplId || !wxAdapter) {
+      return Array(total).fill({ accepted: false, reason: tmplId ? 'unavailable' : 'template_id_missing' });
+    }
+
+    const requestSeries = (requestCount, setting) => {
+      return Array(requestCount).fill(null).reduce((promise) => (
+        promise.then((results) => requestOneSubscribeAuthorization(wxAdapter, tmplId, setting)
+          .then((result) => results.concat(result)))
+      ), Promise.resolve([]));
+    };
+
+    return readAcceptedSubscriptionSetting(wxAdapter, tmplId).then((setting) => {
+      if (setting && setting.accepted) {
+        return requestSeries(total, setting);
+      }
+      return requestOneSubscribeAuthorization(wxAdapter, tmplId, setting).then((first) => {
+        if (!first.accepted) return [first].concat(Array(Math.max(0, total - 1)).fill({ accepted: false, reason: 'quota_not_requested' }));
+        return readAcceptedSubscriptionSetting(wxAdapter, tmplId).then((nextSetting) => {
+          if (!(nextSetting && nextSetting.accepted)) {
+            return [first].concat(Array(Math.max(0, total - 1)).fill({ accepted: false, reason: 'quota_not_requested' }));
+          }
+          if (total === 1) return [first];
+          return requestSeries(total - 1, nextSetting).then((rest) => [first].concat(rest));
+        });
+      });
+    });
+  });
+}
+
+function requestSubscribeAuthorization(wxAdapter, templateId) {
+  return requestSubscribeAuthorizations(wxAdapter, 1, templateId).then((results) => results[0] || { accepted: false, reason: 'unavailable' });
 }
 
 module.exports = {
@@ -161,6 +279,8 @@ module.exports = {
   decorateItem,
   deriveInAppReminders,
   upgradeFutureInAppReminders,
+  resolveExpiryTemplateId,
   readAcceptedSubscriptionSetting,
-  requestSubscribeAuthorization
+  requestSubscribeAuthorization,
+  requestSubscribeAuthorizations
 };

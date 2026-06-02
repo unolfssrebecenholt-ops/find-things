@@ -95,6 +95,12 @@ function requestSubscribeAuthorization() {
   return expiryReminder.requestSubscribeAuthorization(wx).catch(() => ({ accepted: false }));
 }
 
+function primeReminderTemplateConfig() {
+  if (!expiryReminder || typeof expiryReminder.resolveExpiryTemplateId !== 'function') return;
+  if (typeof wx === 'undefined') return;
+  expiryReminder.resolveExpiryTemplateId(wx).catch(() => {});
+}
+
 Component({
   properties: {
     items: {
@@ -126,6 +132,12 @@ Component({
     editorClass: ''
   },
 
+  lifetimes: {
+    attached() {
+      primeReminderTemplateConfig();
+    }
+  },
+
   methods: {
     emit(items) {
       this.triggerEvent('change', {
@@ -147,10 +159,19 @@ Component({
       const item = this.data.items[index] || {};
       const enabled = !!(event.detail && event.detail.value);
       const expiresAt = enabled ? (toTimestamp(item.expiresAt) || dateToEndOfDay(formatDateInput(Date.now()))) : 0;
-      this.patchItem(index, createReminderPatch(item, {
+      const patch = createReminderPatch(item, {
         expiresAt,
-        reminderEnabled: enabled && item.reminderEnabled === true
-      }));
+        reminderEnabled: enabled,
+        remindOffsetDays: normalizeOffsetDays(item.remindOffsetDays)
+      });
+      this.patchItem(index, patch);
+      if (!enabled) return Promise.resolve();
+      return requestSubscribeAuthorization().then((authorization) => {
+        this.patchItem(index, Object.assign({}, patch, {
+          subscribeAccepted: !!(authorization && authorization.accepted),
+          reminderChannel: authorization && authorization.accepted ? 'subscribe' : 'inApp'
+        }));
+      });
     },
 
     changeExpiryDate(event) {
@@ -163,7 +184,7 @@ Component({
         remindOffsetDays: normalizeOffsetDays(item.remindOffsetDays)
       });
       this.patchItem(index, patch);
-      if (!expiresAt) return Promise.resolve();
+      if (!expiresAt || !patch.reminderEnabled) return Promise.resolve();
       return requestSubscribeAuthorization().then((authorization) => {
         this.patchItem(index, Object.assign({}, patch, {
           subscribeAccepted: !!(authorization && authorization.accepted),

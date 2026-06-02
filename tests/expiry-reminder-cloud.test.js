@@ -4,6 +4,22 @@ const Module = require('node:module');
 const path = require('node:path');
 const fs = require('node:fs');
 
+const CLOUD_TEMPLATE_ID = 'test-template-id';
+
+async function withExpiryReminderTemplateId(templateId, callback) {
+  const previous = process.env.EXPIRY_REMINDER_TEMPLATE_ID;
+  process.env.EXPIRY_REMINDER_TEMPLATE_ID = templateId;
+  try {
+    return await callback();
+  } finally {
+    if (previous === undefined) {
+      delete process.env.EXPIRY_REMINDER_TEMPLATE_ID;
+    } else {
+      process.env.EXPIRY_REMINDER_TEMPLATE_ID = previous;
+    }
+  }
+}
+
 function loadExpiryReminderFunction(options = {}) {
   const modulePath = path.join(__dirname, '..', 'cloudfunctions', 'ftExpiryReminder', 'index.js');
   const originalLoad = Module._load;
@@ -151,7 +167,19 @@ test('main returns a diagnostic function version for deployment verification', a
 
   const result = await expiryReminder.main({ now: 1780243920000 }, {});
 
-  assert.equal(result.version, 'ftExpiryReminder-2026-06-01-debug-v3');
+  assert.equal(result.version, 'ftExpiryReminder-2026-06-01-debug-v4');
+});
+
+test('main returns subscribe template config from environment', async () => {
+  const expiryReminder = loadExpiryReminderFunction();
+
+  const result = await withExpiryReminderTemplateId(CLOUD_TEMPLATE_ID, () => expiryReminder.main({ action: 'config' }, {}));
+
+  assert.deepEqual(result, {
+    version: 'ftExpiryReminder-2026-06-01-debug-v4',
+    expiryTemplateId: CLOUD_TEMPLATE_ID,
+    hasTemplateId: true
+  });
 });
 
 test('selectDueReminderItems selects due reminders regardless subscription and skips read notices', () => {
@@ -217,7 +245,7 @@ test('applySendFailure downgrades to in-app fallback without marking it read', (
   );
 });
 
-test('main reports remaining days by Beijing calendar date', async () => {
+test('main sends the aggregate subscribe template fields', async () => {
   const now = Date.UTC(2026, 4, 31, 12);
   const updates = [];
   const sends = [];
@@ -242,10 +270,13 @@ test('main reports remaining days by Beijing calendar date', async () => {
   };
   const expiryReminder = loadExpiryReminderFunction({ collections, updates, sends });
 
-  await expiryReminder.main({ now, templateId: 'template-id' }, {});
+  await withExpiryReminderTemplateId(CLOUD_TEMPLATE_ID, () => expiryReminder.main({ now }, {}));
 
-  assert.equal(sends[0].data.time16.value, '2026-05-31');
-  assert.equal(sends[0].data.number2.value, '0');
+  assert.deepEqual(sends[0].data, {
+    thing5: { value: 'Milk' },
+    number7: { value: '1' },
+    thing3: { value: '有空记得要清理过期物品哦！' }
+  });
 });
 
 test('main sends subscribe messages and stores success updates', async () => {
@@ -277,7 +308,7 @@ test('main sends subscribe messages and stores success updates', async () => {
   };
   const expiryReminder = loadExpiryReminderFunction({ collections, updates, sets, sends });
 
-  const result = await expiryReminder.main({ now, templateId: 'template-id' }, {});
+  const result = await withExpiryReminderTemplateId(CLOUD_TEMPLATE_ID, () => expiryReminder.main({ now }, {}));
 
   assert.equal(result.scanned, 1);
   assert.equal(result.notices, 1);
@@ -285,13 +316,11 @@ test('main sends subscribe messages and stores success updates', async () => {
   assert.equal(result.failed, 0);
   assert.equal(sends.length, 1);
   assert.equal(sends[0].touser, 'user-openid');
-  assert.equal(sends[0].templateId, 'template-id');
+  assert.equal(sends[0].templateId, CLOUD_TEMPLATE_ID);
   assert.deepEqual(sends[0].data, {
     thing5: { value: 'Milk' },
-    time16: { value: '2026-06-01' },
-    thing10: { value: 'Fridge' },
-    thing3: { value: '请及时处理' },
-    number2: { value: '1' }
+    number7: { value: '1' },
+    thing3: { value: '有空记得要清理过期物品哦！' }
   });
   assert.deepEqual(updates, [
     {
@@ -350,7 +379,7 @@ test('main creates in-app notice records for rejected subscriptions without push
   };
   const expiryReminder = loadExpiryReminderFunction({ collections, updates, sets, sends });
 
-  const result = await expiryReminder.main({ now, templateId: 'template-id' }, {});
+  const result = await withExpiryReminderTemplateId(CLOUD_TEMPLATE_ID, () => expiryReminder.main({ now }, {}));
 
   assert.equal(result.scanned, 1);
   assert.equal(result.notices, 1);
@@ -373,11 +402,10 @@ test('main creates in-app notice records for rejected subscriptions without push
   assert.equal(notice.message, 'Milk 已过期，请及时处理。');
 });
 
-test('main records in-app fallbacks when only part of a batch has subscribe quota', async () => {
+test('main sends one subscribe message for a due item batch', async () => {
   const now = Date.UTC(2026, 4, 31, 9);
   const updates = [];
   const sends = [];
-  const sendFailures = [];
   const collections = {
     ft_containers: {
       active: { _id: 'active', name: 'Pantry' }
@@ -391,7 +419,7 @@ test('main records in-app fallbacks when only part of a batch has subscribe quot
       containerId: 'active',
       displayName: `物品${index + 1}`,
       reminderEnabled: true,
-      subscribeAccepted: true,
+      subscribeAccepted: index === 0,
       remindAt: now - 1 - index,
       expiresAt: now + 86400000,
       remindedAt: 0
@@ -400,25 +428,23 @@ test('main records in-app fallbacks when only part of a batch has subscribe quot
   const cloud = createMockCloud({ collections, updates, sends });
   cloud.openapi.subscribeMessage.send = (payload) => {
     sends.push(payload);
-    if (sends.length > 2) {
-      const error = new Error('quota exhausted');
-      sendFailures.push(payload.data.thing5.value);
-      return Promise.reject(error);
-    }
     return Promise.resolve({});
   };
   const expiryReminder = loadExpiryReminderFunction({ cloud });
 
-  const result = await expiryReminder.main({ now, templateId: 'template-id' }, {});
+  const result = await withExpiryReminderTemplateId(CLOUD_TEMPLATE_ID, () => expiryReminder.main({ now }, {}));
 
   assert.equal(result.scanned, 8);
-  assert.equal(result.sent, 2);
-  assert.equal(result.failed, 6);
-  assert.equal(sends.length, 8);
-  assert.equal(sendFailures.length, 6);
+  assert.equal(result.sent, 1);
+  assert.equal(result.failed, 0);
+  assert.equal(sends.length, 1);
+  assert.equal(sends[0].data.number7.value, '8');
+  assert.equal(sends[0].data.thing3.value, '有空记得要清理过期物品哦！');
+  assert.ok(sends[0].data.thing5.value.startsWith('物品1 物品2'));
+  assert.ok(sends[0].data.thing5.value.length <= 20);
+  assert.equal(updates.length, 8);
   assert.equal(Object.values(collections.ft_reminder_notices).length, 8);
-  assert.equal(Object.values(collections.ft_reminder_notices).filter((notice) => notice.pushStatus === 'sent').length, 2);
-  assert.equal(Object.values(collections.ft_reminder_notices).filter((notice) => notice.pushStatus === 'failed' && notice.channel === 'inApp').length, 6);
+  assert.equal(Object.values(collections.ft_reminder_notices).filter((notice) => notice.pushStatus === 'sent' && notice.channel === 'subscribe').length, 8);
 });
 
 test('main writes notices without sending _id in document data', async () => {
@@ -449,7 +475,7 @@ test('main writes notices without sending _id in document data', async () => {
     rejectDocumentIdInData: true
   });
 
-  const result = await expiryReminder.main({ now, templateId: 'template-id' }, {});
+  const result = await withExpiryReminderTemplateId(CLOUD_TEMPLATE_ID, () => expiryReminder.main({ now }, {}));
 
   assert.equal(result.notices, 1);
   assert.equal(sets.length, 1);
@@ -490,7 +516,7 @@ test('main skips read notice records and never pushes them again', async () => {
   };
   const expiryReminder = loadExpiryReminderFunction({ collections, updates, sends });
 
-  const result = await expiryReminder.main({ now, templateId: 'template-id' }, {});
+  const result = await withExpiryReminderTemplateId(CLOUD_TEMPLATE_ID, () => expiryReminder.main({ now }, {}));
 
   assert.equal(result.scanned, 0);
   assert.equal(result.sent, 0);
@@ -531,7 +557,7 @@ test('main does not rewrite existing in-app pending notices every minute', async
   };
   const expiryReminder = loadExpiryReminderFunction({ collections, sets });
 
-  const result = await expiryReminder.main({ now, templateId: 'template-id' }, {});
+  const result = await withExpiryReminderTemplateId(CLOUD_TEMPLATE_ID, () => expiryReminder.main({ now }, {}));
 
   assert.equal(result.scanned, 1);
   assert.equal(result.notices, 0);
@@ -560,7 +586,7 @@ test('main treats missing openid as NO_OPENID failure and in-app fallback', asyn
   };
   const expiryReminder = loadExpiryReminderFunction({ collections, updates, sends });
 
-  const result = await expiryReminder.main({ now, templateId: 'template-id' }, {});
+  const result = await withExpiryReminderTemplateId(CLOUD_TEMPLATE_ID, () => expiryReminder.main({ now }, {}));
 
   assert.equal(result.sent, 0);
   assert.equal(result.failed, 1);
@@ -602,7 +628,7 @@ test('main downgrades subscribe send errors to in-app fallback', async () => {
     sendError: new Error('subscribe unavailable')
   });
 
-  const result = await expiryReminder.main({ now, templateId: 'template-id' }, {});
+  const result = await withExpiryReminderTemplateId(CLOUD_TEMPLATE_ID, () => expiryReminder.main({ now }, {}));
 
   assert.equal(result.sent, 0);
   assert.equal(result.failed, 1);
@@ -652,7 +678,7 @@ test('main scans all collection pages before sending reminders', async () => {
     pageCalls
   });
 
-  const result = await expiryReminder.main({ now, templateId: 'template-id' }, {});
+  const result = await withExpiryReminderTemplateId(CLOUD_TEMPLATE_ID, () => expiryReminder.main({ now }, {}));
 
   assert.equal(result.sent, 1);
   assert.equal(updates[0].id, 'milk');
