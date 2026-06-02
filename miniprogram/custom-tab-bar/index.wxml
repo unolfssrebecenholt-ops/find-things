@@ -1,0 +1,14 @@
+<view class="bottom-nav custom-tab-nav">
+  <view class="nav-item {{selected === 0 ? 'active' : ''}}" data-index="0" data-url="/pages/home/index" bindtap="switchTab">
+    <view class="nav-icon"></view>
+    <text>首页</text>
+  </view>
+  <view class="nav-item {{selected === 1 ? 'active' : ''}}" data-index="1" data-url="/pages/search/index" bindtap="switchTab">
+    <view class="nav-icon search"></view>
+    <text>找东西</text>
+  </view>
+  <view class="nav-item {{selected === 2 ? 'active' : ''}}" data-index="2" data-url="/pages/container/list" bindtap="switchTab">
+    <view class="nav-icon box"></view>
+    <text>容器</text>
+  </view>
+</view>

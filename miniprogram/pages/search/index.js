@@ -1,7 +1,11 @@
 const storage = require('../../services/storage');
 const search = require('../../services/search');
 const imageThumbs = require('../../services/image-thumbs');
-const { navigateHome } = require('../../utils/navigation');
+const {
+  SEARCH_URL,
+  consumeSectionRefresh,
+  syncTabBar
+} = require('../../utils/navigation');
 
 function getUserData() {
   if (typeof storage.removeDemoData === 'function') {
@@ -63,12 +67,10 @@ Page({
     examples: ['书', '钥匙', '纸巾']
   },
 
-  onLoad() {
-    this.refreshExamples();
-  },
-
   onShow() {
-    this.refreshExamples();
+    syncTabBar(this, SEARCH_URL);
+    const shouldRefresh = consumeSectionRefresh(SEARCH_URL);
+    if (!this.examplesLoaded || shouldRefresh) this.refreshExamples();
   },
 
   refreshExamples() {
@@ -77,6 +79,7 @@ Page({
         this.setData({
           examples: buildExamples(data.items)
         });
+        this.examplesLoaded = true;
       })
       .catch(showDataError);
   },
@@ -149,14 +152,6 @@ Page({
     const id = event.detail.containerId;
     if (!id) return;
     wx.navigateTo({ url: `/pages/container/detail?id=${id}` });
-  },
-
-  goHome() {
-    navigateHome();
-  },
-
-  showContainers() {
-    wx.navigateTo({ url: '/pages/container/list' });
   },
 
   goCapture() {

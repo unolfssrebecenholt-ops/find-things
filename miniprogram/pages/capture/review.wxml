@@ -54,7 +54,6 @@
           <text class="quick-confidence">{{item.confidenceLabel}}</text>
         </view>
         <view class="quick-actions">
-          <view wx:if="{{item.isCollapsed}}" class="quick-action-spacer"></view>
           <button
             wx:if="{{item.isCollapsed}}"
             class="quick-action expand-button"

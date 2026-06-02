@@ -4,7 +4,11 @@ const imageThumbs = require('../../services/image-thumbs');
 const imageDisplay = require('../../services/image-display');
 const { isMockAssetPath } = require('../../utils/mock-assets');
 const { getContainerPreview } = require('../../utils/image-preview');
-const { navigateHome } = require('../../utils/navigation');
+const {
+  CONTAINERS_URL,
+  consumeSectionRefresh,
+  syncTabBar
+} = require('../../utils/navigation');
 
 function getToneClass(index) {
   return ['pine', 'warm', 'cool'][index % 3];
@@ -135,7 +139,9 @@ Page({
   },
 
   onShow() {
-    this.load();
+    syncTabBar(this, CONTAINERS_URL);
+    const shouldRefresh = consumeSectionRefresh(CONTAINERS_URL);
+    if (!this.listLoaded || shouldRefresh) this.load();
   },
 
   load() {
@@ -159,6 +165,7 @@ Page({
           rowModeClass: '',
           showRowMoreActions: true
         });
+        this.listLoaded = true;
         this.ensureVisibleThumbnails(data.containers);
       };
       const viewModels = createContainerViewModels(data.containers);
@@ -364,14 +371,6 @@ Page({
         storage.deleteContainersAsync(ids).then(afterDelete).catch(showDataError);
       }
     });
-  },
-
-  goHome() {
-    navigateHome();
-  },
-
-  goSearch() {
-    wx.navigateTo({ url: '/pages/search/index' });
   },
 
   goCapture() {

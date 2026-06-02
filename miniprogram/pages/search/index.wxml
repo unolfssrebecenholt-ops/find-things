@@ -64,19 +64,4 @@
     </view>
     <button class="empty-action" bindtap="goCapture">先拍一箱</button>
   </view>
-
-  <view class="bottom-nav">
-    <view class="nav-item" bindtap="goHome">
-      <view class="nav-icon"></view>
-      <text>首页</text>
-    </view>
-    <view class="nav-item active">
-      <view class="nav-icon search"></view>
-      <text>找东西</text>
-    </view>
-    <view class="nav-item" bindtap="showContainers">
-      <view class="nav-icon box"></view>
-      <text>容器</text>
-    </view>
-  </view>
 </view>

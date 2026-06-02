@@ -114,19 +114,4 @@
     </view>
     <button class="batch-delete" bindtap="confirmBatchDelete">批量删除</button>
   </view>
-
-  <view class="bottom-nav">
-    <view class="nav-item" bindtap="goHome">
-      <view class="nav-icon"></view>
-      <text>首页</text>
-    </view>
-    <view class="nav-item" bindtap="goSearch">
-      <view class="nav-icon search"></view>
-      <text>找东西</text>
-    </view>
-    <view class="nav-item active">
-      <view class="nav-icon box"></view>
-      <text>容器</text>
-    </view>
-  </view>
 </view>

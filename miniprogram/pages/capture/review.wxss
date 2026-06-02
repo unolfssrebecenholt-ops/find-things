@@ -2,6 +2,8 @@
   display: flex;
   flex-direction: column;
   gap: 14rpx;
+  width: 100%;
+  overflow-x: hidden;
   min-height: 100vh;
   padding-bottom: 196rpx;
   background:
@@ -158,12 +160,17 @@
 .quick-list {
   display: grid;
   gap: 8rpx;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .quick-item {
   position: relative;
   display: grid;
   gap: 10rpx;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   min-height: 92rpx;
   padding: 14rpx;
   background: #fbfbf7;
@@ -179,9 +186,10 @@
 
 .quick-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 154rpx;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 12rpx;
   align-items: center;
+  min-width: 0;
   min-height: 52rpx;
 }
 
@@ -264,8 +272,8 @@
   justify-content: flex-end;
   gap: 8rpx;
   justify-self: end;
-  width: 154rpx;
-  min-width: 154rpx;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .quick-action {
@@ -286,11 +294,6 @@
   text-align: center;
   border-radius: 16rpx;
   box-sizing: border-box;
-}
-
-.quick-action-spacer {
-  width: 72rpx;
-  height: 44rpx;
 }
 
 .quick-action::after {

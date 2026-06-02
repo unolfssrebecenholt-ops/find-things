@@ -1,0 +1,68 @@
+.bottom-nav {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  min-height: 108rpx;
+  padding: 6rpx 28rpx 8rpx;
+  background: rgba(251, 251, 247, 0.94);
+  border-top: 2rpx solid rgba(21, 23, 19, 0.12);
+  backdrop-filter: blur(18rpx);
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  min-height: 88rpx;
+  color: #8b9288;
+  font-size: 20rpx;
+  font-weight: 700;
+}
+
+.nav-item.active {
+  color: #1f6048;
+}
+
+.nav-icon {
+  position: relative;
+  width: 40rpx;
+  height: 40rpx;
+  border: 4rpx solid currentColor;
+  border-radius: 12rpx;
+}
+
+.nav-icon.search {
+  position: relative;
+  border-radius: 50%;
+}
+
+.nav-icon.search::after {
+  position: absolute;
+  right: -10rpx;
+  bottom: -7rpx;
+  width: 16rpx;
+  height: 4rpx;
+  content: "";
+  background: currentColor;
+  border-radius: 999rpx;
+  transform: rotate(45deg);
+}
+
+.nav-icon.box {
+  border-radius: 10rpx;
+}
+
+.nav-icon.box::before {
+  position: absolute;
+  top: 14rpx;
+  right: 8rpx;
+  left: 8rpx;
+  content: "";
+  border-top: 4rpx solid currentColor;
+}

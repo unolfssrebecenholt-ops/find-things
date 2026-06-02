@@ -61,13 +61,14 @@ test('wxml avoids brittle else chains and complex fallback expressions', () => {
 
 test('home page keeps the task-first structure with Xiaolan empty state', () => {
   const wxml = readMiniProgramFile('pages', 'home', 'index.wxml');
+  const tabWxml = readMiniProgramFile('custom-tab-bar', 'index.wxml');
 
   assert.match(wxml, /今天整理一点点/);
   assert.match(wxml, /一搜就知道/);
   assert.match(wxml, /hero-panel/);
   assert.match(wxml, /container-stack/);
   assert.match(wxml, /container-row/);
-  assert.match(wxml, /bottom-nav/);
+  assert.match(tabWxml, /bottom-nav/);
   assert.match(wxml, /最近整理/);
   assert.match(wxml, /小懒还没有东西可找/);
   assert.match(wxml, /xiaolan-sloth\.svg/);
@@ -256,12 +257,19 @@ test('container tab opens a real container list page', () => {
   const appJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'app.json'), 'utf8'));
   const homeJs = readMiniProgramFile('pages', 'home', 'index.js');
   const searchJs = readMiniProgramFile('pages', 'search', 'index.js');
+  const navigationJs = readMiniProgramFile('utils', 'navigation.js');
+  const tabWxml = readMiniProgramFile('custom-tab-bar', 'index.wxml');
   const listWxml = readMiniProgramFile('pages', 'container', 'list.wxml');
   const listJs = readMiniProgramFile('pages', 'container', 'list.js');
 
   assert.ok(appJson.pages.includes('pages/container/list'));
-  assert.match(homeJs, /\/pages\/container\/list/);
-  assert.match(searchJs, /\/pages\/container\/list/);
+  assert.equal(appJson.tabBar && appJson.tabBar.custom, true);
+  assert.ok((appJson.tabBar.list || []).some((item) => item.pagePath === 'pages/container/list'));
+  assert.match(navigationJs, /\/pages\/container\/list/);
+  assert.match(navigationJs, /switchTab/);
+  assert.match(tabWxml, /\/pages\/container\/list/);
+  assert.match(homeJs, /CONTAINERS_URL/);
+  assert.match(searchJs, /syncTabBar/);
   assert.match(listWxml, /家里的东西，/);
   assert.match(listWxml, /都在这里/);
   assert.match(listWxml, /compact-search/);
@@ -297,11 +305,14 @@ test('search page uses photo-first result cards and playful assistant wording', 
 test('search page includes the Xiaolan searching chip and relaxed bottom navigation spacing', () => {
   const wxml = readMiniProgramFile('pages', 'search', 'index.wxml');
   const appWxss = readMiniProgramFile('app.wxss');
+  const tabWxss = readMiniProgramFile('custom-tab-bar', 'index.wxss');
 
   assert.match(wxml, /sloth-chip/);
   assert.match(wxml, /xiaolan-sloth\.svg/);
   assert.match(wxml, /小懒在找/);
   assertCssHasAtLeast(appWxss, '.nav-item', 'gap', 10);
+  assertCssHasAtLeast(tabWxss, '.nav-item', 'gap', 6);
+  assert.doesNotMatch(tabWxss, /safe-area-inset-bottom/);
 });
 
 test('user-facing recognition copy uses Xiaolan instead of raw AI labels', () => {

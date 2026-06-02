@@ -3,7 +3,12 @@ const imageDisplay = require('../../services/image-display');
 const imageStore = require('../../services/image-store');
 const storage = require('../../services/storage');
 const { withDisplayIndexes } = require('../../utils/geometry');
-const { navigateHome } = require('../../utils/navigation');
+const {
+  HOME_URL,
+  SEARCH_URL,
+  navigateHome,
+  switchSection
+} = require('../../utils/navigation');
 const { createImageMetadata } = require('../../utils/image-metadata');
 
 const CONTENT_IMAGE_LIMIT = storage.CONTENT_IMAGE_LIMIT || 5;
@@ -856,10 +861,10 @@ Page({
   },
 
   goHome() {
-    navigateHome();
+    switchSection(HOME_URL);
   },
 
   goSearch() {
-    wx.navigateTo({ url: '/pages/search/index' });
+    switchSection(SEARCH_URL);
   }
 });

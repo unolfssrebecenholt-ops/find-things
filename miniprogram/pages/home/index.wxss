@@ -445,22 +445,3 @@
   flex-wrap: wrap;
   gap: 8rpx;
 }
-
-.home-page .bottom-nav {
-  right: 0;
-  bottom: 0;
-  left: 0;
-  gap: 0;
-  min-height: 112rpx;
-  padding: 12rpx 28rpx 18rpx;
-  background: rgba(251, 251, 247, 0.94);
-  border-right: 0;
-  border-bottom: 0;
-  border-left: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-
-.home-page .nav-item.active {
-  background: transparent;
-}

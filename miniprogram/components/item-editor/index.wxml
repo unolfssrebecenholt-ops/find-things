@@ -70,18 +70,18 @@
     <view class="expiry-panel">
       <view class="expiry-row">
         <view class="expiry-copy">
-          <text class="field-caption">到期日期</text>
+          <text class="field-caption">到期提醒</text>
           <text class="expiry-hint">{{item.expiresAt ? item.expiryDateText : '未设置'}}</text>
         </view>
         <switch
           class="expiry-switch"
-          checked="{{item.expiresAt > 0}}"
+          checked="{{item.reminderEnabled}}"
           data-index="{{index}}"
           color="#1f6048"
           bindchange="toggleExpiry"
         />
       </view>
-      <view wx:if="{{item.expiresAt}}" class="expiry-row compact">
+      <view wx:if="{{item.reminderEnabled}}" class="expiry-row compact reminder-settings">
         <picker
           class="expiry-picker"
           mode="date"
@@ -91,30 +91,20 @@
         >
           <view class="expiry-badge">{{item.expiryDateText}}</view>
         </picker>
-        <view class="reminder-control">
-          <text class="expiry-hint">提醒</text>
-          <switch
-            class="expiry-switch"
-            checked="{{item.reminderEnabled}}"
+        <view class="reminder-offset">
+          <text class="expiry-hint">提前</text>
+          <input
+            class="offset-input"
+            type="number"
+            value="{{item.remindOffsetDays}}"
             data-index="{{index}}"
-            color="#1f6048"
-            bindchange="toggleReminder"
+            bindinput="changeReminderOffset"
+            bindchange="changeReminderOffset"
+            bindblur="changeReminderOffset"
+            bindconfirm="changeReminderOffset"
           />
+          <text class="expiry-hint">天提醒</text>
         </view>
-      </view>
-      <view wx:if="{{item.reminderEnabled}}" class="expiry-row compact">
-        <text class="expiry-hint">提前</text>
-        <input
-          class="offset-input"
-          type="number"
-          value="{{item.remindOffsetDays}}"
-          data-index="{{index}}"
-          bindinput="changeReminderOffset"
-          bindchange="changeReminderOffset"
-          bindblur="changeReminderOffset"
-          bindconfirm="changeReminderOffset"
-        />
-        <text class="expiry-hint">天提醒</text>
       </view>
     </view>
 

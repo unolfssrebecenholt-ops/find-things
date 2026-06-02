@@ -3,7 +3,15 @@ const { isMockAssetPath } = require('../../utils/mock-assets');
 const { getContainerPreview } = require('../../utils/image-preview');
 const imageThumbs = require('../../services/image-thumbs');
 const imageDisplay = require('../../services/image-display');
-const { navigateHome } = require('../../utils/navigation');
+const {
+  CONTAINERS_URL,
+  HOME_URL,
+  SEARCH_URL,
+  consumeSectionRefresh,
+  navigateHome,
+  syncTabBar,
+  switchSection
+} = require('../../utils/navigation');
 
 function getStorageService() {
   if (!storageService) {
@@ -31,10 +39,22 @@ function markExpiryRemindersRead(service, notices) {
     : typeof service.markReminderNoticeRead === 'function'
       ? (noticeId, timestamp) => Promise.resolve(service.markReminderNoticeRead(noticeId, timestamp))
       : null;
-  if (!markRead) return Promise.resolve();
+  const markItemRead = typeof service.markItemReminderReadAsync === 'function'
+    ? service.markItemReminderReadAsync.bind(service)
+    : typeof service.markItemReminderRead === 'function'
+      ? (itemId, timestamp) => Promise.resolve(service.markItemReminderRead(itemId, timestamp))
+      : null;
+  if (!markRead && !markItemRead) return Promise.resolve();
 
   const readAt = Date.now();
-  return Promise.all(targetNotices.map((notice) => markRead(notice._id, readAt)));
+  return Promise.all(targetNotices.map((notice) => {
+    if (notice.derived === true && notice.itemId && markItemRead) {
+      return markItemRead(notice.itemId, readAt);
+    }
+    if (markRead) return markRead(notice._id, readAt);
+    if (notice.itemId && markItemRead) return markItemRead(notice.itemId, readAt);
+    return Promise.resolve();
+  }));
 }
 
 function getContainerStatus(container, index) {
@@ -89,6 +109,78 @@ function listReminderNotices(service, useDatabase) {
     return Promise.resolve(service.listPendingReminderNotices());
   }
   return Promise.resolve([]);
+}
+
+function isDeleted(record) {
+  return !!(record && (record.deleted === true || record.deletedAt));
+}
+
+function reminderNoticeKey(record) {
+  const itemId = firstText([
+    record && record.itemId,
+    record && record._id
+  ]);
+  const remindAt = toTimestamp(record && record.remindAt);
+  return itemId && remindAt ? `${itemId}_${remindAt}` : '';
+}
+
+function reminderNoticeItemKey(record) {
+  const itemId = firstText([
+    record && record.itemId,
+    record && record._id
+  ]);
+  return itemId ? `item_${itemId}` : '';
+}
+
+function createDerivedReminderNotice(item) {
+  const itemId = firstText([item && item._id, item && item.id]);
+  const remindAt = toTimestamp(item && item.remindAt);
+  const expiresAt = toTimestamp(item && (item.expiresAt || item.remindAt));
+  const name = reminderName(item);
+  return {
+    _id: `derived_expiry_${itemId || name}_${remindAt || expiresAt}`,
+    derived: true,
+    type: 'expiry',
+    itemId,
+    containerId: itemContainerId(item),
+    displayName: name,
+    message: `${name} 已过期，请及时处理。`,
+    expiresAt,
+    remindAt,
+    channel: item && item.subscribeAccepted === true ? 'subscribe' : 'inApp',
+    status: 'pending',
+    pushStatus: item && item.remindedAt ? 'sent' : 'none',
+    createdAt: remindAt || Date.now(),
+    updatedAt: Date.now()
+  };
+}
+
+function deriveReminderNoticesFromItems(items, existingNotices, now) {
+  const timestamp = toTimestamp(now) || Date.now();
+  const existingKeys = (existingNotices || []).reduce((keys, notice) => {
+    const key = reminderNoticeKey(notice);
+    const itemKey = reminderNoticeItemKey(notice);
+    if (key) keys[key] = true;
+    if (itemKey) keys[itemKey] = true;
+    return keys;
+  }, {});
+  return (items || [])
+    .filter((item) => {
+      if (!item || isDeleted(item)) return false;
+      if (item.reminderEnabled !== true || item.inAppReadAt) return false;
+      const remindAt = toTimestamp(item.remindAt);
+      if (!remindAt || remindAt > timestamp) return false;
+      const key = reminderNoticeKey({ itemId: item._id, remindAt });
+      const itemKey = reminderNoticeItemKey({ itemId: item._id });
+      return (!key || !existingKeys[key]) && (!itemKey || !existingKeys[itemKey]);
+    })
+    .map(createDerivedReminderNotice);
+}
+
+function mergeReminderNotices(notices, items, now) {
+  const list = (notices || []).filter(Boolean);
+  return list.concat(deriveReminderNoticesFromItems(items, list, now))
+    .sort((a, b) => (b.createdAt || b.updatedAt || 0) - (a.createdAt || a.updatedAt || 0));
 }
 
 function triggerExpiryReminderScan(useDatabase) {
@@ -353,7 +445,9 @@ Page({
   },
 
   onShow() {
-    this.load();
+    syncTabBar(this, HOME_URL);
+    const shouldRefresh = consumeSectionRefresh(HOME_URL);
+    if (!this.homeLoaded || shouldRefresh) this.load();
   },
 
   load() {
@@ -386,6 +480,7 @@ Page({
         const rendered = createContainerViewModels(visibleContainers);
         const apply = (recentContainers) => ({
           containers,
+          items,
           visibleContainers,
           recentContainers,
           expiryReminderNotices: reminderNotices || []
@@ -395,7 +490,8 @@ Page({
           : apply(rendered);
       })
       .then(({ containers, items, visibleContainers, recentContainers, expiryReminderNotices }) => {
-        const enrichedNotices = enrichReminderNotices(expiryReminderNotices, items, containers);
+        const mergedNotices = mergeReminderNotices(expiryReminderNotices, items);
+        const enrichedNotices = enrichReminderNotices(mergedNotices, items, containers);
         const details = createReminderDetails(enrichedNotices);
         return resolveReminderDetails(details).then((expiryReminderDetails) => {
           this.setData({
@@ -408,6 +504,7 @@ Page({
             expiryReminderCount: enrichedNotices.length,
             showExpiryReminderEntry: enrichedNotices.length > 0
           });
+          this.homeLoaded = true;
           this.ensureRecentThumbnails(visibleContainers);
         });
       })
@@ -431,7 +528,7 @@ Page({
   },
 
   goSearch() {
-    wx.navigateTo({ url: '/pages/search/index' });
+    switchSection(SEARCH_URL);
   },
 
   goHome() {
@@ -439,7 +536,7 @@ Page({
   },
 
   showContainers() {
-    wx.navigateTo({ url: '/pages/container/list' });
+    switchSection(CONTAINERS_URL);
   },
 
   openExpiryReminders() {
