@@ -167,7 +167,7 @@ test('main returns a diagnostic function version for deployment verification', a
 
   const result = await expiryReminder.main({ now: 1780243920000 }, {});
 
-  assert.equal(result.version, 'ftExpiryReminder-2026-06-01-debug-v4');
+  assert.equal(result.version, 'ftExpiryReminder-2026-06-01-debug-v5');
 });
 
 test('main returns subscribe template config from environment', async () => {
@@ -176,7 +176,7 @@ test('main returns subscribe template config from environment', async () => {
   const result = await withExpiryReminderTemplateId(CLOUD_TEMPLATE_ID, () => expiryReminder.main({ action: 'config' }, {}));
 
   assert.deepEqual(result, {
-    version: 'ftExpiryReminder-2026-06-01-debug-v4',
+    version: 'ftExpiryReminder-2026-06-01-debug-v5',
     expiryTemplateId: CLOUD_TEMPLATE_ID,
     hasTemplateId: true
   });
@@ -402,7 +402,7 @@ test('main creates in-app notice records for rejected subscriptions without push
   assert.equal(notice.message, 'Milk 已过期，请及时处理。');
 });
 
-test('main sends one subscribe message for a due item batch', async () => {
+test('main sends one subscribe message for subscribed due items only', async () => {
   const now = Date.UTC(2026, 4, 31, 9);
   const updates = [];
   const sends = [];
@@ -438,13 +438,14 @@ test('main sends one subscribe message for a due item batch', async () => {
   assert.equal(result.sent, 1);
   assert.equal(result.failed, 0);
   assert.equal(sends.length, 1);
-  assert.equal(sends[0].data.number7.value, '8');
+  assert.equal(sends[0].data.number7.value, '1');
   assert.equal(sends[0].data.thing3.value, '有空记得要清理过期物品哦！');
-  assert.ok(sends[0].data.thing5.value.startsWith('物品1 物品2'));
+  assert.equal(sends[0].data.thing5.value, '物品1');
   assert.ok(sends[0].data.thing5.value.length <= 20);
-  assert.equal(updates.length, 8);
+  assert.equal(updates.length, 1);
   assert.equal(Object.values(collections.ft_reminder_notices).length, 8);
-  assert.equal(Object.values(collections.ft_reminder_notices).filter((notice) => notice.pushStatus === 'sent' && notice.channel === 'subscribe').length, 8);
+  assert.equal(Object.values(collections.ft_reminder_notices).filter((notice) => notice.pushStatus === 'sent' && notice.channel === 'subscribe').length, 1);
+  assert.equal(Object.values(collections.ft_reminder_notices).filter((notice) => notice.pushStatus === 'none' && notice.channel === 'inApp').length, 7);
 });
 
 test('main writes notices without sending _id in document data', async () => {

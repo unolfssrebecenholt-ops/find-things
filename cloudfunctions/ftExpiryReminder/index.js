@@ -14,7 +14,7 @@ try {
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
-const FUNCTION_VERSION = 'ftExpiryReminder-2026-06-01-debug-v4';
+const FUNCTION_VERSION = 'ftExpiryReminder-2026-06-01-debug-v5';
 const LOG_PREFIX = '[ftExpiryReminder]';
 const DEFAULT_PAGE = 'pages/home/index';
 const ITEM_COLLECTION = (cloudConfig.collections && cloudConfig.collections.items) || 'ft_items';
@@ -415,14 +415,6 @@ function shouldSendSubscribeReminder(item, notice) {
     && hasEmptyReminderTimestamp(item);
 }
 
-function shouldIncludeInSubscribeBatch(item, notice) {
-  return item
-    && notice
-    && notice.status !== 'read'
-    && notice.pushStatus !== 'sent'
-    && hasEmptyReminderTimestamp(item);
-}
-
 function createSubscribeBatches(records) {
   const groups = (records || []).reduce((map, record) => {
     const openid = record && record.item && record.item._openid;
@@ -435,11 +427,10 @@ function createSubscribeBatches(records) {
   return Object.keys(groups).map((openid) => {
     const groupRecords = groups[openid];
     const quotaRecords = groupRecords.filter((record) => shouldSendSubscribeReminder(record.item, record.notice));
-    const recordsToSend = groupRecords.filter((record) => shouldIncludeInSubscribeBatch(record.item, record.notice));
     return {
       openid,
       quotaRecords,
-      records: quotaRecords.length ? recordsToSend : []
+      records: quotaRecords
     };
   }).filter((batch) => batch.records.length);
 }
