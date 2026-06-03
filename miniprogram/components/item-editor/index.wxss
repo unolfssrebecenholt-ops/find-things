@@ -240,7 +240,7 @@
 
 .field-grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 12rpx;
 }
 
@@ -263,22 +263,30 @@
   border-radius: 20rpx;
 }
 
+.tag-field {
+  display: grid;
+  min-width: 0;
+  gap: 10rpx;
+}
+
 .tag-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8rpx;
+  gap: 14rpx 12rpx;
   align-items: center;
+  padding-top: 10rpx;
 }
 
 .tag {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
   max-width: 100%;
-  padding: 6rpx 10rpx;
-  overflow: hidden;
+  min-height: 46rpx;
+  padding: 9rpx 16rpx 9rpx 34rpx;
   font-size: 21rpx;
   font-weight: 760;
   line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   border-radius: 999rpx;
 }
 
@@ -286,6 +294,43 @@
   color: #143e31;
   background: #eef4ef;
   border: 1rpx solid rgba(31, 96, 72, 0.1);
+}
+
+.tag-label {
+  min-width: 0;
+  max-width: 250rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag-remove {
+  position: absolute;
+  top: -6rpx;
+  left: -4rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28rpx;
+  min-width: 28rpx;
+  height: 28rpx;
+  color: #8f4538;
+  font-size: 17rpx;
+  font-weight: 900;
+  line-height: 1;
+  background: #fff8f6;
+  border: 1rpx solid rgba(143, 69, 56, 0.2);
+  border-radius: 999rpx;
+  box-shadow: 0 2rpx 6rpx rgba(22, 25, 18, 0.08);
+}
+
+.tag-remove-mark {
+  display: block;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: 1;
+  transform: translateY(-1rpx);
 }
 
 .expiry-panel {

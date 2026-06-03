@@ -4,8 +4,10 @@ const imageStore = require('../../services/image-store');
 const storage = require('../../services/storage');
 const { withDisplayIndexes } = require('../../utils/geometry');
 const {
+  CONTAINERS_URL,
   HOME_URL,
   SEARCH_URL,
+  markSectionRefresh,
   navigateHome,
   switchSection
 } = require('../../utils/navigation');
@@ -193,6 +195,25 @@ function stripImageViewFields(image) {
   return value;
 }
 
+function sameImageIdentity(left, right) {
+  if (!left || !right) return false;
+  if (left.imageId && right.imageId && left.imageId === right.imageId) return true;
+  return !!(left.fileId && right.fileId && left.fileId === right.fileId);
+}
+
+function preserveImageDisplayFields(images, currentImages) {
+  return (images || []).map((image) => {
+    const current = (currentImages || []).find((candidate) => sameImageIdentity(image, candidate));
+    if (!current) return image;
+    return Object.assign({}, image, {
+      displayFileId: current.displayFileId || image.displayFileId || '',
+      displayThumbFileId: current.displayThumbFileId || image.displayThumbFileId || '',
+      displaySrc: current.displaySrc || image.displaySrc || '',
+      refreshingDisplayFileId: !!current.refreshingDisplayFileId
+    });
+  });
+}
+
 function normalizeRawItems(items) {
   return withDisplayIndexes(items || []).map((item, index) => {
     const value = stripItemViewFields(item);
@@ -252,6 +273,12 @@ function createContainerViewModel(container) {
   return Object.assign({}, container, {
     displayLocation: container.locationPath || '未填写位置'
   });
+}
+
+function markInventoryRelatedSectionsRefresh() {
+  markSectionRefresh(HOME_URL);
+  markSectionRefresh(CONTAINERS_URL);
+  markSectionRefresh(SEARCH_URL);
 }
 
 function collectImagePaths(container, contentImages) {
@@ -528,37 +555,79 @@ Page({
     if (!contextKey) return;
     const editedItems = event.detail.items || [];
     const shouldRemove = editedItems.length === 0;
+    if (shouldRemove) {
+      this.deleteInventoryItem(contextKey);
+      return;
+    }
     const nextItems = (this.data.rawItems || []).reduce((items, item, index) => {
       if (getItemKey(item, index) !== contextKey) return items.concat(item);
-      if (shouldRemove) return items;
       return items.concat(stripItemViewFields(Object.assign({}, item, editedItems[0])));
     }, []);
-    const expandedItemKeys = shouldRemove
-      ? (this.data.expandedItemKeys || []).filter((key) => key !== contextKey)
-      : (this.data.expandedItemKeys || []);
-    this.persistInventory(nextItems, expandedItemKeys, shouldRemove ? '已移除物品' : '已保存修改');
+    const expandedItemKeys = this.data.expandedItemKeys || [];
+    this.persistInventory(nextItems, expandedItemKeys, '已保存修改');
   },
 
   removeExpandedItem(event) {
     const itemKey = String(event.currentTarget.dataset.key || '');
     if (!itemKey) return;
     wx.showModal({
-      title: '移除这件物品？',
-      content: '移除后，这件物品不会再出现在搜索结果里。',
+      title: '删除这件物品？',
+      content: '删除后，这件物品不会再出现在搜索结果里，对应过期提醒也会一起收起。',
       cancelText: '取消',
-      confirmText: '移除',
+      confirmText: '删除',
       confirmColor: '#a33b2f',
       success: (result) => {
         if (!result.confirm) return;
-        this.removeInventoryItem(itemKey);
+        this.deleteInventoryItem(itemKey);
       }
     });
   },
 
-  removeInventoryItem(itemKey) {
+  deleteInventoryItem(itemKey) {
+    const rawItems = this.data.rawItems || [];
+    const targetIndex = rawItems.findIndex((item, index) => getItemKey(item, index) === itemKey);
+    const targetItem = targetIndex >= 0 ? rawItems[targetIndex] : null;
+    const itemId = targetItem && targetItem._id;
     const nextItems = (this.data.rawItems || []).filter((item, index) => getItemKey(item, index) !== itemKey);
     const expandedItemKeys = (this.data.expandedItemKeys || []).filter((key) => key !== itemKey);
-    this.persistInventory(nextItems, expandedItemKeys, '已移除物品');
+    if (!itemId || (typeof storage.deleteItem !== 'function' && typeof storage.deleteItemAsync !== 'function')) {
+      return this.persistInventory(nextItems, expandedItemKeys, '已删除物品').then(() => {
+        markInventoryRelatedSectionsRefresh();
+      });
+    }
+
+    this.setInventoryState(nextItems, this.data.contentImages || [], expandedItemKeys, {
+      inventoryStatusText: '正在删除...',
+      inventorySaving: true
+    });
+
+    const runDelete = () => {
+      const request = typeof storage.deleteItemAsync === 'function'
+        ? storage.deleteItemAsync(itemId)
+        : Promise.resolve(storage.deleteItem(itemId));
+      return request
+        .then(() => {
+          markInventoryRelatedSectionsRefresh();
+          wx.showToast({ title: '已删除', icon: 'success' });
+          this.load();
+        })
+        .catch((error) => {
+          this.setData({
+            inventoryStatusText: '删除失败，请重试',
+            inventorySaving: false
+          });
+          wx.showToast({
+            title: error && error.message ? error.message : '删除失败',
+            icon: 'none'
+          });
+          this.load();
+        });
+    };
+
+    this.inventorySaveChain = (this.inventorySaveChain || Promise.resolve())
+      .catch(() => {})
+      .then(runDelete);
+    return this.inventorySaveChain;
   },
 
   addManualItem() {
@@ -574,7 +643,9 @@ Page({
     if (!this.data.container || !this.data.container._id) return Promise.resolve();
 
     const cleanItems = normalizeRawItems(rawItems).map(stripItemViewFields);
-    const contentImages = (this.data.contentImages || []).map(stripImageViewFields);
+    const currentContentImages = this.data.contentImages || [];
+    const contentImages = currentContentImages.map(stripImageViewFields);
+    const displayContentImages = preserveImageDisplayFields(contentImages, currentContentImages);
     const saveData = Object.assign({}, this.data.container, {
       contentImages,
       contentImageFileId: contentImages[0] ? contentImages[0].fileId : '',
@@ -584,7 +655,7 @@ Page({
     this.inventorySaveVersion = (this.inventorySaveVersion || 0) + 1;
     const saveVersion = this.inventorySaveVersion;
 
-    this.setInventoryState(cleanItems, contentImages, expandedItemKeys, {
+    this.setInventoryState(cleanItems, displayContentImages, expandedItemKeys, {
       inventoryStatusText: '正在保存...',
       inventorySaving: true
     });
@@ -598,7 +669,11 @@ Page({
           if (saveVersion !== this.inventorySaveVersion) return saved;
           const container = (saved && saved.container) || saveData;
           const items = normalizeRawItems((saved && saved.items) || cleanItems);
-          const images = (container.contentImages || contentImages).map(stripImageViewFields);
+          const images = preserveImageDisplayFields(
+            (container.contentImages || contentImages).map(stripImageViewFields),
+            currentContentImages
+          );
+          if (saved && saved.dismissedReminderCount) markInventoryRelatedSectionsRefresh();
           this.setInventoryState(items, images, expandedItemKeys, {
             container: createContainerViewModel(container),
             inventoryStatusText: doneText || '已保存修改',
@@ -847,6 +922,7 @@ Page({
           : Promise.resolve(storage.deleteContainer(this.data.container._id));
         runDelete
           .then(() => {
+            markInventoryRelatedSectionsRefresh();
             wx.showToast({ title: '已删除', icon: 'success' });
             navigateHome();
           })

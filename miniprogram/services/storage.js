@@ -7,6 +7,7 @@ const imageDisplay = require('./image-display');
 
 const CONTAINER_LIMIT = 3;
 const CONTENT_IMAGE_LIMIT = 5;
+const REMINDER_NOTICE_STATUSES = ['pending', 'read', 'dismissed', 'resolved'];
 
 function now() {
   return Date.now();
@@ -512,7 +513,8 @@ function normalizeStoredItems(items) {
 
 function normalizeReminderNotice(notice) {
   const value = Object.assign({}, notice || {});
-  const status = value.status === 'read' ? 'read' : 'pending';
+  const rawStatus = firstText(value.status);
+  const status = REMINDER_NOTICE_STATUSES.indexOf(rawStatus) >= 0 ? rawStatus : 'pending';
   const pushStatus = ['sent', 'failed', 'none'].indexOf(value.pushStatus) >= 0 ? value.pushStatus : 'none';
   return Object.assign({}, value, {
     _id: firstText([value._id, value.id]),
@@ -535,6 +537,10 @@ function normalizeReminderNotice(notice) {
     contentThumbFileId: firstText(value.contentThumbFileId),
     sentAt: finiteNumber(value.sentAt, 0),
     readAt: finiteNumber(value.readAt, 0),
+    dismissedAt: finiteNumber(value.dismissedAt, 0),
+    dismissedReason: firstText(value.dismissedReason),
+    resolvedAt: finiteNumber(value.resolvedAt, 0),
+    resolvedReason: firstText(value.resolvedReason),
     createdAt: finiteNumber(value.createdAt, 0),
     updatedAt: finiteNumber(value.updatedAt, 0),
     lastError: firstText(value.lastError)
@@ -564,8 +570,9 @@ function createStorageService(adapter) {
   }
 
   function listItems() {
-    const persistedItems = normalizeStoredItems(readArray(storage, ITEMS_KEY)).filter((item) => !item.deletedAt);
-    const containersWithPersistedItems = persistedItems.reduce((ids, item) => {
+    const storedItems = normalizeStoredItems(readArray(storage, ITEMS_KEY));
+    const persistedItems = storedItems.filter((item) => !item.deletedAt);
+    const containersWithPersistedItems = storedItems.reduce((ids, item) => {
       const containerId = getItemContainerId(item);
       if (containerId) ids[containerId] = true;
       return ids;
@@ -576,13 +583,17 @@ function createStorageService(adapter) {
     return dedupeRecords(persistedItems.concat(embeddedItems));
   }
 
+  function listDeletedStoredItems() {
+    return normalizeStoredItems(readArray(storage, ITEMS_KEY)).filter((item) => item.deletedAt);
+  }
+
   function listReminderNotices() {
     return normalizeReminderNotices(readArray(storage, REMINDER_NOTICES_KEY))
       .sort((a, b) => (b.createdAt || b.updatedAt || 0) - (a.createdAt || a.updatedAt || 0));
   }
 
   function listPendingReminderNotices() {
-    return listReminderNotices().filter((notice) => notice.status !== 'read');
+    return listReminderNotices().filter((notice) => notice.status === 'pending');
   }
 
   function listUserContainers() {
@@ -595,6 +606,58 @@ function createStorageService(adapter) {
       return ids;
     }, {});
     return listItems().filter((item) => userContainerIds[getItemContainerId(item)] && !isDemoItem(item));
+  }
+
+  function createIdSet(ids) {
+    return (ids || []).reduce((map, id) => {
+      const value = firstText(id);
+      if (value) map[value] = true;
+      return map;
+    }, {});
+  }
+
+  function hasSetValues(map) {
+    return Object.keys(map || {}).length > 0;
+  }
+
+  function noticeMatchesDismissTarget(notice, itemIds, containerIds) {
+    const itemId = firstText(notice && notice.itemId);
+    const containerId = firstText(notice && notice.containerId);
+    return !!((itemId && itemIds[itemId]) || (containerId && containerIds[containerId]));
+  }
+
+  function dismissReminderNotices(options, timestamp) {
+    const itemIds = createIdSet(options && options.itemIds);
+    const containerIds = createIdSet(options && options.containerIds);
+    if (!hasSetValues(itemIds) && !hasSetValues(containerIds)) {
+      return { dismissedCount: 0, notices: [] };
+    }
+
+    const dismissedAt = finiteNumber(timestamp, now());
+    const dismissedReason = firstText(options && options.reason) || 'source_deleted';
+    const dismissedNotices = [];
+    const notices = normalizeReminderNotices(readArray(storage, REMINDER_NOTICES_KEY)).map((notice) => {
+      if (!notice || notice.status !== 'pending' || !noticeMatchesDismissTarget(notice, itemIds, containerIds)) {
+        return notice;
+      }
+      const dismissed = Object.assign({}, notice, {
+        status: 'dismissed',
+        dismissedAt,
+        dismissedReason,
+        updatedAt: dismissedAt
+      });
+      dismissedNotices.push(dismissed);
+      return dismissed;
+    });
+
+    if (dismissedNotices.length) {
+      writeArray(storage, REMINDER_NOTICES_KEY, notices);
+    }
+
+    return {
+      dismissedCount: dismissedNotices.length,
+      notices: dismissedNotices.map(normalizeReminderNotice)
+    };
   }
 
   function canUseDatabase() {
@@ -711,8 +774,8 @@ function createStorageService(adapter) {
       throw error;
     }
 
-    const previousItemsById = listItems()
-      .filter((item) => itemBelongsToContainer(item, container._id))
+    const previousItems = listItems().filter((item) => itemBelongsToContainer(item, container._id));
+    const previousItemsById = previousItems
       .reduce((itemsById, item) => {
         itemsById[item._id] = item;
         return itemsById;
@@ -721,12 +784,29 @@ function createStorageService(adapter) {
       .filter((item) => item.confirmed !== false)
       .map((item) => normalizeItem(item, container, timestamp, item._id ? previousItemsById[item._id] : null));
     container = refreshContentImageCounts(container, items);
+    const activeIds = items.reduce((ids, item) => {
+      ids[item._id] = true;
+      return ids;
+    }, {});
+    const removedItems = previousItems
+      .filter((item) => !activeIds[item._id])
+      .map((item) => Object.assign({}, item, { deletedAt: timestamp, updatedAt: timestamp }));
 
     const otherContainers = listContainers().filter((item) => item._id !== container._id);
     const otherItems = listItems().filter((item) => !itemBelongsToContainer(item, container._id));
     writeArray(storage, CONTAINERS_KEY, [container].concat(otherContainers));
-    writeArray(storage, ITEMS_KEY, items.concat(otherItems));
-    return { container, items };
+    writeArray(storage, ITEMS_KEY, dedupeRecords(items.concat(otherItems, removedItems, listDeletedStoredItems())));
+    const reminderDismissal = dismissReminderNotices({
+      itemIds: removedItems.map((item) => item._id),
+      reason: 'item_deleted'
+    }, timestamp);
+    return {
+      container,
+      items,
+      removedItems,
+      reminderNotices: reminderDismissal.notices,
+      dismissedReminderCount: reminderDismissal.dismissedCount
+    };
   }
 
   function getContentImages(containerId) {
@@ -819,14 +899,32 @@ function createStorageService(adapter) {
       }), container, timestamp, item._id ? previousItemsById[item._id] : null));
     const nextContainerItems = replacementItems.concat(keptContainerItems);
     const updatedContainer = refreshContentImageCounts(Object.assign({}, container, { updatedAt: timestamp }), nextContainerItems);
+    const activeIds = nextContainerItems.reduce((ids, item) => {
+      ids[item._id] = true;
+      return ids;
+    }, {});
+    const removedItems = activeItems
+      .filter((item) => itemBelongsToContainer(item, containerId) && !activeIds[item._id])
+      .map((item) => Object.assign({}, item, { deletedAt: timestamp, updatedAt: timestamp }));
 
     writeArray(storage, CONTAINERS_KEY, [updatedContainer].concat(containers.filter((item) => item._id !== containerId)));
-    writeArray(storage, ITEMS_KEY, nextContainerItems.concat(otherItems));
-    return { container: updatedContainer, items: nextContainerItems };
+    writeArray(storage, ITEMS_KEY, dedupeRecords(nextContainerItems.concat(otherItems, removedItems, listDeletedStoredItems())));
+    const reminderDismissal = dismissReminderNotices({
+      itemIds: removedItems.map((item) => item._id),
+      reason: 'item_deleted'
+    }, timestamp);
+    return {
+      container: updatedContainer,
+      items: nextContainerItems,
+      removedItems,
+      reminderNotices: reminderDismissal.notices,
+      dismissedReminderCount: reminderDismissal.dismissedCount
+    };
   }
 
   function deleteContainer(id) {
     const timestamp = now();
+    const containerItems = listItems().filter((item) => itemBelongsToContainer(item, id));
     const containers = readArray(storage, CONTAINERS_KEY).map((container) => {
       if (container._id !== id) return container;
       return Object.assign({}, container, { deletedAt: timestamp, updatedAt: timestamp });
@@ -837,9 +935,16 @@ function createStorageService(adapter) {
     });
     writeArray(storage, CONTAINERS_KEY, containers);
     writeArray(storage, ITEMS_KEY, items);
+    const reminderDismissal = dismissReminderNotices({
+      containerIds: [id],
+      itemIds: containerItems.map((item) => item._id),
+      reason: 'container_deleted'
+    }, timestamp);
     return {
       container: containers.find((container) => container._id === id) || null,
-      items: items.filter((item) => itemBelongsToContainer(item, id))
+      items: items.filter((item) => itemBelongsToContainer(item, id)),
+      reminderNotices: reminderDismissal.notices,
+      dismissedReminderCount: reminderDismissal.dismissedCount
     };
   }
 
@@ -849,6 +954,7 @@ function createStorageService(adapter) {
       return map;
     }, {});
     const timestamp = now();
+    const selectedItems = listItems().filter((item) => selected[getItemContainerId(item)]);
     let deletedCount = 0;
     const containers = readArray(storage, CONTAINERS_KEY).map((container) => {
       if (!selected[container._id] || container.deletedAt) return container;
@@ -861,10 +967,69 @@ function createStorageService(adapter) {
     });
     writeArray(storage, CONTAINERS_KEY, containers);
     writeArray(storage, ITEMS_KEY, items);
+    const reminderDismissal = dismissReminderNotices({
+      containerIds: Object.keys(selected),
+      itemIds: selectedItems.map((item) => item._id),
+      reason: 'container_deleted'
+    }, timestamp);
     return {
       deletedCount,
       containers: containers.filter((container) => selected[container._id]),
-      items: items.filter((item) => selected[getItemContainerId(item)])
+      items: items.filter((item) => selected[getItemContainerId(item)]),
+      reminderNotices: reminderDismissal.notices,
+      dismissedReminderCount: reminderDismissal.dismissedCount
+    };
+  }
+
+  function deleteItem(itemId) {
+    const id = firstText(itemId);
+    if (!id) throw new Error('物品不存在');
+
+    const timestamp = now();
+    const activeItems = listItems();
+    const targetItem = activeItems.find((item) => item && item._id === id && !item.deletedAt);
+    if (!targetItem) throw new Error('物品不存在');
+
+    const containerId = getItemContainerId(targetItem);
+    const deletedItem = Object.assign({}, targetItem, {
+      deletedAt: timestamp,
+      updatedAt: timestamp
+    });
+    let updatedContainer = null;
+
+    if (containerId) {
+      const containers = readArray(storage, CONTAINERS_KEY);
+      const targetContainer = containers.find((container) => container._id === containerId && !container.deletedAt);
+      const nextContainerItems = activeItems.filter((item) => (
+        item._id !== id && itemBelongsToContainer(item, containerId)
+      ));
+      const otherItems = activeItems.filter((item) => !itemBelongsToContainer(item, containerId));
+
+      if (targetContainer) {
+        updatedContainer = refreshContentImageCounts(
+          Object.assign({}, targetContainer, { updatedAt: timestamp }),
+          nextContainerItems
+        );
+        writeArray(storage, CONTAINERS_KEY, [updatedContainer].concat(containers.filter((container) => container._id !== containerId)));
+      }
+      writeArray(storage, ITEMS_KEY, dedupeRecords(nextContainerItems.concat(otherItems, [deletedItem], listDeletedStoredItems())));
+    } else {
+      const items = readArray(storage, ITEMS_KEY).map((item) => (
+        item && item._id === id ? deletedItem : item
+      ));
+      writeArray(storage, ITEMS_KEY, items);
+    }
+
+    const reminderDismissal = dismissReminderNotices({
+      itemIds: [id],
+      reason: 'item_deleted'
+    }, timestamp);
+
+    return {
+      container: updatedContainer,
+      item: normalizeStoredItem(deletedItem),
+      reminderNotices: reminderDismissal.notices,
+      dismissedReminderCount: reminderDismissal.dismissedCount
     };
   }
 
@@ -947,18 +1112,12 @@ function createStorageService(adapter) {
 
   function saveContainerAsync(input) {
     return ensureDatabaseLoaded().then(() => {
-      const previousItems = input && input._id
-        ? listItems().filter((item) => itemBelongsToContainer(item, input._id))
-        : [];
       const saved = saveContainer(input);
-      const activeIds = saved.items.reduce((ids, item) => {
-        ids[item._id] = true;
-        return ids;
-      }, {});
-      const removedItems = previousItems
-        .filter((item) => !activeIds[item._id])
-        .map((item) => Object.assign({}, item, { deletedAt: saved.container.updatedAt, updatedAt: saved.container.updatedAt }));
-      return persistRecords([saved.container], saved.items.concat(removedItems)).then(() => saved);
+      return persistRecords(
+        [saved.container],
+        saved.items.concat(saved.removedItems || []),
+        saved.reminderNotices || []
+      ).then(() => saved);
     });
   }
 
@@ -978,19 +1137,12 @@ function createStorageService(adapter) {
 
   function replaceItemsForImageAsync(containerId, imageId, items) {
     return ensureDatabaseLoaded().then(() => {
-      const beforeItems = listItems().filter((item) => itemBelongsToContainer(item, containerId));
       const updated = replaceItemsForImage(containerId, imageId, items);
-      const activeIds = updated.items.reduce((ids, item) => {
-        ids[item._id] = true;
-        return ids;
-      }, {});
-      const removedItems = beforeItems
-        .filter((item) => !activeIds[item._id])
-        .map((item) => Object.assign({}, item, {
-          deletedAt: updated.container.updatedAt,
-          updatedAt: updated.container.updatedAt
-        }));
-      return persistRecords([updated.container], updated.items.concat(removedItems)).then(() => updated);
+      return persistRecords(
+        [updated.container],
+        updated.items.concat(updated.removedItems || []),
+        updated.reminderNotices || []
+      ).then(() => updated);
     });
   }
 
@@ -999,14 +1151,22 @@ function createStorageService(adapter) {
       const deleted = deleteContainer(id);
       const records = [];
       if (deleted.container) records.push(deleted.container);
-      return persistRecords(records, deleted.items).then(() => deleted);
+      return persistRecords(records, deleted.items, deleted.reminderNotices || []).then(() => deleted);
     });
   }
 
   function deleteContainersAsync(ids) {
     return ensureDatabaseLoaded().then(() => {
       const deleted = deleteContainers(ids);
-      return persistRecords(deleted.containers, deleted.items).then(() => deleted);
+      return persistRecords(deleted.containers, deleted.items, deleted.reminderNotices || []).then(() => deleted);
+    });
+  }
+
+  function deleteItemAsync(itemId) {
+    return ensureDatabaseLoaded().then(() => {
+      const deleted = deleteItem(itemId);
+      const containers = deleted.container ? [deleted.container] : [];
+      return persistRecords(containers, [deleted.item], deleted.reminderNotices || []).then(() => deleted);
     });
   }
 
@@ -1321,6 +1481,9 @@ function createStorageService(adapter) {
     deleteContainerAsync,
     deleteContainers,
     deleteContainersAsync,
+    deleteItem,
+    deleteItemAsync,
+    dismissReminderNotices,
     markItemReminderRead,
     markItemReminderReadAsync,
     markReminderNoticeRead,

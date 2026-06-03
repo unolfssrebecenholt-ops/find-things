@@ -22,6 +22,7 @@ const CONTAINER_COLLECTION = (cloudConfig.collections && cloudConfig.collections
 const NOTICE_COLLECTION = (cloudConfig.collections && cloudConfig.collections.reminderNotices) || 'ft_reminder_notices';
 const READ_PAGE_SIZE = 100;
 const DIAGNOSTIC_ITEM_LIMIT = 10;
+const CLOSED_NOTICE_STATUSES = ['read', 'dismissed', 'resolved'];
 
 function diagnosticLog(stage, data) {
   const record = Object.assign({
@@ -73,7 +74,7 @@ function noticeIdForItem(item) {
 }
 
 function isReadNoticeForItem(notice, item) {
-  if (!notice || notice.status !== 'read') return false;
+  if (!notice || CLOSED_NOTICE_STATUSES.indexOf(String(notice.status || '')) < 0) return false;
   const itemId = item && item._id ? String(item._id) : '';
   if (!itemId || String(notice.itemId || '') !== itemId) return false;
   return toTimestamp(notice.remindAt) === toTimestamp(item && item.remindAt);
@@ -359,6 +360,8 @@ function buildReminderNotice(item, container, existingNotice, timestamp) {
   const pushStatus = existing.pushStatus || (remindedAt ? 'sent' : 'none');
   const channel = existing.channel || (subscribeAccepted ? 'subscribe' : 'inApp');
   const noticeId = noticeIdForItem(item);
+  const existingStatus = String(existing.status || '');
+  const status = ['pending', 'read', 'dismissed', 'resolved'].indexOf(existingStatus) >= 0 ? existingStatus : 'pending';
 
   return {
     _id: noticeId,
@@ -396,7 +399,7 @@ function buildReminderNotice(item, container, existingNotice, timestamp) {
     expiresAt: toTimestamp(item.expiresAt || item.remindAt),
     remindAt: toTimestamp(item.remindAt),
     channel,
-    status: existing.status === 'read' ? 'read' : 'pending',
+    status,
     pushStatus,
     sentAt: toTimestamp(existing.sentAt) || remindedAt || 0,
     readAt: toTimestamp(existing.readAt),

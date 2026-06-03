@@ -107,6 +107,7 @@ module.exports = {
   HOME_URL,
   SEARCH_URL,
   consumeSectionRefresh,
+  markSectionRefresh,
   navigateHome,
   syncTabBar,
   switchSection

@@ -501,6 +501,120 @@ test('markReminderNoticeRead marks the notice read and updates the related item 
   assert.equal(service.listItems()[0].inAppReadAt, 12345);
 });
 
+test('dismissReminderNotices hides matching pending notices from reminder counts', () => {
+  const adapter = createMemoryAdapter({
+    'findThings.reminderNotices': [
+      {
+        _id: 'notice_milk',
+        itemId: 'milk',
+        containerId: 'box',
+        displayName: 'Milk',
+        status: 'pending',
+        createdAt: 3
+      },
+      {
+        _id: 'notice_tea',
+        itemId: 'tea',
+        containerId: 'box',
+        displayName: 'Tea',
+        status: 'pending',
+        createdAt: 2
+      }
+    ]
+  });
+  const service = storage.createStorageService(adapter);
+
+  const result = service.dismissReminderNotices({
+    itemIds: ['milk'],
+    reason: 'item_deleted'
+  }, 12345);
+
+  assert.equal(result.dismissedCount, 1);
+  assert.deepEqual(service.listPendingReminderNotices().map((notice) => notice._id), ['notice_tea']);
+  const storedNotices = adapter.getStorageSync('findThings.reminderNotices');
+  assert.equal(storedNotices.find((notice) => notice._id === 'notice_milk').status, 'dismissed');
+  assert.equal(storedNotices.find((notice) => notice._id === 'notice_milk').dismissedReason, 'item_deleted');
+});
+
+test('deleteItem deletes one item and dismisses only its reminder notice', () => {
+  const adapter = createMemoryAdapter({
+    'findThings.containers': [
+      {
+        _id: 'box',
+        name: '冰箱',
+        contentImages: [{ imageId: 'inside', fileId: '/tmp/inside.jpg', itemCount: 2 }],
+        itemCount: 2,
+        createdAt: 1,
+        updatedAt: 1,
+        deletedAt: null
+      }
+    ],
+    'findThings.items': [
+      {
+        _id: 'milk',
+        containerId: 'box',
+        displayName: '牛奶',
+        sourceImageId: 'inside',
+        confirmed: true,
+        deletedAt: null
+      },
+      {
+        _id: 'tea',
+        containerId: 'box',
+        displayName: '茶包',
+        sourceImageId: 'inside',
+        confirmed: true,
+        deletedAt: null
+      }
+    ],
+    'findThings.reminderNotices': [
+      { _id: 'notice_milk', itemId: 'milk', containerId: 'box', status: 'pending', createdAt: 3 },
+      { _id: 'notice_tea', itemId: 'tea', containerId: 'box', status: 'pending', createdAt: 2 }
+    ]
+  });
+  const service = storage.createStorageService(adapter);
+
+  const result = service.deleteItem('milk');
+
+  assert.equal(result.item._id, 'milk');
+  assert.equal(result.dismissedReminderCount, 1);
+  assert.deepEqual(service.getItemsByContainer('box').map((item) => item._id), ['tea']);
+  assert.equal(service.getContainer('box').itemCount, 1);
+  assert.equal(service.getContentImages('box')[0].itemCount, 1);
+  assert.deepEqual(service.listPendingReminderNotices().map((notice) => notice._id), ['notice_tea']);
+});
+
+test('deleteItem suppresses legacy embedded items instead of rehydrating them', () => {
+  const service = storage.createStorageService(createMemoryAdapter({
+    'findThings.containers': [
+      {
+        _id: 'legacy_box',
+        name: '旧箱子',
+        itemCount: 2,
+        updatedAt: 1,
+        deletedAt: null,
+        items: [
+          { displayName: '旧牛奶', confirmed: true },
+          { displayName: '旧茶包', confirmed: true }
+        ]
+      }
+    ],
+    'findThings.items': []
+  }));
+  const originalItems = service.getItemsByContainer('legacy_box');
+
+  service.deleteItem(originalItems[0]._id);
+
+  assert.deepEqual(service.getItemsByContainer('legacy_box').map((item) => item.displayName), ['旧茶包']);
+  assert.equal(service.getContainer('legacy_box').itemCount, 1);
+
+  service.deleteItem(service.getItemsByContainer('legacy_box')[0]._id);
+  service.saveContainer({ name: '其它箱子', items: [] });
+
+  assert.deepEqual(service.getItemsByContainer('legacy_box'), []);
+  assert.equal(service.getContainer('legacy_box').itemCount, 0);
+});
+
 test('keeps thumbnail file ids alongside durable container image paths', () => {
   const service = storage.createStorageService(createMemoryAdapter());
   const saved = service.saveContainer({
@@ -848,6 +962,54 @@ test('async storage loads reminder notices and persists read acknowledgements', 
   });
 });
 
+test('async deleteContainer persists dismissed reminder notices to cloud', async () => {
+  const mock = createMockWxWithDatabase({
+    ft_containers: [
+      {
+        _id: 'cloud_delete_box',
+        name: 'Cloud delete box',
+        itemCount: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        deletedAt: null
+      }
+    ],
+    ft_items: [
+      {
+        _id: 'cloud_delete_item',
+        containerId: 'cloud_delete_box',
+        displayName: 'Cloud milk',
+        confirmed: true,
+        deletedAt: null
+      }
+    ],
+    ft_reminder_notices: [
+      {
+        _id: 'cloud_delete_notice',
+        itemId: 'cloud_delete_item',
+        containerId: 'cloud_delete_box',
+        displayName: 'Cloud milk',
+        status: 'pending',
+        pushStatus: 'none',
+        createdAt: 2
+      }
+    ]
+  });
+
+  await withWx(mock.wx, async () => {
+    const service = storage.createStorageService();
+    const result = await service.deleteContainerAsync('cloud_delete_box');
+
+    assert.equal(result.dismissedReminderCount, 1);
+    const writtenNotice = mock.writes.find((write) => (
+      write.collection === 'ft_reminder_notices' && write.id === 'cloud_delete_notice'
+    ));
+    assert.ok(writtenNotice);
+    assert.equal(writtenNotice.data.status, 'dismissed');
+    assert.equal(writtenNotice.data.dismissedReason, 'container_deleted');
+  });
+});
+
 test('replaces only items from one source image and updates image and container counts', () => {
   const service = storage.createStorageService(createMemoryAdapter());
   const saved = service.saveContainer({
@@ -1031,6 +1193,48 @@ test('deletes a container and its items', () => {
   assert.deepEqual(service.listItems(), []);
 });
 
+test('deleting a container dismisses reminders by container id and legacy item id', () => {
+  const adapter = createMemoryAdapter({
+    'findThings.containers': [
+      {
+        _id: 'box',
+        name: '冰箱',
+        itemCount: 2,
+        createdAt: 1,
+        updatedAt: 1,
+        deletedAt: null
+      },
+      {
+        _id: 'other_box',
+        name: '茶柜',
+        itemCount: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        deletedAt: null
+      }
+    ],
+    'findThings.items': [
+      { _id: 'milk', containerId: 'box', displayName: '牛奶', confirmed: true, deletedAt: null },
+      { _id: 'mask', containerId: 'box', displayName: '面膜', confirmed: true, deletedAt: null },
+      { _id: 'tea', containerId: 'other_box', displayName: '茶包', confirmed: true, deletedAt: null }
+    ],
+    'findThings.reminderNotices': [
+      { _id: 'notice_milk', itemId: 'milk', containerId: 'box', status: 'pending', createdAt: 4 },
+      { _id: 'notice_mask_legacy', itemId: 'mask', status: 'pending', createdAt: 3 },
+      { _id: 'notice_tea', itemId: 'tea', containerId: 'other_box', status: 'pending', createdAt: 2 }
+    ]
+  });
+  const service = storage.createStorageService(adapter);
+
+  const result = service.deleteContainer('box');
+
+  assert.equal(result.dismissedReminderCount, 2);
+  assert.deepEqual(service.listPendingReminderNotices().map((notice) => notice._id), ['notice_tea']);
+  const storedNotices = adapter.getStorageSync('findThings.reminderNotices');
+  assert.equal(storedNotices.find((notice) => notice._id === 'notice_milk').status, 'dismissed');
+  assert.equal(storedNotices.find((notice) => notice._id === 'notice_mask_legacy').status, 'dismissed');
+});
+
 test('batch deletes selected containers and their items', () => {
   const service = storage.createStorageService(createMemoryAdapter());
   const first = service.saveContainer({
@@ -1051,6 +1255,32 @@ test('batch deletes selected containers and their items', () => {
   assert.equal(result.deletedCount, 2);
   assert.deepEqual(service.listContainers().map((container) => container._id), [third.container._id]);
   assert.deepEqual(service.listItems().map((item) => item.displayName), ['围巾']);
+});
+
+test('batch delete dismisses reminder notices for all selected containers', () => {
+  const adapter = createMemoryAdapter({
+    'findThings.containers': [
+      { _id: 'box_a', name: 'A', itemCount: 1, deletedAt: null },
+      { _id: 'box_b', name: 'B', itemCount: 1, deletedAt: null },
+      { _id: 'box_c', name: 'C', itemCount: 1, deletedAt: null }
+    ],
+    'findThings.items': [
+      { _id: 'a_item', containerId: 'box_a', displayName: 'A item', confirmed: true, deletedAt: null },
+      { _id: 'b_item', containerId: 'box_b', displayName: 'B item', confirmed: true, deletedAt: null },
+      { _id: 'c_item', containerId: 'box_c', displayName: 'C item', confirmed: true, deletedAt: null }
+    ],
+    'findThings.reminderNotices': [
+      { _id: 'notice_a', itemId: 'a_item', containerId: 'box_a', status: 'pending', createdAt: 3 },
+      { _id: 'notice_b', itemId: 'b_item', containerId: 'box_b', status: 'pending', createdAt: 2 },
+      { _id: 'notice_c', itemId: 'c_item', containerId: 'box_c', status: 'pending', createdAt: 1 }
+    ]
+  });
+  const service = storage.createStorageService(adapter);
+
+  const result = service.deleteContainers(['box_a', 'box_b']);
+
+  assert.equal(result.dismissedReminderCount, 2);
+  assert.deepEqual(service.listPendingReminderNotices().map((notice) => notice._id), ['notice_c']);
 });
 
 test('seeds demo data when storage is empty', () => {

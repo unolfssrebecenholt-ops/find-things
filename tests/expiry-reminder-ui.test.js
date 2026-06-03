@@ -51,6 +51,68 @@ test('item editor exposes expiry date and reminder controls', () => {
   assert.match(wxss, /\.expiry-badge/);
 });
 
+test('item editor shows removable tags instead of a tag input', () => {
+  const wxml = readMiniProgramFile('components', 'item-editor', 'index.wxml');
+  const wxss = readMiniProgramFile('components', 'item-editor', 'index.wxss');
+  const definition = loadItemEditor();
+  const context = createComponentContext(definition, [{
+    displayName: '透明收纳盒',
+    colors: ['蓝色'],
+    features: ['透明', '耐热'],
+    aliases: ['透明', '盒子'],
+    hasTags: true,
+    tagList: ['蓝色', '透明', '耐热', '盒子'],
+    tagText: '蓝色 透明 耐热 盒子'
+  }]);
+
+  assert.doesNotMatch(wxml, /placeholder="颜色、特征、别名"/);
+  assert.doesNotMatch(wxml, /bindblur="editTags"/);
+  assert.doesNotMatch(wxml, /<button[^>]*class="tag-remove"/);
+  assert.match(wxml, /wx:for-index="itemIndex"/);
+  assert.match(wxml, /class="tag-remove"[\s\S]*data-index="\{\{itemIndex\}\}"/);
+  assert.match(wxml, /class="tag-remove"/);
+  assert.match(wxml, /catchtap="removeTag"/);
+  assert.match(wxss, /\.tag-remove[\s\S]*position:\s*absolute/);
+
+  definition.methods.removeTag.call(context, {
+    currentTarget: { dataset: { index: 0, tag: '透明' } }
+  });
+
+  const item = context.events[0].detail.items[0];
+  assert.deepEqual(item.colors, ['蓝色']);
+  assert.deepEqual(item.features, ['耐热']);
+  assert.deepEqual(item.aliases, ['盒子']);
+  assert.deepEqual(item.tagList, ['蓝色', '耐热', '盒子']);
+  assert.equal(item.tagText, '蓝色 耐热 盒子');
+  assert.equal(item.hasTags, true);
+  assert.deepEqual(context.data.items[0].tagList, ['蓝色', '耐热', '盒子']);
+});
+
+test('item editor hides tag row state after the last tag is removed', () => {
+  const definition = loadItemEditor();
+  const context = createComponentContext(definition, [{
+    displayName: '单标签物品',
+    colors: [],
+    features: ['透明'],
+    aliases: [],
+    hasTags: true,
+    tagList: ['透明'],
+    tagText: '透明'
+  }]);
+
+  definition.methods.removeTag.call(context, {
+    currentTarget: { dataset: { index: 0, tag: '透明' } }
+  });
+
+  const item = context.events[0].detail.items[0];
+  assert.deepEqual(item.colors, []);
+  assert.deepEqual(item.features, []);
+  assert.deepEqual(item.aliases, []);
+  assert.deepEqual(item.tagList, []);
+  assert.equal(item.tagText, '');
+  assert.equal(item.hasTags, false);
+});
+
 test('item editor emits shared reminder fields when expiry date changes', () => {
   const definition = loadItemEditor();
   const context = createComponentContext(definition, [{

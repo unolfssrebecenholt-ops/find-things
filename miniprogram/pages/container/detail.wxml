@@ -102,7 +102,7 @@
             class="inventory-action remove"
             data-key="{{item.itemKey}}"
             bindtap="removeExpandedItem"
-          >移除</button>
+          >删除</button>
           <button
             wx:if="{{item.showCollapseAction}}"
             class="inventory-action collapse"

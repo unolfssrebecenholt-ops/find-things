@@ -164,6 +164,27 @@ test('container save requests a quota before persisting a reminder item', async 
   assert.equal(savedItems[0].remindOffsetDays, 0);
 });
 
+test('container save marks tab sections for refresh after persisting', async () => {
+  const wxMock = createWxMock({
+    'findThings.containers': [],
+    'findThings.items': []
+  });
+  const page = loadEditPage(wxMock);
+  const navigation = require(path.join(__dirname, '..', 'miniprogram', 'utils', 'navigation.js'));
+  const context = createPageContext(page, {
+    name: 'Fresh box',
+    locationPath: 'Shelf',
+    contentImages: [{ imageId: 'image_1', fileId: '/tmp/fresh.jpg' }],
+    items: [{ displayName: 'Key', confirmed: true }]
+  });
+
+  await withWx(wxMock, () => page.save.call(context));
+
+  assert.equal(navigation.consumeSectionRefresh(navigation.HOME_URL), true);
+  assert.equal(navigation.consumeSectionRefresh(navigation.CONTAINERS_URL), true);
+  assert.equal(navigation.consumeSectionRefresh(navigation.SEARCH_URL), true);
+});
+
 test('container save applies one accepted quota to all reminder items in the save action', async () => {
   const expiresAt = Date.UTC(2026, 5, 1, 15, 59, 59, 999);
   const wxMock = createWxMock({

@@ -1,7 +1,13 @@
 const imageStore = require('../../services/image-store');
 const imageDisplay = require('../../services/image-display');
 const storage = require('../../services/storage');
-const { navigateHome } = require('../../utils/navigation');
+const {
+  CONTAINERS_URL,
+  HOME_URL,
+  SEARCH_URL,
+  markSectionRefresh,
+  navigateHome
+} = require('../../utils/navigation');
 const { createImageMetadata } = require('../../utils/image-metadata');
 
 let expiryReminder = null;
@@ -167,6 +173,12 @@ function applyDisplayPaths(data, resolvedPaths) {
       data.coverImageFileId
     ], resolved)
   });
+}
+
+function markSavedContainerSectionsRefresh() {
+  markSectionRefresh(HOME_URL);
+  markSectionRefresh(CONTAINERS_URL);
+  markSectionRefresh(SEARCH_URL);
 }
 
 function viewState(data) {
@@ -415,6 +427,7 @@ Page({
         wx.removeStorageSync('reviewDraft');
         wx.removeStorageSync('captureDraft');
         wx.removeStorageSync('containerEditDraft');
+        markSavedContainerSectionsRefresh();
         wx.showToast({ title: '已保存', icon: 'success' });
         navigateHome();
       })

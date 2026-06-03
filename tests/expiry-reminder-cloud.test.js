@@ -192,6 +192,7 @@ test('selectDueReminderItems selects due reminders regardless subscription and s
     { _id: 'rejected', containerId: 'active', reminderEnabled: true, subscribeAccepted: false, remindAt: now - 1, remindedAt: 0 },
     { _id: 'sent', containerId: 'active', reminderEnabled: true, subscribeAccepted: true, remindAt: now - 1, remindedAt: now - 2 },
     { _id: 'read', containerId: 'active', reminderEnabled: true, subscribeAccepted: true, remindAt: now - 1, remindedAt: 0 },
+    { _id: 'dismissed', containerId: 'active', reminderEnabled: true, subscribeAccepted: true, remindAt: now - 1, remindedAt: 0 },
     { _id: 'legacyRead', containerId: 'active', reminderEnabled: true, subscribeAccepted: false, remindAt: now - 1, inAppReadAt: now - 3 },
     { _id: 'itemDeleted', containerId: 'active', deleted: true, reminderEnabled: true, subscribeAccepted: true, remindAt: now - 1, remindedAt: 0 },
     { _id: 'parentDeleted', containerId: 'deleted', reminderEnabled: true, subscribeAccepted: true, remindAt: now - 1, remindedAt: 0 }
@@ -203,7 +204,8 @@ test('selectDueReminderItems selects due reminders regardless subscription and s
 
   assert.deepEqual(
     selectDueReminderItems(items, containers, now, [
-      { _id: `expiry_read_${now - 1}`, itemId: 'read', remindAt: now - 1, status: 'read' }
+      { _id: `expiry_read_${now - 1}`, itemId: 'read', remindAt: now - 1, status: 'read' },
+      { _id: `expiry_dismissed_${now - 1}`, itemId: 'dismissed', remindAt: now - 1, status: 'dismissed' }
     ]).map((item) => item._id),
     ['due', 'rejected', 'sent']
   );

@@ -6,7 +6,10 @@ const { isMockAssetPath } = require('../../utils/mock-assets');
 const { getContainerPreview } = require('../../utils/image-preview');
 const {
   CONTAINERS_URL,
+  HOME_URL,
+  SEARCH_URL,
   consumeSectionRefresh,
+  markSectionRefresh,
   syncTabBar
 } = require('../../utils/navigation');
 
@@ -107,6 +110,11 @@ function showDataError(error) {
     title: error && error.message ? error.message : '数据同步失败',
     icon: 'none'
   });
+}
+
+function markDeleteRelatedSectionsRefresh() {
+  markSectionRefresh(HOME_URL);
+  markSectionRefresh(SEARCH_URL);
 }
 
 function buildSummary(containers) {
@@ -318,6 +326,7 @@ Page({
       success: (result) => {
         if (!result.confirm) return;
         const afterDelete = () => {
+          markDeleteRelatedSectionsRefresh();
           wx.showToast({ title: '已删除', icon: 'success' });
           this.load();
         };
@@ -352,6 +361,7 @@ Page({
       success: (result) => {
         if (!result.confirm) return;
         const afterDelete = () => {
+          markDeleteRelatedSectionsRefresh();
           wx.showToast({ title: '已删除', icon: 'success' });
           this.load();
           this.setData({

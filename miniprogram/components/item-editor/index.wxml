@@ -6,7 +6,7 @@
     </view>
     <text class="editor-count">{{items.length}} 件</text>
   </view>
-  <view wx:for="{{items}}" wx:key="tempId" class="item-card {{item.confirmed ? '' : 'disabled'}}">
+  <view wx:for="{{items}}" wx:for-index="itemIndex" wx:key="tempId" class="item-card {{item.confirmed ? '' : 'disabled'}}">
     <view wx:if="{{showToolbar}}" class="item-toolbar">
       <view class="item-identity">
         <text class="number">{{item.displayIndex}}</text>
@@ -19,10 +19,10 @@
         <button
           wx:if="{{showKeepAction}}"
           class="action-button keep-toggle {{item.confirmed ? 'checked' : ''}}"
-          data-index="{{index}}"
+          data-index="{{itemIndex}}"
           bindtap="toggleConfirmed"
         >{{item.confirmed ? '保留' : '不存'}}</button>
-        <button class="action-button delete" data-index="{{index}}" bindtap="removeItem">删除</button>
+        <button class="action-button delete" data-index="{{itemIndex}}" bindtap="removeItem">删除</button>
       </view>
     </view>
 
@@ -32,7 +32,7 @@
         class="name-input"
         placeholder="物品名称"
         value="{{item.displayName}}"
-        data-index="{{index}}"
+        data-index="{{itemIndex}}"
         bindblur="rename"
         bindconfirm="rename"
       />
@@ -45,26 +45,30 @@
           class="compact-input"
           placeholder="类别"
           value="{{item.category}}"
-          data-index="{{index}}"
+          data-index="{{itemIndex}}"
           bindblur="editCategory"
           bindconfirm="editCategory"
         />
       </view>
-      <view class="compact-field">
-        <text class="field-caption">搜索标签</text>
-        <input
-          class="compact-input"
-          placeholder="颜色、特征、别名"
-          value="{{item.tagText}}"
-          data-index="{{index}}"
-          bindblur="editTags"
-          bindconfirm="editTags"
-        />
-      </view>
     </view>
 
-    <view wx:if="{{item.hasTags}}" class="tag-row">
-      <text wx:for="{{item.tagList}}" wx:for-item="tag" wx:key="*this" class="tag">{{tag}}</text>
+    <view wx:if="{{item.hasTags}}" class="tag-field">
+      <text class="field-caption">搜索标签</text>
+      <view class="tag-row">
+        <view wx:for="{{item.tagList}}" wx:for-item="tag" wx:key="*this" class="tag">
+          <view
+            class="tag-remove"
+            data-index="{{itemIndex}}"
+            data-tag="{{tag}}"
+            role="button"
+            aria-label="删除标签 {{tag}}"
+            catchtap="removeTag"
+          >
+            <text class="tag-remove-mark">x</text>
+          </view>
+          <text class="tag-label">{{tag}}</text>
+        </view>
+      </view>
     </view>
 
     <view class="expiry-panel">
@@ -76,7 +80,7 @@
         <switch
           class="expiry-switch"
           checked="{{item.reminderEnabled}}"
-          data-index="{{index}}"
+          data-index="{{itemIndex}}"
           color="#1f6048"
           bindchange="toggleExpiry"
         />
@@ -86,7 +90,7 @@
           class="expiry-picker"
           mode="date"
           value="{{item.expiryDateValue}}"
-          data-index="{{index}}"
+          data-index="{{itemIndex}}"
           bindchange="changeExpiryDate"
         >
           <view class="expiry-badge">{{item.expiryDateText}}</view>
@@ -97,7 +101,7 @@
             class="offset-input"
             type="number"
             value="{{item.remindOffsetDays}}"
-            data-index="{{index}}"
+            data-index="{{itemIndex}}"
             bindinput="changeReminderOffset"
             bindchange="changeReminderOffset"
             bindblur="changeReminderOffset"
@@ -114,7 +118,7 @@
         class="description-input"
         placeholder="位置、外观、用途"
         value="{{item.description}}"
-        data-index="{{index}}"
+        data-index="{{itemIndex}}"
         bindblur="editDescription"
       ></textarea>
     </view>
@@ -125,7 +129,7 @@
         class="note"
         placeholder="补充品牌、尺寸、用途"
         value="{{item.note}}"
-        data-index="{{index}}"
+        data-index="{{itemIndex}}"
         bindblur="editNote"
       ></textarea>
     </view>

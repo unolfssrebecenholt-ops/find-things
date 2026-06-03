@@ -137,6 +137,132 @@ test('container detail expands inventory items and persists edits', async () => 
   assert.equal(context.data.items[0].isExpanded, true);
 });
 
+test('container detail tag edits preserve resolved content image display', async () => {
+  const wxMock = createWxMock({
+    'findThings.containers': [
+      {
+        _id: 'box_tag_edit',
+        name: '桌面收纳',
+        locationPath: '书桌',
+        contentImages: [
+          {
+            imageId: 'inside_cloud',
+            fileId: 'cloud://env/find-things/content/inside.jpg',
+            thumbFileId: 'cloud://env/find-things/thumbs/inside.jpg',
+            label: '照片 1',
+            sortOrder: 0
+          }
+        ],
+        updatedAt: 2
+      }
+    ],
+    'findThings.items': [
+      {
+        _id: 'mouse',
+        containerId: 'box_tag_edit',
+        displayName: 'ThinkPad 黑色有线鼠标',
+        sourceImageId: 'inside_cloud',
+        sourceImageFileId: 'cloud://env/find-things/content/inside.jpg',
+        colors: ['黑色', '红色', '白色'],
+        features: ['有线鼠标'],
+        aliases: ['鼠标'],
+        confirmed: true
+      }
+    ]
+  });
+  const page = loadContainerDetailPage(wxMock);
+  const context = createPageContext(page, Object.assign({}, page.data, { id: 'box_tag_edit' }));
+
+  await withWx(wxMock, () => page.renderContainer.call(context, wxMock.getStorageSync('findThings.containers')[0]));
+  page.toggleItemExpanded.call(context, { currentTarget: { dataset: { key: 'mouse' } } });
+
+  assert.match(context.data.contentImages[0].displaySrc, /^https:\/\/display\.example\.com\//);
+
+  const editedItem = Object.assign({}, context.data.items[0].editorItems[0], {
+    colors: ['黑色', '红色'],
+    features: ['有线鼠标'],
+    aliases: ['鼠标'],
+    hasTags: true,
+    tagList: ['黑色', '红色', '有线鼠标', '鼠标'],
+    tagText: '黑色 红色 有线鼠标 鼠标'
+  });
+  await withWx(wxMock, () => page.handleExpandedItemChange.call(context, {
+    detail: {
+      contextKey: 'mouse',
+      items: [editedItem]
+    }
+  }));
+
+  assert.match(context.data.contentImages[0].displaySrc, /^https:\/\/display\.example\.com\//);
+  await context.inventorySaveChain;
+
+  const storedItems = wxMock.getStorageSync('findThings.items');
+  assert.deepEqual(storedItems[0].colors, ['黑色', '红色']);
+  assert.equal(context.data.items[0].tagList.includes('白色'), false);
+  assert.match(context.data.contentImages[0].displaySrc, /^https:\/\/display\.example\.com\//);
+});
+
+test('container detail deletes a single item and dismisses its reminder notice', async () => {
+  const wxMock = createWxMock({
+    'findThings.containers': [
+      {
+        _id: 'box_delete_item',
+        name: '冰箱',
+        locationPath: '厨房',
+        contentImages: [
+          { imageId: 'inside_1', fileId: '/tmp/inside.jpg', label: '照片 1', sortOrder: 0, itemCount: 2 }
+        ],
+        itemCount: 2,
+        updatedAt: 2
+      }
+    ],
+    'findThings.items': [
+      {
+        _id: 'milk',
+        containerId: 'box_delete_item',
+        displayName: '牛奶',
+        sourceImageId: 'inside_1',
+        sourceImageFileId: '/tmp/inside.jpg',
+        confirmed: true,
+        deletedAt: null
+      },
+      {
+        _id: 'tea',
+        containerId: 'box_delete_item',
+        displayName: '茶包',
+        sourceImageId: 'inside_1',
+        sourceImageFileId: '/tmp/inside.jpg',
+        confirmed: true,
+        deletedAt: null
+      }
+    ],
+    'findThings.reminderNotices': [
+      { _id: 'notice_milk', itemId: 'milk', containerId: 'box_delete_item', status: 'pending', createdAt: 2 },
+      { _id: 'notice_tea', itemId: 'tea', containerId: 'box_delete_item', status: 'pending', createdAt: 1 }
+    ]
+  });
+  const page = loadContainerDetailPage(wxMock);
+  const context = createPageContext(page, Object.assign({}, page.data, { id: 'box_delete_item' }));
+
+  await withWx(wxMock, () => page.renderContainer.call(context, wxMock.getStorageSync('findThings.containers')[0]));
+  page.toggleItemExpanded.call(context, { currentTarget: { dataset: { key: 'milk' } } });
+  await withWx(wxMock, async () => {
+    page.removeExpandedItem.call(context, { currentTarget: { dataset: { key: 'milk' } } });
+    await context.inventorySaveChain;
+  });
+
+  const storedItems = wxMock.getStorageSync('findThings.items');
+  const storedNotices = wxMock.getStorageSync('findThings.reminderNotices');
+  const storedContainer = wxMock.getStorageSync('findThings.containers').find((container) => container._id === 'box_delete_item');
+
+  assert.equal(storedItems.find((item) => item._id === 'milk').deletedAt > 0, true);
+  assert.equal(storedItems.find((item) => item._id === 'tea').deletedAt, null);
+  assert.equal(storedContainer.itemCount, 1);
+  assert.equal(storedNotices.find((notice) => notice._id === 'notice_milk').status, 'dismissed');
+  assert.equal(storedNotices.find((notice) => notice._id === 'notice_tea').status, 'pending');
+  assert.equal(context.data.items.length, 1);
+});
+
 test('container detail shows legacy items embedded on the container', async () => {
   const wxMock = createWxMock({
     'findThings.containers': [

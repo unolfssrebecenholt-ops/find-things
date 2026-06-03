@@ -1,5 +1,3 @@
-const { COLORS } = require('../../utils/normalize');
-
 let expiryReminder = null;
 try {
   expiryReminder = require('../../services/expiry-reminder');
@@ -9,11 +7,17 @@ try {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function splitTerms(value) {
-  return String(value || '')
-    .split(/[、,，;；\s]+/)
-    .map((term) => term.trim())
-    .filter((term, index, terms) => term && terms.indexOf(term) === index);
+function removeTagValue(values, tag) {
+  const target = String(tag || '').trim();
+  const source = Array.isArray(values) ? values : [];
+  if (!target) return source.slice();
+  return source.filter((value) => String(value || '').trim() !== target);
+}
+
+function uniqueTags(values) {
+  return (values || [])
+    .map((value) => String(value || '').trim())
+    .filter((value, index, terms) => value && terms.indexOf(value) === index);
 }
 
 function toTimestamp(value) {
@@ -151,6 +155,11 @@ Component({
         if (itemIndex !== index) return item;
         return Object.assign({}, item, patch);
       });
+      if (typeof this.setData === 'function') {
+        this.setData({ items });
+      } else {
+        this.data.items = items;
+      }
       this.emit(items);
     },
 
@@ -239,14 +248,22 @@ Component({
       });
     },
 
-    editTags(event) {
-      const terms = splitTerms(event.detail.value);
-      const colors = terms.filter((term) => COLORS.includes(term));
-      const searchableTerms = terms.filter((term) => !COLORS.includes(term));
-      this.patchItem(Number(event.currentTarget.dataset.index), {
+    removeTag(event) {
+      const index = Number(event.currentTarget.dataset.index);
+      const tag = String(event.currentTarget.dataset.tag || '').trim();
+      if (!Number.isFinite(index) || !tag) return;
+      const item = this.data.items[index] || {};
+      const colors = removeTagValue(item.colors, tag);
+      const features = removeTagValue(item.features, tag);
+      const aliases = removeTagValue(item.aliases, tag);
+      const fullTagList = uniqueTags(colors.concat(features, aliases));
+      this.patchItem(index, {
         colors,
-        features: searchableTerms,
-        aliases: searchableTerms
+        features,
+        aliases,
+        hasTags: fullTagList.length > 0,
+        tagList: fullTagList.slice(0, 6),
+        tagText: fullTagList.join(' ')
       });
     },
 
