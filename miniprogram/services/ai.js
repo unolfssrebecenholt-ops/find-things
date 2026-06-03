@@ -55,10 +55,10 @@ function resolveTransport(config, apiKey, transport) {
 
 function getRuntimeConfig() {
   const config = mergeConfig();
-  const apiKey = getStorageValue(config.apiKeyStorageKey, config.apiKey);
+  const apiKey = config.lockTransport ? config.apiKey : getStorageValue(config.apiKeyStorageKey, config.apiKey);
   const transport = config.lockTransport ? config.transport : getStorageValue(config.transportStorageKey, config.transport);
-  const baseUrl = getStorageValue(config.baseUrlStorageKey, config.baseUrl);
-  const model = getStorageValue(config.modelStorageKey, config.model);
+  const baseUrl = config.lockTransport ? config.baseUrl : getStorageValue(config.baseUrlStorageKey, config.baseUrl);
+  const model = config.lockTransport ? config.model : getStorageValue(config.modelStorageKey, config.model);
   const relays = (relayConfig.relays || []).map((relay, index) => {
     const isPrimary = index === 0 || relay.id === 'primary';
     return Object.assign({}, relay, {

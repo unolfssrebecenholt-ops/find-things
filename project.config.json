@@ -47,6 +47,18 @@
       {
         "type": "folder",
         "value": "output/"
+      },
+      {
+        "type": "file",
+        "value": "miniprogram/config/ai.local.js"
+      },
+      {
+        "type": "file",
+        "value": "miniprogram/config/relay.local.js"
+      },
+      {
+        "type": "file",
+        "value": "cloudfunctions/ftAnalyzeImage/local.config.js"
       }
     ],
     "include": []

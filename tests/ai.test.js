@@ -99,16 +99,16 @@ test('uses cloud transport when stale direct setting has no local API key', () =
   });
 });
 
-test('keeps direct transport when a local API key is explicitly configured', () => {
+test('keeps cloud transport even when a stale local API key is present', () => {
   withWxStorage({
     'findThings.aiTransport': 'direct',
     'findThings.aiApiKey': 'sk-local-test'
   }, () => {
     const config = ai.getRuntimeConfig();
 
-    assert.equal(config.transport, 'direct');
-    assert.equal(config.apiKey, 'sk-local-test');
-    assert.equal(config.relays[0].apiKey, 'sk-local-test');
+    assert.equal(config.transport, 'cloud');
+    assert.equal(config.apiKey, '');
+    assert.equal(config.relays[0].apiKey, '');
   });
 });
 

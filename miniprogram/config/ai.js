@@ -1,6 +1,7 @@
 const defaults = {
   mode: 'real',
   transport: 'cloud',
+  lockTransport: true,
   cloudFunctionName: 'ftAnalyzeImage',
   baseUrl: 'https://aipaiai.cn',
   endpoint: '/v1/chat/completions',
@@ -15,12 +16,4 @@ const defaults = {
   fallbackToMock: false
 };
 
-function loadLocalConfig() {
-  try {
-    return require('./ai.local');
-  } catch (error) {
-    return {};
-  }
-}
-
-module.exports = Object.assign({}, defaults, loadLocalConfig());
+module.exports = defaults;
