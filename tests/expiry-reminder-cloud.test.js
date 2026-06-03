@@ -5,6 +5,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 
 const CLOUD_TEMPLATE_ID = 'test-template-id';
+const RELEASE_VERSION = 'ftExpiryReminder-2026-06-04-release-v1';
 
 async function withExpiryReminderTemplateId(templateId, callback) {
   const previous = process.env.EXPIRY_REMINDER_TEMPLATE_ID;
@@ -113,6 +114,33 @@ function createMockCloud(options = {}) {
   };
 }
 
+async function captureReminderLogs(callback) {
+  const originalLog = console.log;
+  const logs = [];
+  console.log = (...args) => {
+    logs.push(args);
+  };
+  try {
+    const result = await callback();
+    return { result, logs };
+  } finally {
+    console.log = originalLog;
+  }
+}
+
+function parseReminderLogs(logs) {
+  return logs
+    .filter((args) => args[0] === '[ftExpiryReminder]')
+    .map((args) => {
+      try {
+        return JSON.parse(args[1]);
+      } catch (error) {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
 test('cloud function loads with default collection names when miniprogram config is unavailable', () => {
   const modulePath = path.join(__dirname, '..', 'cloudfunctions', 'ftExpiryReminder', 'index.js');
   const configPath = path.join(__dirname, '..', 'miniprogram', 'config', 'cloud.js');
@@ -147,13 +175,13 @@ test('cloud function declares subscribe message OpenAPI permission', () => {
   assert.ok(config.permissions.openapi.includes('subscribeMessage.send'));
 });
 
-test('cloud function timer runs every minute for reminder testing', () => {
+test('cloud function timer runs daily at 9 AM for production reminders', () => {
   const configPath = path.join(__dirname, '..', 'cloudfunctions', 'ftExpiryReminder', 'config.json');
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   const trigger = config.triggers.find((item) => item.name === 'dailyExpiryReminder');
 
   assert.equal(trigger.type, 'timer');
-  assert.equal(trigger.config, '0 */1 * * * * *');
+  assert.equal(trigger.config, '0 0 9 * * * *');
 });
 
 test('main returns a diagnostic function version for deployment verification', async () => {
@@ -167,7 +195,8 @@ test('main returns a diagnostic function version for deployment verification', a
 
   const result = await expiryReminder.main({ now: 1780243920000 }, {});
 
-  assert.equal(result.version, 'ftExpiryReminder-2026-06-01-debug-v5');
+  assert.equal(result.version, RELEASE_VERSION);
+  assert.doesNotMatch(result.version, /debug/i);
 });
 
 test('main returns subscribe template config from environment', async () => {
@@ -176,10 +205,94 @@ test('main returns subscribe template config from environment', async () => {
   const result = await withExpiryReminderTemplateId(CLOUD_TEMPLATE_ID, () => expiryReminder.main({ action: 'config' }, {}));
 
   assert.deepEqual(result, {
-    version: 'ftExpiryReminder-2026-06-01-debug-v5',
+    version: RELEASE_VERSION,
     expiryTemplateId: CLOUD_TEMPLATE_ID,
     hasTemplateId: true
   });
+});
+
+test('main production logs keep scan summary without item-level diagnostics', async () => {
+  const now = Date.UTC(2026, 4, 31, 9);
+  const collections = {
+    ft_containers: {
+      active: { _id: 'active' }
+    },
+    ft_items: {
+      milk: {
+        _id: 'milk',
+        _openid: 'user-openid',
+        containerId: 'active',
+        displayName: 'Milk',
+        reminderEnabled: true,
+        subscribeAccepted: false,
+        reminderChannel: 'inApp',
+        remindAt: now,
+        remindedAt: 0
+      },
+      future: {
+        _id: 'future',
+        _openid: 'user-openid',
+        containerId: 'active',
+        displayName: 'Future',
+        reminderEnabled: true,
+        subscribeAccepted: false,
+        reminderChannel: 'inApp',
+        remindAt: now + 86400000,
+        remindedAt: 0
+      }
+    },
+    ft_reminder_notices: {}
+  };
+  const expiryReminder = loadExpiryReminderFunction({ collections });
+
+  const { logs } = await captureReminderLogs(() => withExpiryReminderTemplateId(CLOUD_TEMPLATE_ID, () => expiryReminder.main({ now }, {})));
+  const records = parseReminderLogs(logs);
+  const scan = records.find((record) => record.stage === 'scan');
+
+  assert.ok(scan);
+  assert.equal(scan.items, 2);
+  assert.equal(scan.dueItems, 1);
+  assert.deepEqual(scan.reasonCounts, { due: 1, future_remindAt: 1 });
+  assert.equal(Object.prototype.hasOwnProperty.call(scan, 'sampleItems'), false);
+  assert.equal(records.some((record) => record.stage === 'process-item'), false);
+  assert.equal(records.some((record) => record.stage === 'set-notice-success'), false);
+});
+
+test('main production send success logs omit user and item identifiers', async () => {
+  const now = Date.UTC(2026, 4, 31, 9);
+  const collections = {
+    ft_containers: {
+      active: { _id: 'active' }
+    },
+    ft_items: {
+      milk: {
+        _id: 'milk',
+        _openid: 'user-openid',
+        containerId: 'active',
+        displayName: 'Milk',
+        reminderEnabled: true,
+        subscribeAccepted: true,
+        remindAt: now,
+        remindedAt: 0
+      }
+    },
+    ft_reminder_notices: {}
+  };
+  const expiryReminder = loadExpiryReminderFunction({ collections });
+
+  const { logs } = await captureReminderLogs(() => withExpiryReminderTemplateId(CLOUD_TEMPLATE_ID, () => expiryReminder.main({ now }, {})));
+  const records = parseReminderLogs(logs);
+  const sendStart = records.find((record) => record.stage === 'send-subscribe-start');
+  const sendSuccess = records.find((record) => record.stage === 'send-subscribe-success');
+
+  assert.ok(sendStart);
+  assert.ok(sendSuccess);
+  assert.equal(sendStart.count, 1);
+  assert.equal(sendSuccess.count, 1);
+  for (const record of [sendStart, sendSuccess]) {
+    assert.equal(Object.prototype.hasOwnProperty.call(record, 'openid'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(record, 'itemIds'), false);
+  }
 });
 
 test('selectDueReminderItems selects due reminders regardless subscription and skips read notices', () => {

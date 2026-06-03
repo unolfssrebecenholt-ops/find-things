@@ -12,6 +12,7 @@ const {
   switchSection
 } = require('../../utils/navigation');
 const { createImageMetadata } = require('../../utils/image-metadata');
+const privacy = require('../../utils/privacy');
 
 const CONTENT_IMAGE_LIMIT = storage.CONTENT_IMAGE_LIMIT || 5;
 let expiryReminder = null;
@@ -876,9 +877,9 @@ Page({
           showUsageLimit(status);
           return;
         }
-        openPicker();
+        privacy.guardPrivateAction(wx, this, openPicker);
       })
-      .catch(() => openPicker());
+      .catch(() => privacy.guardPrivateAction(wx, this, openPicker));
   },
 
   showRecognizingLayer(descText) {

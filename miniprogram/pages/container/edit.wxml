@@ -109,4 +109,5 @@
       <view class="saving-hint">东西别跑，小懒已经贴好标签啦。</view>
     </view>
   </view>
+  <privacy-authorization visible="{{privacyPromptVisible}}" contract-name="{{privacyContractName}}"></privacy-authorization>
 </view>

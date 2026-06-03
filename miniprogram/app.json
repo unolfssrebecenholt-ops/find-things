@@ -6,9 +6,11 @@
     "pages/container/edit",
     "pages/container/list",
     "pages/container/detail",
-    "pages/search/index",
-    "pages/settings/index"
+    "pages/search/index"
   ],
+  "usingComponents": {
+    "privacy-authorization": "/components/privacy-authorization/index"
+  },
   "window": {
     "navigationBarTitleText": "拍箱找物",
     "navigationBarBackgroundColor": "#f7f3ea",

@@ -14,14 +14,13 @@ try {
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
-const FUNCTION_VERSION = 'ftExpiryReminder-2026-06-01-debug-v5';
+const FUNCTION_VERSION = 'ftExpiryReminder-2026-06-04-release-v1';
 const LOG_PREFIX = '[ftExpiryReminder]';
 const DEFAULT_PAGE = 'pages/home/index';
 const ITEM_COLLECTION = (cloudConfig.collections && cloudConfig.collections.items) || 'ft_items';
 const CONTAINER_COLLECTION = (cloudConfig.collections && cloudConfig.collections.containers) || 'ft_containers';
 const NOTICE_COLLECTION = (cloudConfig.collections && cloudConfig.collections.reminderNotices) || 'ft_reminder_notices';
 const READ_PAGE_SIZE = 100;
-const DIAGNOSTIC_ITEM_LIMIT = 10;
 const CLOSED_NOTICE_STATUSES = ['read', 'dismissed', 'resolved'];
 
 function diagnosticLog(stage, data) {
@@ -147,18 +146,13 @@ function buildScanDiagnostics(items, containers, notices, timestamp, dueItems) {
     counts[key] = (counts[key] || 0) + 1;
     return counts;
   }, {});
-  const sampleItems = diagnostics
-    .filter((item) => item.reminderEnabled || item.remindAt || item.expiresAt || item.due)
-    .slice(0, DIAGNOSTIC_ITEM_LIMIT);
-
   return {
     containers: (containers || []).length,
     activeContainers: activeContainers.size,
     items: (items || []).length,
     notices: (notices || []).length,
     dueItems: (dueItems || []).length,
-    reasonCounts,
-    sampleItems
+    reasonCounts
   };
 }
 
@@ -497,30 +491,10 @@ async function main(event, context) {
     let notice = buildReminderNotice(item, containersById[itemContainerKey(item)], existingNotice, timestamp);
     const needsSubscribeSend = shouldSendSubscribeReminder(item, notice);
     const shouldWriteNotice = !existingNotice || needsSubscribeSend;
-    diagnosticLog('process-item', {
-      itemId: item && item._id,
-      noticeId: notice && notice._id,
-      hasExistingNotice: !!existingNotice,
-      existingNoticeStatus: existingNotice && existingNotice.status,
-      existingNoticePushStatus: existingNotice && existingNotice.pushStatus,
-      needsSubscribeSend,
-      shouldWriteNotice,
-      subscribeAccepted: item && item.subscribeAccepted === true,
-      reminderChannel: item && item.reminderChannel,
-      remindedAt: toTimestamp(item && item.remindedAt),
-      inAppReadAt: toTimestamp(item && item.inAppReadAt)
-    });
     if (shouldWriteNotice) {
       try {
         await setNotice(notice._id, notice);
         result.notices += 1;
-        diagnosticLog('set-notice-success', {
-          itemId: item && item._id,
-          noticeId: notice && notice._id,
-          status: notice && notice.status,
-          channel: notice && notice.channel,
-          pushStatus: notice && notice.pushStatus
-        });
       } catch (error) {
         const message = errorMessage(error);
         diagnosticLog('set-notice-failure', {
@@ -560,8 +534,6 @@ async function main(event, context) {
     const itemIds = recordItemIds(batch.records);
     try {
       diagnosticLog('send-subscribe-start', {
-        openid: batch.openid,
-        itemIds,
         count: batch.records.length
       });
       await sendReminderBatch(batch.records.map((record) => record.item), templateId, batch.openid);
@@ -578,8 +550,6 @@ async function main(event, context) {
       }));
       result.sent += 1;
       diagnosticLog('send-subscribe-success', {
-        openid: batch.openid,
-        itemIds,
         count: batch.records.length,
         sentAt: timestamp
       });

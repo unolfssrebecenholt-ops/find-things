@@ -4,6 +4,7 @@ const imageStore = require('../../services/image-store');
 const storage = require('../../services/storage');
 const { withDisplayIndexes } = require('../../utils/geometry');
 const { createImageMetadata } = require('../../utils/image-metadata');
+const privacy = require('../../utils/privacy');
 
 const CONTENT_IMAGE_LIMIT = storage.CONTENT_IMAGE_LIMIT || 5;
 
@@ -405,9 +406,9 @@ Page({
           showUsageLimit(status);
           return;
         }
-        openPicker();
+        privacy.guardPrivateAction(wx, this, openPicker);
       })
-      .catch(() => openPicker());
+      .catch(() => privacy.guardPrivateAction(wx, this, openPicker));
   },
 
   goNext() {

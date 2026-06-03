@@ -56,4 +56,5 @@
       <view class="recognizing-hint">{{recognizingHintText}}</view>
     </view>
   </view>
+  <privacy-authorization visible="{{privacyPromptVisible}}" contract-name="{{privacyContractName}}"></privacy-authorization>
 </view>

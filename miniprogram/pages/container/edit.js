@@ -9,6 +9,7 @@ const {
   navigateHome
 } = require('../../utils/navigation');
 const { createImageMetadata } = require('../../utils/image-metadata');
+const privacy = require('../../utils/privacy');
 
 let expiryReminder = null;
 try {
@@ -348,17 +349,20 @@ Page({
           wx.hideLoading();
         });
     };
-    if (wx.chooseMedia) {
-      wx.chooseMedia({
-        count: 1,
-        mediaType: ['image'],
-        sizeType: ['compressed'],
-        sourceType: ['album', 'camera'],
-        success: onSuccess
-      });
-      return;
-    }
-    wx.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: onSuccess });
+    const openPicker = () => {
+      if (wx.chooseMedia) {
+        wx.chooseMedia({
+          count: 1,
+          mediaType: ['image'],
+          sizeType: ['compressed'],
+          sourceType: ['album', 'camera'],
+          success: onSuccess
+        });
+        return;
+      }
+      wx.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: onSuccess });
+    };
+    privacy.guardPrivateAction(wx, this, openPicker);
   },
 
   useContentAsCover() {

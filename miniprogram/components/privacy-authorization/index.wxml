@@ -1,0 +1,16 @@
+<view wx:if="{{visible}}" class="privacy-mask">
+  <view class="privacy-dialog">
+    <text class="privacy-title">继续前先确认隐私协议</text>
+    <text class="privacy-copy">拍照、选图和保存图片会用到你选择的照片。请阅读并同意 {{contractName}} 后继续。</text>
+    <button class="privacy-link" bindtap="onOpenContract">查看隐私协议</button>
+    <view class="privacy-actions">
+      <button class="privacy-secondary" bindtap="onDisagree">暂不使用</button>
+      <button
+        id="privacy-agree-btn"
+        class="privacy-primary"
+        open-type="agreePrivacyAuthorization"
+        bindagreeprivacyauthorization="onAgree"
+      >同意并继续</button>
+    </view>
+  </view>
+</view>

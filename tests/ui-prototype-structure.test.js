@@ -285,6 +285,14 @@ test('container tab opens a real container list page', () => {
   assert.match(listJs, /confirmDeleteContainer/);
 });
 
+test('unused settings page is not shipped', () => {
+  const appJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'miniprogram', 'app.json'), 'utf8'));
+  const settingsDir = path.join(__dirname, '..', 'miniprogram', 'pages', 'settings');
+
+  assert.ok(!appJson.pages.includes('pages/settings/index'));
+  assert.equal(fs.existsSync(settingsDir), false);
+});
+
 test('search page uses photo-first result cards and playful assistant wording', () => {
   const wxml = readMiniProgramFile('pages', 'search', 'index.wxml');
   const cardWxml = readMiniProgramFile('components', 'search-result-card', 'index.wxml');
@@ -321,8 +329,6 @@ test('user-facing recognition copy uses Xiaolan instead of raw AI labels', () =>
     ['pages', 'capture', 'review.js'],
     ['pages', 'capture', 'review.wxml'],
     ['pages', 'container', 'detail.js'],
-    ['pages', 'settings', 'index.js'],
-    ['pages', 'settings', 'index.wxml'],
     ['components', 'item-editor', 'index.wxml'],
     ['services', 'mock-ai.js']
   ];
@@ -332,7 +338,6 @@ test('user-facing recognition copy uses Xiaolan instead of raw AI labels', () =>
   assert.ok(fs.existsSync(assetPath));
   assert.match(content, /小懒正在分析中/);
   assert.match(content, /小懒暂时没看清/);
-  assert.match(content, /小懒识别服务/);
   assert.match(content, /小懒识别/);
   assert.doesNotMatch(content, /AI 识别中|AI 识别失败|AI 未生效|AI 识别|AI 配置|本地 mock|mock 数据/);
 });

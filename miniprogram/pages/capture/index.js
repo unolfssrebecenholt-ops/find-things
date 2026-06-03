@@ -1,6 +1,7 @@
 const ai = require('../../services/ai');
 const imageStore = require('../../services/image-store');
 const { createImageMetadata } = require('../../utils/image-metadata');
+const privacy = require('../../utils/privacy');
 
 function getChosenPath(result) {
   if (result && result.tempFiles && result.tempFiles[0]) {
@@ -80,9 +81,15 @@ Page({
           showUsageLimit(status);
           return;
         }
-        openPicker();
+        privacy.guardPrivateAction(wx, this, openPicker).then((result) => {
+          if (!result || !result.authorized) complete();
+        });
       })
-      .catch(() => openPicker());
+      .catch(() => {
+        privacy.guardPrivateAction(wx, this, openPicker).then((result) => {
+          if (!result || !result.authorized) complete();
+        });
+      });
   },
 
   analyze(imagePath, options) {

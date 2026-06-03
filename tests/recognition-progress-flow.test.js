@@ -34,11 +34,11 @@ test('picker-backed recognition flows preflight usage before opening camera or a
     }
 
     assert.match(source, /const openPicker = \(\) => \{[\s\S]*wx\.chooseMedia[\s\S]*wx\.chooseImage[\s\S]*\};/, `${relativePath} should wrap picker calls in openPicker`);
-    assert.match(source, /ai\.getUsageStatus\(\)[\s\S]*\.then\(\(status\) => \{[\s\S]*openPicker\(\);[\s\S]*\}\)[\s\S]*\.catch\(\(\)\s*=>\s*openPicker\(\)\)/, `${relativePath} should call openPicker only after preflight or after preflight failure`);
+    assert.match(source, /ai\.getUsageStatus\(\)[\s\S]*\.then\(\(status\) => \{[\s\S]*privacy\.guardPrivateAction\(wx,\s*this,\s*openPicker\)[\s\S]*\}\)[\s\S]*\.catch\(\(\)\s*=>[\s\S]*privacy\.guardPrivateAction\(wx,\s*this,\s*openPicker\)/, `${relativePath} should call openPicker only through privacy authorization after preflight or after preflight failure`);
     assert.match(source, /canAnalyze\s*===\s*false/, `${relativePath} should block picker opening when usage is exhausted`);
     assert.match(source, /remainingToday/, `${relativePath} should include remaining usage text when available`);
     assert.match(source, /dailyAnalyzeLimit/, `${relativePath} should include the daily limit when available`);
-    assert.match(source, /\.catch\(\(\)\s*=>\s*openPicker\(\)\)/, `${relativePath} should allow picker opening if preflight fails`);
+    assert.match(source, /\.catch\(\(\)\s*=>[\s\S]*privacy\.guardPrivateAction\(wx,\s*this,\s*openPicker\)/, `${relativePath} should allow picker opening through privacy authorization if preflight fails`);
   }
 });
 
