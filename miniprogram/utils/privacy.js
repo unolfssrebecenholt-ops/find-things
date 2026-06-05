@@ -38,7 +38,7 @@ function registerNeedPrivacyAuthorization(adapter) {
       privacyReferrer: eventInfo && eventInfo.referrer || '',
       privacyContractName: pageContext && pageContext.data && pageContext.data.privacyContractName
         ? pageContext.data.privacyContractName
-        : '《拍箱找物用户隐私保护指引》'
+        : '《搁哪儿用户隐私保护指引》'
     });
     loadPrivacyContractName(adapter, pageContext);
   });

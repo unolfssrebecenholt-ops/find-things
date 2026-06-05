@@ -1,7 +1,7 @@
 const cloudConfig = require('./config/cloud');
 App({
   globalData: {
-    appName: '拍箱找物',
+    appName: '搁哪儿',
     mockMode: false,
     cloudEnvId: cloudConfig.envId,
     collections: cloudConfig.collections

@@ -12,7 +12,7 @@
     "privacy-authorization": "/components/privacy-authorization/index"
   },
   "window": {
-    "navigationBarTitleText": "拍箱找物",
+    "navigationBarTitleText": "搁哪儿",
     "navigationBarBackgroundColor": "#f7f3ea",
     "navigationBarTextStyle": "black",
     "backgroundColor": "#f7f3ea",

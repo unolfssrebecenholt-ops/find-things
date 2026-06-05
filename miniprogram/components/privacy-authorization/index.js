@@ -8,7 +8,7 @@ Component({
     },
     contractName: {
       type: String,
-      value: '《拍箱找物用户隐私保护指引》'
+      value: '《搁哪儿用户隐私保护指引》'
     }
   },
 

@@ -64,7 +64,7 @@ test('privacy authorization helper shows a page prompt when WeChat needs privacy
     getPrivacySetting(options) {
       options.success({
         needAuthorization: true,
-        privacyContractName: '《拍箱找物用户隐私保护指引》'
+        privacyContractName: '《搁哪儿用户隐私保护指引》'
       });
     }
   };
@@ -73,7 +73,7 @@ test('privacy authorization helper shows a page prompt when WeChat needs privacy
 
   assert.equal(typeof requireOptions.success, 'function');
   assert.equal(pageContext.data.privacyPromptVisible, true);
-  assert.equal(pageContext.data.privacyContractName, '《拍箱找物用户隐私保护指引》');
+  assert.equal(pageContext.data.privacyContractName, '《搁哪儿用户隐私保护指引》');
 
   privacy.resolvePendingAuthorization({ event: 'agree', buttonId: 'privacy-agree-btn' });
   const result = await pending;
