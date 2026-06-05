@@ -667,16 +667,18 @@ test('adds content images up to the configured limit and reports a neutral promp
   );
 });
 
-test('limits user containers to three while allowing existing updates', () => {
+test('limits user containers to five while allowing existing updates', () => {
   const service = storage.createStorageService(createMemoryAdapter());
   const first = service.saveContainer({ name: '箱子 1' });
   service.saveContainer({ name: '箱子 2' });
   service.saveContainer({ name: '箱子 3' });
+  service.saveContainer({ name: '箱子 4' });
+  service.saveContainer({ name: '箱子 5' });
 
-  assert.equal(storage.CONTAINER_LIMIT, 3);
+  assert.equal(storage.CONTAINER_LIMIT, 5);
   assert.throws(
-    () => service.saveContainer({ name: '箱子 4' }),
-    /最多可保存 3 个箱子/
+    () => service.saveContainer({ name: '箱子 6' }),
+    /最多可保存 5 个箱子/
   );
 
   service.saveContainer(Object.assign({}, first.container, { name: '箱子 1 更新' }));

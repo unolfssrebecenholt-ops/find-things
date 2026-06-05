@@ -2,7 +2,7 @@
   <view class="intro">
     <text class="eyebrow">第一步</text>
     <text class="page-title">拍下箱内物品</text>
-    <text class="subtle">先拍箱内或抽屉内的照片，默认可保存 2 张；多角度会让搜索更准。</text>
+    <text class="subtle">先拍箱内或抽屉内的照片，最多可保存 5 张；多角度会让搜索更准。</text>
   </view>
 
   <view class="capture-card">

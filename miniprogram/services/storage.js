@@ -5,7 +5,7 @@ const cloudConfig = require('../config/cloud');
 const expiryReminder = require('./expiry-reminder');
 const imageDisplay = require('./image-display');
 
-const CONTAINER_LIMIT = 3;
+const CONTAINER_LIMIT = 5;
 const CONTENT_IMAGE_LIMIT = 5;
 const REMINDER_NOTICE_STATUSES = ['pending', 'read', 'dismissed', 'resolved'];
 
